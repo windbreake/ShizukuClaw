@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+"""
+Agent 记忆与规划模块
+
+功能描述:
+    管理 AI 智能体的记忆系统，包括：
+    - 短期记忆 (Short-term memory): 存储当前会话上下文
+    - 长期记忆 (Long-term memory): 存储持久化知识和经验
+    - 任务规划 (AgentPlanner): 负责任务的分解、进度追踪与更新
+"""
 import json
 import os
 import time

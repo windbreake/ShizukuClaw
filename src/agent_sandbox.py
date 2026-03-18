@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+"""
+Agent 沙箱环境模块 (Agent Sandbox)
+
+功能描述:
+    为 AI 智能体通过代码执行任务提供隔离环境。
+    支持在安全受控的环境中运行 Python 脚本或命令行工具，
+    并捕获执行结果返回给智能体。
+"""
 """Sandbox execution module for the AI agent"""
 
 import os

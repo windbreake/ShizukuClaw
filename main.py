@@ -1,4 +1,12 @@
 # main.py
+# -*- coding: utf-8 -*-
+"""
+主程序入口模块
+
+功能描述:
+    作为程序的启动入口，根据命令行参数或用户交互选择运行模式。
+    支持启动 Web 服务器、控制面板、Koishi 服务、数据库管理等多种模式。
+"""
 import sys
 import io
 import os

@@ -1,4 +1,13 @@
 # koishi_service.py
+# -*- coding: utf-8 -*-
+"""
+Koishi 服务适配模块
+
+功能描述:
+    提供与 Koishi 机器人框架对接的 API 服务。
+    基于 FastAPI 实现，提供兼容 OpenAI Chat Completion 的接口，
+    使外部机器人框架能够调用本系统的 AI 对话能力。
+"""
 import socket
 import uvicorn
 from fastapi import FastAPI, Request

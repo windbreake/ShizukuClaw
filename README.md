@@ -14,20 +14,24 @@
 ##目录结构
 
 - `main.py`：入口脚本，根据参数选择模式  
-- `koishi_service.py`：FastAPI 实现的 OpenAI-completion 兼容接口  
-- `web_server.py`：终端模式 & Web 沙箱模式（Flask）  
-- `ai_chat_system.py`：AIChatSystem 核心逻辑，封装 DeepSeek 调用及消息管理  
-- `database.py`：MySQL 数据库操作（角色和聊天记录）  
-- `config.py`：配置文件（API Key、Base URL、数据库连接）  
+- `src/koishi_service.py`：FastAPI 实现的 OpenAI-completion 兼容接口  
+- `src/web_server.py`：Web 服务器 & 终端模式 & 沙箱模式支持（Flask）  
+- `src/ai_chat_system.py`：AIChatSystem 核心逻辑，封装 LLM 调用及消息管理  
+- `src/database.py`：MySQL 数据库操作（角色和聊天记录）  
+- `src/config.py`：配置文件（API Key、Base URL、数据库连接）
+- `src/agent_manager.py`：Agent管理器，协调记忆、规划与执行  
+- `src/agent_memory.py`：Agent记忆系统，管理短期/长期记忆与任务规划  
+- `src/agent_sandbox.py`：Agent代码沙箱，提供安全的代码执行环境  
 - `chat-sandbox.html`：沙箱模式的前端页面  
-- `unified_api.py`：统一API服务，提供整合的AI功能接口  
+- `unified_api.py.bak`：(已备份) 统一API服务旧版代码  
 - `start.bat`：Windows 启动脚本，安装依赖并选择运行模式  
 - `control_panel.html`：Web控制面板前端页面  
 - `db_management.html`：数据库管理前端页面  
 - `logs.html`：日志查看前端页面  
-- `control_panel.js`：控制面板JavaScript逻辑  
-- `create_database.py`：数据库和表初始化脚本  
-- `init_database.sql`：数据库初始化SQL脚本  
+- `src/static/js/control_panel.js`：控制面板JavaScript逻辑  
+- `src/create_database.py`：数据库和表初始化脚本  
+- `data/init_database.sql`：数据库初始化SQL脚本  
+
 
 ---
 

@@ -1,4 +1,14 @@
 # -*- coding: utf-8 -*-
+"""
+Agent 管理模块
+
+功能描述:
+    负责管理和协调 AI 智能体的核心组件，包括：
+    - 规划任务 (AgentPlanner)
+    - 管理长期和短期记忆 (AgentMemory)
+    - 在沙箱环境中执行代码 (AgentSandbox)
+    - 处理任务分解与执行流程
+"""
 import json
 import os
 import sys
