@@ -1,0 +1,237 @@
+:root {
+  --primary-color: #6f42c1;
+  --primary-hover: #5a32a3;
+  --secondary-color: #f8f9fa;
+  --text-color: #2c3e50;
+  --sidebar-bg: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+  --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  --transition-speed: 0.3s;
+}
+
+body {
+    background-color: #f4f6f9;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--text-color);
+    overflow-x: hidden;
+}
+
+/* 渐进式动画 */
+.fade-in {
+    animation: fadeIn var(--transition-speed) ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 侧边栏样式 */
+#sidebar {
+    width: 250px;
+    height: 100vh;
+    position: fixed;
+    left: 0;
+    top: 0;
+    background: var(--sidebar-bg);
+    color: white;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    z-index: 1000;
+    transition: all var(--transition-speed);
+}
+
+#sidebar .brand {
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-align: center;
+    padding: 20px 0;
+    margin-bottom: 10px;
+    color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+#sidebar .nav-link {
+    color: rgba(255,255,255,0.85);
+    padding: 12px 20px;
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s;
+    font-size: 0.95rem;
+}
+
+#sidebar .nav-link:hover, #sidebar .nav-link.active {
+    color: #fff;
+    background: rgba(255,255,255,0.15);
+    border-left: 4px solid #fff;
+}
+
+#sidebar .nav-link i {
+    width: 20px;
+    text-align: center;
+}
+
+/* 主内容区域 */
+#content {
+    margin-left: 250px;
+    padding: 20px;
+    transition: margin-left var(--transition-speed);
+    min-height: 100vh;
+}
+
+/* 卡片通用样式 */
+.card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    background: #fff;
+    margin-bottom: 20px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+}
+
+.card-header {
+    background-color: #fff;
+    border-bottom: 1px solid #f0f0f0;
+    padding: 15px 20px;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.card-body {
+    padding: 20px;
+}
+
+/* 按钮样式 */
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 4px rgba(111, 66, 193, 0.3);
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+    box-shadow: 0 4px 8px rgba(111, 66, 193, 0.4);
+}
+
+/* 表单控件 */
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(111, 66, 193, 0.15);
+}
+
+/* 加载动画 */
+.loading-spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 0.25em solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spinner-border .75s linear infinite;
+    color: var(--primary-color);
+}
+
+/* Chat Sandbox Styles */
+.chat-wrapper {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    overflow: hidden;
+    height: 75vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-header {
+    background: var(--primary-color);
+    color: white;
+    padding: 15px 20px;
+    font-weight: 600;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.message {
+    max-width: 80%;
+    padding: 10px 15px;
+    border-radius: 15px;
+    line-height: 1.5;
+    position: relative;
+    word-wrap: break-word;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.bot-message {
+    background: #fff;
+    color: #333;
+    border: 1px solid #e1e4e8;
+    align-self: flex-start;
+    border-bottom-left-radius: 2px;
+}
+
+.user-message {
+    background: var(--primary-color);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 2px;
+}
+
+.input-area {
+    padding: 20px;
+    background: #fff;
+    border-top: 1px solid #e1e4e8;
+}
+
+#chat-input {
+    width: 100%;
+    border: 1px solid #e1e4e8;
+    border-radius: 8px;
+    padding: 12px;
+    resize: none;
+    height: 80px;
+    transition: border-color 0.2s;
+    font-family: inherit;
+}
+
+#chat-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(111, 66, 193, 0.1);
+}
+
+.typing-indicator {
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-style: italic;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.typing-indicator.active {
+    opacity: 1;
+}
+
+/* API Key Card Styles */
+.api-key-card {
+    border: 1px solid #e9ecef;
+    transition: all 0.2s;
+}
+.api-key-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+}
+

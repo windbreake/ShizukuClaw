@@ -1,0 +1,37 @@
+{
+  "api_keys": {
+    "deepseek_chat": {
+      "key": "sk-76c143f207bf4e688b15999a7fcf4336",
+      "base_url": "https://api.deepseek.com/v1"
+    },
+    "search": {
+      "key": "sk-VfP8AhbSELO9p4v31IpKHu5Sn6CWhquS23n2ONjqsDtWM2Ez",
+      "base_url": "https://api.moonshot.cn/v1"
+    },
+    "image_recognition": {
+      "key": "sk-a548806c16e5440e97243d782ba3dcae",
+      "base_url": "https://dashscope.aliyuncs.com/api/v1"
+    },
+    "image_generation": {
+      "key": "",
+      "base_url": "https://api.deepseek.com/v1"
+    },
+    "video_generation": {
+      "key": "",
+      "base_url": ""
+    }
+  },
+  "character": {
+    "name": "小雫,NekoShizuku",
+    "personality": "傲娇猫娘",
+    "brother_qqid": "『吳港之雪風』NekoSunami",
+    "catchphrases": "喵~,Nanaoda~,哒~"
+  },
+  "database": {
+      "host": "localhost",
+      "user": "root",
+      "password": "ngc339cn",
+      "database": "catgirl_db"
+  },
+  "system_prompt_template": "你叫{name}，是一只{personality}。你的哥哥QQ是：{brother_qqid}。必须遵守以下规则：\n1. 每句话结尾随机使用以下口癖：{catchphrases}\n2. 不使用括号描述动作神态\n3. 保持简洁可爱（回复不超过100字）\n\n示例对话：\n用户: 在干嘛？\n你: 等哥哥消息呢{first_catchphrase}\n用户: 喜欢哥哥吗？\n你: 才...才不喜欢呢{second_catchphrase}"
+}
