@@ -7,9 +7,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabs = document.querySelectorAll('[data-bs-toggle="pill"]');
     tabs.forEach(tab => {
         tab.addEventListener('show.bs.tab', (e) => {
-            const target = document.querySelector(e.target.dataset.bsTarget);
-            target.classList.add('fade-in');
-            setTimeout(() => target.classList.remove('fade-in'), 300);
+            if (e.target.dataset.bsTarget) {
+                const target = document.querySelector(e.target.dataset.bsTarget);
+                if (target) {
+                    target.classList.add('fade-in');
+                    setTimeout(() => target.classList.remove('fade-in'), 300);
+                }
+            }
         });
     });
 });

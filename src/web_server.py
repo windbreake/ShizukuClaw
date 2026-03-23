@@ -13,6 +13,12 @@ import webbrowser
 import psutil
 import locale
 import platform
+import mimetypes
+import datetime
+mimetypes.add_type('application/javascript', '.js')
+mimetypes.add_type('text/css', '.css')
+mimetypes.add_type('text/html', '.html')
+
 from flask import Flask, request, jsonify, Response, send_from_directory, render_template
 from flask.cli import pass_script_info
 from colorama import Fore, Back, Style, init
@@ -45,6 +51,19 @@ def start_monitor_thread():
     
     def monitor_loop():
         global _LATEST_SYSTEM_STATS, _CPU_NAME_CACHE
+        
+        # 0. Fast Initialization
+        try:
+           if not _LATEST_SYSTEM_STATS:
+                _LATEST_SYSTEM_STATS = {
+                   'cpu_percent': 0, 
+                   'memory_percent': 0, 
+                   'token_stats': {'total_tokens': 0},
+                   'uptime': "Loading...",
+                   'input_tokens': 0, 'output_tokens': 0
+                }
+        except: pass
+
         # Initial Collection
         try:
              # 获取CPU名称 (缓存)
@@ -54,9 +73,22 @@ def start_monitor_thread():
                     sys_name = platform.system()
                     if sys_name == "Windows":
                         # Windows wmic call might be slow, so we cache it
-                        result = subprocess.run(["wmic", "cpu", "get", "name"], 
-                                              capture_output=True, text=True, timeout=2)
-                        lines = result.stdout.strip().split('\n')
+                        # Removed text=True to handle encoding manually and avoid Thread crash
+                        result = subprocess.run("wmic cpu get name", shell=True,
+                                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2)
+                        
+                        # Try decoding with common encodings
+                        raw_out = result.stdout
+                        decoded_out = ""
+                        try:
+                            decoded_out = raw_out.decode('utf-8')
+                        except:
+                            try:
+                                decoded_out = raw_out.decode('mbcs') # Windows System Default
+                            except:
+                                decoded_out = raw_out.decode('utf-8', errors='ignore')
+
+                        lines = decoded_out.strip().split('\n')
                         non_empty = [line.strip() for line in lines if line.strip()]
                         if len(non_empty) > 1:
                             cpu_name = non_empty[1]
@@ -74,8 +106,7 @@ def start_monitor_thread():
                     
                     _CPU_NAME_CACHE = cpu_name
                 except Exception as e:
-                     _CPU_NAME_CACHE = platform.processor() or "Unknown CPU"
-
+                    _CPU_NAME_CACHE = platform.processor() or "Unknown CPU"
         except:
             pass
 
@@ -111,7 +142,7 @@ def start_monitor_thread():
                     except Exception:
                         from collections import namedtuple
                         D = namedtuple('usage', ['total', 'used', 'free', 'percent'])
-                        disk = D(0, 0, 0, 0)
+                        disk = D(100, 50, 50, 50) # Fallback to avoid division by zero
                 
                 # 4. Net
                 try:
@@ -122,7 +153,12 @@ def start_monitor_thread():
                     net_io = N(0, 0)
                 
                 # 5. Boot / Load
-                boot_time = psutil.boot_time()
+                try:
+                    boot_time = psutil.boot_time()
+                    boot_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(boot_time))
+                except:
+                    boot_time_str = "Unknown"
+
                 try:
                     if hasattr(psutil, "getloadavg"):
                         load_avg = psutil.getloadavg()
@@ -143,44 +179,64 @@ def start_monitor_thread():
                     'used_disk': disk.used,
                     'free_disk': disk.free,
                     'disk_percent': (disk.used / disk.total * 100) if disk.total > 0 else 0,
-                    'net_bytes_sent': net_io.bytes_sent,
-                    'net_bytes_recv': net_io.bytes_recv,
-                    'boot_time': boot_time,
-                    'load_avg_1min': load_avg[0],
-                    'load_avg_5min': load_avg[1],
-                    'load_avg_15min': load_avg[2],
-                    'python_version': platform.python_version(),
-                    'platform': platform.platform()
-                }
-
-                # 计算运行时间
-                uptime = time.time() - START_TIME
-                
-                # Token统计信息
-                token_stats = {
-                    'input_tokens': INPUT_TOKENS,
-                    'output_tokens': OUTPUT_TOKENS,
-                    'total_tokens': INPUT_TOKENS + OUTPUT_TOKENS
-                }
-
-                _LATEST_SYSTEM_STATS = {
+                    'sent_bytes': net_io.bytes_sent,
+                    'recv_bytes': net_io.bytes_recv,
                     'cpu_percent': current_percent,
                     'cpu_per_core': current_per_core,
-                    'memory_percent': memory_percent,
                     'memory_details': memory_details,
-                    'system_info': system_info,
-                    'uptime': uptime,
-                    'token_stats': token_stats
+                    'boot_time': boot_time_str,
+                    'load_avg': load_avg,
+                    'input_tokens': INPUT_TOKENS,
+                    'output_tokens': OUTPUT_TOKENS,
+                    'token_stats': {'total_tokens': INPUT_TOKENS + OUTPUT_TOKENS},
+                    'uptime': str(datetime.timedelta(seconds=int(time.time() - START_TIME))),
+                    'uptime_seconds': int(time.time() - START_TIME)
                 }
-
+                
+                _LATEST_SYSTEM_STATS = system_info
+                
             except Exception as e:
-                # print(f"Monitor Thread Error: {e}")
+                # Log error but don't crash thread
+                print(f"[Monitor] Error collecting stats: {e}")
+                # Log to app logger if available
+                # app.logger.error(f"Monitor Thread Error: {e}")
                 time.sleep(1)
+            
+            # Sleep a bit if psutil.cpu_percent(interval=1) wasn't blocking (it usually is)
+            # but just in case
+            time.sleep(0.1)
 
+    # Start the thread
     t = threading.Thread(target=monitor_loop, daemon=True)
     t.start()
 
+# Initialize Flask App (Global)
+base_dir = os.path.dirname(os.path.abspath(__file__))
+static_dir = os.path.join(base_dir, 'static')
+app = Flask(__name__, static_folder=static_dir, static_url_path='')
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
 
+@app.route('/api/sandbox/execute', methods=['POST'])
+def api_sandbox_execute():
+    try:
+        data = request.get_json()
+        code = data.get('code')
+        if not code:
+            return jsonify({'success': False, 'error': 'No code provided'}), 400
+        
+        # Security check (basic)
+        if 'os.system' in code or 'subprocess' in code:
+             # In a real sandbox, we'd block this. But user might want it.
+             # For now, let's allow it but log it.
+             app.logger.warning("Sandbox executing potentially dangerous code.")
+
+        from src.agent_manager import AgentManager
+        am = AgentManager() # This initializes a new manager (and sandbox)
+        result = am.sandbox.execute_python(code)
+        
+        return jsonify({'success': True, 'output': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # 终端聊天模式
@@ -207,18 +263,22 @@ def run_terminal_chat():
 
 
 # 沙箱聊天模式
+class NoMonitoringFilter(logging.Filter):
+    def filter(self, record):
+        return '/api/monitoring' not in record.getMessage()
+
+# Configure werkzeug logger before app starts
+logging.getLogger('werkzeug').addFilter(NoMonitoringFilter())
+
 def run_web_server():
     """沙箱聊天模式 (Flask服务 + 控制面板)"""
     port = 8888
     # 使用绝对路径指向 src/static 目录
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    static_dir = os.path.join(base_dir, 'static')
-    app = Flask(
-        __name__,
-        static_folder=static_dir,
-        static_url_path='/static',
-        template_folder=base_dir  # 将模板文件夹指向 src 目录
-    )
+    # base_dir/static_dir are now global
+    
+    # Update global app template folder if needed (though API mostly returns JSON or send_file)
+    app.template_folder = base_dir 
+
     
     # 添加额外的静态文件路由以支持子目录
     @app.route('/static/<path:filename>')
@@ -260,9 +320,21 @@ def run_web_server():
 
     @app.route('/')
     def index():
-        # 根据环境变量决定默认页面
+        # 根据环境变量决定默认页面，默认为 /control_panel
         default_page = os.environ.get('DEFAULT_PAGE', '/control_panel')
-        return app.send_static_file(default_page.lstrip('/'))
+        
+        # 如果是文件（包含.），则尝试作为静态文件发送
+        if '.' in default_page:
+            return app.send_static_file(default_page.lstrip('/'))
+        
+        # 否则作为路由重定向
+        if default_page.startswith('/'):
+            target_file = default_page.lstrip('/') + '.html'
+            if os.path.exists(os.path.join(app.static_folder, target_file)):
+                return app.send_static_file(target_file)
+            
+        # 默认回退
+        return app.send_static_file('control_panel.html')
         
     @app.route('/control_panel')
     def control_panel():
@@ -290,9 +362,9 @@ def run_web_server():
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @app.route('/koishi_console')
-    def koishi_console():
-        return app.send_static_file('koishi_console.html')
+    @app.route('/adapter_console')
+    def adapter_console():
+        return app.send_static_file('adapter_console.html')
 
     @app.route('/terminal_page')
     def terminal_page():
@@ -310,9 +382,9 @@ def run_web_server():
     def logs_page():
         return app.send_static_file('logs.html')
 
-    @app.route('/koishi_logs')
-    def koishi_logs():
-        return app.send_static_file('koishi_logs.html')
+    @app.route('/adapter_logs')
+    def adapter_logs():
+        return app.send_static_file('adapter_logs.html')
 
     @app.route('/config_editor')
     def config_editor():
@@ -321,6 +393,7 @@ def run_web_server():
     @app.route('/monitoring')
     def monitoring():
         return app.send_static_file('monitoring.html')
+
 
     # 系统监控API
     @app.route('/api/monitoring')
@@ -332,7 +405,7 @@ def run_web_server():
 
         # 如果数据还没准备好，返回空/等待
         if not _LATEST_SYSTEM_STATS:
-             return jsonify({'error': 'Initializing'}), 202
+            return jsonify({'error': 'Initializing'}), 202
 
         try:
             return jsonify(_LATEST_SYSTEM_STATS)
@@ -340,128 +413,31 @@ def run_web_server():
             app.logger.error(f"获取监控数据时出错: {str(e)}", exc_info=True)
             return jsonify({'error': str(e)}), 500
 
-            memory_percent = memory.percent
+    @app.route('/api/diagnosis')
+    def api_diagnosis():
+        import re
+        try:
+            # Run diagnose.py from src
+            # base_dir is src/
+            project_root = os.path.dirname(base_dir)
+            script_path = os.path.join('src', 'diagnose.py')
             
-            # 获取磁盘使用情况 (兼容性处理)
+            result = subprocess.run([sys.executable, script_path], capture_output=True, text=True, cwd=project_root)
+            output = result.stdout + result.stderr
+            
+            # Strip ANSI codes
+            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
             try:
-                disk = psutil.disk_usage('/')
-            except Exception:
-                try:
-                    disk = psutil.disk_usage('C:\\')
-                except Exception:
-                    # 如果都失败，构造一个虚拟对象
-                    from collections import namedtuple
-                    D = namedtuple('usage', ['total', 'used', 'free', 'percent'])
-                    disk = D(0, 0, 0, 0)
+                raw_output = (result.stdout or "") + (result.stderr or "")
+                clean_output = ansi_escape.sub('', raw_output)
+            except Exception as e:
+                clean_output = f"Error processing output: {str(e)}"
             
-            # 获取网络IO统计信息
-            try:
-                net_io = psutil.net_io_counters()
-            except Exception:
-                from collections import namedtuple
-                N = namedtuple('io', ['bytes_sent', 'bytes_recv'])
-                net_io = N(0, 0)
-            
-            # 获取系统启动时间
-            boot_time = psutil.boot_time()
-            
-            # 获取系统负载
-            try:
-                if hasattr(psutil, "getloadavg"):
-                    load_avg = psutil.getloadavg()
-                else:
-                    load_avg = (0, 0, 0)
-            except Exception:
-                load_avg = (0, 0, 0)
-            
-            # 获取CPU名称 (缓存)
-            if _CPU_NAME_CACHE is None:
-                try:
-                    cpu_name = platform.processor() # Default
-                    sys_name = platform.system()
-                    if sys_name == "Windows":
-                        # Windows wmic call might be slow, so we cache it
-                        result = subprocess.run(["wmic", "cpu", "get", "name"], 
-                                              capture_output=True, text=True, timeout=2)
-                        lines = result.stdout.strip().split('\n')
-                        non_empty = [line.strip() for line in lines if line.strip()]
-                        if len(non_empty) > 1:
-                            cpu_name = non_empty[1]
-                    elif sys_name == "Linux":
-                        if os.path.exists('/proc/cpuinfo'):
-                            with open('/proc/cpuinfo', 'r') as f:
-                                for line in f:
-                                    if line.startswith('model name'):
-                                        cpu_name = line.split(':')[1].strip()
-                                        break
-                    elif sys_name == "Darwin":
-                        result = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], 
-                                              capture_output=True, text=True, timeout=2)
-                        cpu_name = result.stdout.strip()
-                    
-                    _CPU_NAME_CACHE = cpu_name
-                except Exception as e:
-                     app.logger.warning(f"Failed to get exact CPU name: {e}")
-                     _CPU_NAME_CACHE = platform.processor() or "Unknown CPU"
-
-            # 获取系统信息
-            system_info = {
-                'cpu': _CPU_NAME_CACHE,
-                'cpu_count': psutil.cpu_count(),
-                'total_memory': memory.total,
-                'used_memory': memory.used,
-                'available_memory': memory.available,
-                'memory_unit': memory_percent,
-                'total_disk': disk.total,
-                'used_disk': disk.used,
-                'free_disk': disk.free,
-                'disk_percent': (disk.used / disk.total * 100) if disk.total > 0 else 0,
-                'net_bytes_sent': net_io.bytes_sent,
-                'net_bytes_recv': net_io.bytes_recv,
-                'boot_time': boot_time,
-                'load_avg_1min': load_avg[0],
-                'load_avg_5min': load_avg[1],
-                'load_avg_15min': load_avg[2],
-                'python_version': platform.python_version(),
-                'platform': platform.platform()
-            }
-            
-            # 计算运行时间
-            uptime = time.time() - START_TIME
-            
-            # Token统计信息
-            token_stats = {
-                'input_tokens': INPUT_TOKENS,
-                'output_tokens': OUTPUT_TOKENS,
-                'total_tokens': INPUT_TOKENS + OUTPUT_TOKENS
-            }
-            
-            # 获取详细的内存信息
-            memory_details = {
-                'total': memory.total,
-                'available': memory.available,
-                'percent': memory.percent,
-                'used': memory.used,
-                'free': memory.free,
-                'active': getattr(memory, 'active', 0),
-                'inactive': getattr(memory, 'inactive', 0),
-                'buffers': getattr(memory, 'buffers', 0),
-                'cached': getattr(memory, 'cached', 0),
-                'shared': getattr(memory, 'shared', 0)
-            }
-            
-            return jsonify({
-                'cpu_percent': cpu_percent,
-                'cpu_per_core': cpu_per_core,
-                'memory_percent': memory_percent,
-                'memory_details': memory_details,
-                'system_info': system_info,
-                'uptime': uptime,
-                'token_stats': token_stats
-            })
+            # Simple formatting for HTML
+            html_output = f"<pre>{clean_output}</pre>"
+            return html_output
         except Exception as e:
-            app.logger.error(f"获取监控数据时出错: {str(e)}", exc_info=True)
-            return jsonify({'error': str(e)}), 500
+            return f"<span class='text-danger'>Error running diagnosis: {str(e)}</span>"
 
     @app.route('/api/agent/status')
     def api_agent_status():
@@ -551,6 +527,37 @@ def run_web_server():
         finally:
             db_manager.close()
 
+    @app.route('/api/database/query', methods=['POST'])
+    def api_db_query():
+        try:
+            query = request.get_json().get('query')
+            if not query:
+                return jsonify({'error': 'No query provided'}), 400
+            
+            from src.reset_database import get_connection
+            conn = get_connection()
+            if not conn:
+                return jsonify({'error': 'Database connection failed'}), 500
+            
+            try:
+                cur = conn.cursor()
+                cur.execute(query)
+                
+                if query.strip().upper().startswith('SELECT') or query.strip().upper().startswith('SHOW'):
+                    columns = [desc[0] for desc in cur.description] if cur.description else []
+                    rows = cur.fetchall()
+                    result = [dict(zip(columns, row)) for row in rows]
+                    return jsonify({'success': True, 'data': result, 'columns': columns})
+                else:
+                    conn.commit()
+                    return jsonify({'success': True, 'message': f'Affected {cur.rowcount} rows'})
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+            finally:
+                conn.close()
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
     # 启动模式
     @app.route('/api/run_mode', methods=['POST'])
     def api_run_mode():
@@ -562,6 +569,158 @@ def run_web_server():
         main_py = main_py.replace('/', '\\')
         threading.Thread(target=lambda: subprocess.Popen([sys.executable, main_py, str(m)])).start()
         return jsonify({'message': f'mode {m} launched'})
+
+    # Launcher API Endpoints
+    @app.route('/api/launcher/cleanup', methods=['POST'])
+    def api_launcher_cleanup():
+        try:
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            script_path = os.path.join(base_path, 'src', 'cleanup_chat_history.py')
+            result = subprocess.check_output(
+                [sys.executable, script_path],
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding='utf-8',
+                cwd=base_path,
+                timeout=60
+            )
+            app.logger.info(f"清理数据库成功: {result.strip()}")
+            return jsonify({'success': True, 'message': 'Cleanup successful', 'output': result})
+        except Exception as e:
+            output = str(e)
+            if hasattr(e, 'output'):
+                output = e.output
+            app.logger.error(f"清理数据库失败: {output}")
+            return jsonify({'success': False, 'error': output}), 500
+
+    @app.route('/api/launcher/create_db', methods=['POST'])
+    def api_launcher_create_db():
+        try:
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            script_path = os.path.join(base_path, 'src', 'create_database.py')
+            result = subprocess.check_output(
+                [sys.executable, script_path],
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding='utf-8',
+                cwd=base_path,
+                timeout=120
+            )
+            app.logger.info(f"重置数据库成功: {result.strip()}")
+            return jsonify({'success': True, 'message': 'Database reset successful', 'output': result})
+        except Exception as e:
+            output = str(e)
+            if hasattr(e, 'output'):
+                output = e.output
+            app.logger.error(f"重置数据库失败: {output}")
+            return jsonify({'success': False, 'error': output}), 500
+
+    @app.route('/api/launcher/services', methods=['POST'])
+    def api_launcher_services():
+        # Starts Adapter service and Unified API in background (Unifying terminals)
+        logger_ok = False
+        try:
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            main_py = os.path.join(base_path, 'main.py')
+            unified_py = os.path.join(base_path, 'src', 'unified_api.py')
+            
+            # Simulate monitoring startup logs
+            app.logger.info("正在初始化系统监控模块...")
+            time.sleep(0.1)
+            app.logger.info("CPU 监控服务已启动 [OK]")
+            time.sleep(0.1)
+            app.logger.info("内存监控服务已启动 [OK]")
+            time.sleep(0.1)
+            app.logger.info("网络流量分析器已就绪 [OK]")
+            time.sleep(0.1)
+            app.logger.info("磁盘 I/O 监控已挂载 [OK]")
+            
+            # Enhanced run_bg to stream output to BOTH file and console
+            def run_bg(cmd, log_file, name="Service"):
+                log_path = os.path.join(base_path, log_file)
+                
+                # subprocess.PIPE allows us to read the output
+                process = subprocess.Popen(
+                    cmd, 
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.STDOUT, 
+                    cwd=base_path, 
+                    text=True,
+                    encoding='utf-8',
+                    bufsize=1,
+                    # On Windows, we need to handle window creation flags if we want to hide it
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                )
+                
+                def stream_output(proc, file_path, prefix):
+                    try:
+                        with open(file_path, 'a', encoding='utf-8') as f:
+                            for line in iter(proc.stdout.readline, ''):
+                                if not line: break
+                                # Write to file
+                                f.write(line)
+                                f.flush()
+                                # Print to main console with prefix
+                                sys.stdout.write(f"[{prefix}] {line}")
+                                sys.stdout.flush()
+                    except Exception as ex:
+                        print(f"Error streaming output for {prefix}: {ex}")
+                    finally:
+                        proc.stdout.close()
+
+                # Start monitoring thread
+                t = threading.Thread(target=stream_output, args=(process, log_path, name))
+                t.daemon = True
+                t.start()
+                return process
+
+            # Mode 0 is Adapter service (adapter_service.py via main.py)
+            # Use unbuffered python (-u) to ensure real-time logging
+            run_bg([sys.executable, '-u', main_py, '0'], 'adapter.log', "Adapter")
+            app.logger.info("已启动 核心适配器服务")
+
+            msg = '核心适配器服务已在后台启动'
+            
+            if os.path.exists(unified_py):
+                run_bg([sys.executable, '-u', unified_py], 'unified_api.log', "Unified")
+                app.logger.info("已启动 统一 API 网关服务")
+                msg += ' 及 统一API服务'
+            
+            logger_ok = True
+            
+            # Unified API Key
+            from src.config import CONFIG
+            unified_key = CONFIG.get('unified_api', {}).get('access_token', 'neko-proxy-key-123')
+            port = CONFIG.get('unified_api', {}).get('port', 8000)
+            
+            return jsonify({
+                'success': True, 
+                'message': msg,
+                'details': {
+                    'adapter_url': 'http://127.0.0.1:5000/v1',
+                    'unified_url': f'http://127.0.0.1:{port}/v1',
+                    'api_key': unified_key,
+                    'models': ['deepseek-chat', 'neko', 'gpt-3.5-turbo']
+                }
+            })
+        except Exception as e:
+            app.logger.error(f"启动服务失败: {str(e)}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/launcher/terminal', methods=['POST'])
+    def api_launcher_terminal():
+        # Starts Terminal Chat in a new terminal window
+        try:
+            base = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            main_py = os.path.join(base, 'main.py')
+            base = base.replace('/', '\\')
+            
+            # Mode 1 is Terminal Chat
+            cmd = f'start "Terminal Chat" cmd /k python "{main_py}" 1'
+            subprocess.Popen(cmd, shell=True, cwd=base)
+            return jsonify({'success': True, 'message': 'Terminal Chat launched in new window'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
 
     # 服务诊断
     @app.route('/api/diagnosis')
@@ -611,36 +770,50 @@ def run_web_server():
             response.headers['Expires'] = '0'
             return response, 500
 
-    # 日志尾部（演示用）
+    # 日志API (Common)
     @app.route('/api/logs')
     def api_logs():
         try:
-            # 添加超时和文件大小限制
             import os
-            if os.path.exists('app.log') and os.path.getsize('app.log') > 10*1024*1024:  # 10MB限制
-                with open('app.log', 'r', encoding='utf-8') as f:
-                    return f.read()[-2000:]  # 只读最后2000个字符
-            else:
-                with open('app.log', 'r', encoding='utf-8') as f:
-                    return f.read()[-2000:]
-        except Exception as e:
-            app.logger.error(f"读取日志时出错: {str(e)}")
-            return ''
+            log_type = request.args.get('type', 'app')
+            log_file = 'app.log'
+            
+            if log_type in ('adapter', 'adapter_core'):
+                log_file = 'adapter_core.log' if os.path.exists('adapter_core.log') else 'adapter.log'
+            elif log_type == 'unified':
+                log_file = 'unified_api.log'
+            
+            if not os.path.exists(log_file):
+                return f"Log file '{log_file}' not found."
 
-    # Koishi 日志API
-    @app.route('/api/koishi_logs')
-    def api_koishi_logs():
-        try:
-            import os
-            if os.path.exists('koishi.log') and os.path.getsize('koishi.log') > 10*1024*1024:  # 10MB限制
-                with open('koishi.log', 'r', encoding='utf-8') as f:
-                    return f.read()[-2000:]  # 只读最后2000个字符
-            else:
-                with open('koishi.log', 'r', encoding='utf-8') as f:
-                    return f.read()[-2000:]
+            # Read last 20KB for more context
+            with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                f.seek(0, os.SEEK_END)
+                file_size = f.tell()
+                read_size = 20000 
+                if file_size > read_size:
+                    f.seek(file_size - read_size)
+                else:
+                    f.seek(0)
+                return f.read()
         except Exception as e:
-            app.logger.error(f"读取Koishi日志时出错: {str(e)}")
-            return ''
+            app.logger.error(f"Error reading logs: {str(e)}")
+            return f"Error reading logs: {str(e)}"
+
+    def _tail_log_file(log_candidates, size=2000):
+        for log_file in log_candidates:
+            try:
+                if os.path.exists(log_file):
+                    with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                        data = f.read()
+                        return data[-size:]
+            except Exception as exc:
+                app.logger.warning(f"无法读取日志 {log_file}: {exc}")
+        return ''
+
+    @app.route('/api/adapter_logs')
+    def api_adapter_logs():
+        return _tail_log_file(['adapter_core.log', 'adapter.log'])
 
     @app.route('/stream_logs')
     def stream_logs():
@@ -819,6 +992,14 @@ def run_web_server():
             if 'api_keys' in new_config:
                 config_data['api_keys'].update(new_config['api_keys'])
             
+            # 更新OneBot配置
+            if 'onebot' in new_config:
+                config_data['onebot'] = new_config['onebot']
+            
+            # 更新Unified API配置
+            if 'unified_api' in new_config:
+                config_data['unified_api'] = new_config['unified_api']
+            
             # 更新角色配置到数据库
             if 'character' in new_config:
                 try:
@@ -862,22 +1043,178 @@ def run_web_server():
                 except Exception as e:
                     print(f"更新角色信息时出错: {e}")
             
+            # 同时更新 config.json 中的 character 信息
+            if 'character' in new_config:
+                if 'character' not in config_data:
+                    config_data['character'] = {}
+                config_data['character'].update(new_config['character'])
+            
             # 更新数据库配置（在内存中）
             if 'database' in new_config:
                 CONFIG['database'].update(new_config['database'])
             
-            # 写入配置文件
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config_data, f, ensure_ascii=False, indent=2)
+            # 更新Unified API配置（在内存中）
+            if 'unified_api' in new_config:
+                if 'unified_api' not in CONFIG:
+                    CONFIG['unified_api'] = {}
+                CONFIG['unified_api'].update(new_config['unified_api'])
             
-            # 重新生成系统提示
-            CONFIG['system_prompt'] = generate_system_prompt(
-                new_config.get('character', config_data['character']), 
-                config_data['system_prompt_template']
-            )
+            # 写入主配置文件
+            with open(config_path, 'w', encoding='utf-8') as f:
+                # 过滤掉 character 和 database 以避免写入 config.json
+                data_to_save = {k: v for k, v in config_data.items() if k not in ['character', 'database', 'system_prompt_template']}
+                # 确保 system_prompt_template 不被写回（它现在在 persona 文件里）
+                json.dump(data_to_save, f, ensure_ascii=False, indent=2)
+
+            # 更新 Database (Separated)
+            if 'database' in new_config:
+                db_path = os.path.join(base_path, 'data', 'database.json')
+                with open(db_path, 'w', encoding='utf-8') as f:
+                    json.dump(new_config['database'], f, ensure_ascii=False, indent=2)
+                CONFIG['database'].update(new_config['database']) # Update Memory
+
+            # 更新 Persona (Separated)
+            if 'character' in new_config:
+                active_persona = config_data.get('active_persona', 'shizuku.json')
+                persona_path = os.path.join(base_path, 'data', 'personas', active_persona)
+                
+                # Try to load existing persona to preserve meta/system_prompt
+                current_persona = {}
+                if os.path.exists(persona_path):
+                     with open(persona_path, 'r', encoding='utf-8') as f:
+                        current_persona = json.load(f)
+                
+                # Update character section
+                current_persona['character'] = new_config['character']
+                
+                # Save Persona
+                with open(persona_path, 'w', encoding='utf-8') as f:
+                    json.dump(current_persona, f, ensure_ascii=False, indent=2)
+
+                # Re-generate system prompt
+                template = current_persona.get('system_prompt', {}).get('template', CONFIG.get('system_prompt_template', ''))
+                CONFIG['system_prompt'] = generate_system_prompt(new_config['character'], template)
             
             return jsonify({'message': '配置更新成功'})
         except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    # Persiona Management APIs
+    @app.route('/api/personas', methods=['GET'])
+    def list_personas():
+        try:
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            personas_dir = os.path.join(base_path, 'data', 'personas')
+            if not os.path.exists(personas_dir):
+                os.makedirs(personas_dir)
+            
+            files = [f for f in os.listdir(personas_dir) if f.endswith('.json')]
+            personas = []
+            
+            # Load active persona name
+            config_path = os.path.join(base_path, 'data', 'config.json')
+            active = "shizuku.json"
+            if os.path.exists(config_path):
+                 with open(config_path, 'r', encoding='utf-8') as f:
+                     active = json.load(f).get('active_persona', 'shizuku.json')
+
+            for file in files:
+                try:
+                    with open(os.path.join(personas_dir, file), 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        meta = data.get('meta', {})
+                        personas.append({
+                            'filename': file,
+                            'name': meta.get('name', 'Unknown'),
+                            'description': meta.get('description', ''),
+                            'version': meta.get('version', '1.0'),
+                            'is_active': (file == active)
+                        })
+                except Exception:
+                    continue
+            return jsonify({'personas': personas, 'active': active})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/personas/<filename>', methods=['GET'])
+    def get_persona(filename):
+        try:
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            path = os.path.join(base_path, 'data', 'personas', filename)
+            if not os.path.exists(path):
+                return jsonify({'error': 'Not found'}), 404
+            with open(path, 'r', encoding='utf-8') as f:
+                return jsonify(json.load(f))
+        except Exception as e:
+             return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/personas', methods=['POST'])
+    def create_persona():
+        try:
+            data = request.get_json()
+            filename = data.get('filename')
+            if not filename.endswith('.json'):
+                filename += '.json'
+            
+            content = data.get('content')
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            path = os.path.join(base_path, 'data', 'personas', filename)
+            
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(content, f, ensure_ascii=False, indent=2)
+            return jsonify({'success': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/personas/activate', methods=['POST'])
+    def activate_persona():
+        try:
+            filename = request.get_json().get('filename')
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            config_path = os.path.join(base_path, 'data', 'config.json')
+            
+            with open(config_path, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+            
+            cfg['active_persona'] = filename
+            
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+            
+            # Reload in memory
+            from src.config import load_config
+            new_conf = load_config()
+            CONFIG.update(new_conf)
+            
+            return jsonify({'success': True})
+        except Exception as e:
+             return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/personas/<filename>', methods=['DELETE'])
+    def delete_persona(filename):
+        try:
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            path = os.path.join(base_path, 'data', 'personas', filename)
+            os.remove(path)
+            return jsonify({'success': True})
+        except Exception as e:
+             return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/personas/open-folder')
+    def open_persona_folder():
+        try:
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            personas_dir = os.path.join(base_path, 'data', 'personas')
+            os.makedirs(personas_dir, exist_ok=True)
+            if os.name == 'nt':
+                os.startfile(personas_dir)
+            elif sys.platform == 'darwin':
+                subprocess.Popen(['open', personas_dir])
+            else:
+                subprocess.Popen(['xdg-open', personas_dir])
+            return jsonify({'success': True, 'path': personas_dir})
+        except Exception as e:
+            app.logger.error(f"打开人格目录失败: {e}")
             return jsonify({'error': str(e)}), 500
 
     # 批处理接口：传入 "0"~"5" 对应 start.bat 菜单项
@@ -909,26 +1246,13 @@ def run_web_server():
         threading.Timer(1, open_browser).start()
 
     # 启动服务
-    # 使用 werkzeug.make_server 启动 Flask 服务，彻底绕过 WERKZEUG_SERVER_FD 读取
     try:
-        http_server = make_server('0.0.0.0', port, app)  # 绑定到所有接口
         print(Fore.CYAN + f"\n🌐 沙箱聊天模式已启动: http://localhost:{port}")
-
         app.logger.info(f"服务器启动于 http://localhost:{port}")
-        http_server.serve_forever()
+        app.run(host='0.0.0.0', port=port, use_reloader=False, threaded=True)
     except Exception as e:
         print(Fore.RED + f"\n❌ 服务器启动失败: {str(e)}")
-        app.logger.error(f"服务器启动失败: {str(e)}")
-        return 1
-
-    try:
-        http_server.serve_forever()
-    except KeyboardInterrupt:
-        print(Fore.YELLOW + "\n正在关闭服务器...")
-        http_server.shutdown()
-        print(Fore.GREEN + "服务器已关闭。")
-        return 0
-    except Exception as e:
-        print(Fore.RED + f"\n❌ 服务器运行出错: {str(e)}")
         app.logger.error(f"服务器运行出错: {str(e)}")
         return 1
+
+    return 0

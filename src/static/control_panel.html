@@ -46,6 +46,15 @@
         <a class="nav-link" id="v-logs-tab" data-bs-toggle="pill" data-bs-target="#v-logs" type="button" role="tab" onclick="refreshLog()">
             <i class="fas fa-terminal fa-fw"></i> 系统日志
         </a>
+        <a class="nav-link" id="v-terminal-tab" data-bs-toggle="pill" data-bs-target="#v-terminal" type="button" role="tab" onclick="initTerminal()">
+            <i class="fas fa-code fa-fw"></i> 终端命令行
+        </a>
+        <a class="nav-link" id="v-persona-tab" data-bs-toggle="pill" data-bs-target="#v-persona" type="button" role="tab">
+            <i class="fas fa-face-smile-beam fa-fw"></i> 人格设定
+        </a>
+        <a class="nav-link" id="v-gateway-tab" data-bs-toggle="pill" data-bs-target="#v-gateway" type="button" role="tab">
+            <i class="fas fa-network-wired fa-fw"></i> 网关控制台
+        </a>
     </div>
 </div>
 
@@ -162,142 +171,260 @@
             </div>
         </div>
 
-        <!-- Sandbox Tab (Merged Chat) -->
+
+        <!-- Sandbox Chat Tab -->
         <div class="tab-pane fade" id="v-sandbox" role="tabpanel">
             <h3 class="mb-4">💬 沙箱对话测试</h3>
-            <div class="row">
-                <div class="col-lg-8 mx-auto">
-                    <div class="chat-wrapper">
-                        <div class="chat-header d-flex justify-content-between align-items-center">
-                            <span><i class="fas fa-cat me-2"></i> Shizuku (Testing Mode)</span>
-                            <button class="btn btn-sm btn-outline-light" onclick="clearChat()"><i class="fas fa-eraser"></i> Clear</button>
-                        </div>
-                        <div class="chat-messages" id="chat-box">
-                            <div class="message bot-message">喵~ 你好呀！我是你的小可爱，今天也要和你好好聊天哦！</div>
-                        </div>
-                        <div class="input-area position-relative">
-                            <div id="emoji-picker" class="card position-absolute shadow-sm d-none" style="bottom: 100%; left: 0; width: 300px; z-index: 1050;">
-                                <div class="card-body p-2 d-flex flex-wrap gap-1" id="emoji-list">
-                                    <!-- Emojis will be injected here -->
-                                </div>
-                            </div>
+            <div class="card h-100 shadow-sm border-0 d-flex flex-column" style="min-height: 600px;">
+                <div id="chat-box" class="card-body bg-light overflow-auto p-4" style="flex: 1; min-height: 400px; border-radius: 0.5rem;">
+                    <div class="message bot-message p-3 mb-2 bg-white rounded shadow-sm border" style="width: fit-content; max-width: 80%;">
+                        喵~我是小雫，有什么可以帮你的吗？
+                    </div>
+                </div>
+                <!-- Input Area -->
+                <div class="card-footer bg-white border-top p-3 position-relative">
+                    <!-- File Previews -->
+                    <div id="file-preview-area" class="mb-2 d-flex flex-wrap gap-2"></div>
+                    
+                    <!-- Typing Indicator -->
+                    <div id="typing-indicator" class="text-muted small mb-2" style="display: none;">
+                        <i class="fas fa-pen-nib fa-spin me-1 text-primary"></i> 小雫正在输入...
+                    </div>
 
-                            <textarea id="chat-input" class="form-control mb-2" rows="3" placeholder="输入你想说的话... (Ctrl+Enter 发送)"></textarea>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span class="typing-indicator small text-muted" id="typing-indicator" style="display:none;">
-                                    <i class="fas fa-circle-notch fa-spin me-1"></i> 小可爱正在思考...
-                                </span>
-                                <div class="btn-group">
-                                    <button class="btn btn-outline-secondary" onclick="toggleEmojiPicker()" title="Emoji">
-                                        <i class="far fa-smile"></i>
-                                    </button>
-                                    <button class="btn btn-outline-secondary" onclick="triggerFileUpload()" title="Upload File">
-                                        <i class="fas fa-paperclip"></i>
-                                    </button>
-                                    <input type="file" id="file-upload" hidden multiple>
-                                </div>
-                                <button class="btn btn-primary px-4 ms-2" onclick="sendChat()">
-                                    <i class="fas fa-paper-plane me-2"></i> 发送
-                                </button>
+                    <div class="input-group">
+                        <button class="btn btn-outline-secondary" type="button" onclick="triggerFileUpload()" title="Upload File/Image">
+                            <i class="fas fa-paperclip"></i>
+                        </button>
+                        <button class="btn btn-outline-secondary" type="button" onclick="toggleEmojiPicker()" title="Emoji">
+                            <i class="far fa-smile"></i>
+                        </button>
+                        <input type="file" id="file-upload" class="d-none" multiple>
+                        <input type="text" id="chat-input" class="form-control" placeholder="Type a message... (Ctrl+Enter to send)" autocomplete="off">
+                        <button class="btn btn-primary px-4" type="button" onclick="sendChat()">
+                            <i class="fas fa-paper-plane me-1"></i> 发送
+                        </button>
+                    </div>
+
+                    <!-- Emoji Picker Popover -->
+                    <div id="emoji-picker" class="d-none card position-absolute shadow-lg" style="bottom: 80px; left: 10px; width: 300px; z-index: 1050;">
+                        <div class="card-header bg-light py-2 small fw-bold d-flex justify-content-between align-items-center">
+                            <span>Emoji Picker</span>
+                            <button type="button" class="btn-close btn-close-sm" onclick="toggleEmojiPicker()"></button>
+                        </div>
+                        <div class="card-body p-2">
+                            <div id="emoji-list" class="d-flex flex-wrap gap-1 justify-content-center" style="max-height: 200px; overflow-y: auto;">
+                                <!-- Emojis injected via JS -->
                             </div>
-                            <div id="file-preview-area" class="mt-2 text-end"></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Config Tab (Merged Editor) -->
+        <!-- Config Tab -->
         <div class="tab-pane fade" id="v-config" role="tabpanel">
-            <h3 class="mb-4">⚙️ 系统全量配置</h3>
-            <form id="full-config-form">
-                <div class="row">
-                    <!-- DB Config -->
-                    <div class="col-md-6">
-                        <div class="card mb-4">
-                            <div class="card-header bg-light fw-bold">数据库配置</div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <label class="form-label">Host</label>
-                                    <input type="text" class="form-control" name="db_host">
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">User</label>
-                                    <input type="text" class="form-control" name="db_user">
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Password</label>
-                                    <input type="password" class="form-control" name="db_password">
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Database Name</label>
-                                    <input type="text" class="form-control" name="db_name">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            <div class="config-header d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
+                <div>
+                    <h3 class="mb-1"><i class="fas fa-sliders-h me-2"></i> 系统配置</h3>
+                    <p class="text-muted small mb-0">在一个侧边栏中切换核心配置区域，快速保存并保持参数一致。</p>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="loadConfig()">
+                        <i class="fas fa-sync me-1"></i> 刷新配置
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="saveAllConfig()">
+                        <i class="fas fa-save me-1"></i> 保存所有设置
+                    </button>
+                </div>
+            </div>
 
-                    <!-- Character Config -->
-                    <div class="col-md-6">
-                        <div class="card mb-4">
-                            <div class="card-header bg-light fw-bold">角色设定 (Persona)</div>
+            <div class="config-shell shadow-sm">
+                <div class="config-sidebar list-group" id="config-sidebar" role="tablist">
+                    <button class="list-group-item list-group-item-action active" type="button" data-config-section="general">
+                        <i class="fas fa-key me-2"></i> 通用 &amp; API密钥
+                    </button>
+                    <button class="list-group-item list-group-item-action" type="button" data-config-section="database">
+                        <i class="fas fa-database me-2"></i> 数据库
+                    </button>
+                    <button class="list-group-item list-group-item-action" type="button" data-config-section="comm">
+                        <i class="fas fa-network-wired me-2"></i> 通信协议
+                    </button>
+                </div>
+                <div class="config-content flex-grow-1">
+                    <section class="config-section active" data-section="general">
+                        <div class="card border-0 shadow-sm">
                             <div class="card-body">
-                                <div class="mb-3">
-                                    <label class="form-label">Name</label>
-                                    <input type="text" class="form-control" name="char_name">
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Personality</label>
-                                    <textarea class="form-control" rows="3" name="char_persona"></textarea>
-                                </div>
-                                <div class="row">
-                                    <div class="col-6 mb-3">
-                                        <label class="form-label">Height</label>
-                                        <input type="text" class="form-control" name="char_height">
+                                <h5 class="card-title mb-3">服务密钥管理</h5>
+                                <form id="general-config-form">
+                                    <div class="mb-3">
+                                        <label class="form-label">API 服务密钥配置</label>
+                                        <div id="api-keys-container">
+                                            <!-- Dynamic API Key Slots -->
+                                        </div>
+                                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addApiKeySlot()">
+                                            <i class="fas fa-plus"></i> 添加服务密钥
+                                        </button>
                                     </div>
-                                    <div class="col-6 mb-3">
-                                        <label class="form-label">Weight</label>
-                                        <input type="text" class="form-control" name="char_weight">
+                                </form>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="config-section" data-section="database">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">数据库 &amp; SQL 控制</h5>
+                                <form id="db-config-form">
+                                    <div class="row g-3 align-items-end">
+                                        <div class="col-md-3">
+                                            <label class="form-label">Host</label>
+                                            <input type="text" class="form-control" name="db_host" id="db_host">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">User</label>
+                                            <input type="text" class="form-control" name="db_user" id="db_user">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">Password</label>
+                                            <input type="password" class="form-control" name="db_password" id="db_password">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">Database Name</label>
+                                            <input type="text" class="form-control" name="db_name" id="db_name">
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Catchphrases (Comma separated)</label>
-                                    <input type="text" class="form-control" name="char_catchphrases">
-                                </div>
+                                    <div class="mt-3 d-flex gap-2 flex-wrap">
+                                        <button type="button" class="btn btn-outline-info btn-sm" onclick="testDbConnection()">测试连接</button>
+                                        <a href="/db_console" target="_blank" class="btn btn-outline-secondary btn-sm">打开数据库管理面板 <i class="fas fa-external-link-alt"></i></a>
+                                        <button type="button" class="btn btn-success btn-sm ms-auto" onclick="saveDbConfigOnly()">保存DB配置</button>
+                                    </div>
+
+                                    <hr class="my-4">
+                                    <h6>⚙️ 快速 SQL 查询控制台</h6>
+                                    <div class="mb-2">
+                                        <textarea class="form-control font-monospace bg-light" id="sql-query-input" rows="3" placeholder="SELECT * FROM character_info LIMIT 1."></textarea>
+                                    </div>
+                                    <button type="button" class="btn btn-primary btn-sm" onclick="runSqlQuery()">执行查询 (Execute)</button>
+                                    <div class="mt-2 bg-dark text-white p-2 rounded" id="sql-result-area" style="min-height: 80px; max-height: 300px; overflow: auto; font-family: 'Consolas', monospace; font-size: 0.85em;">
+                                        <span class="text-muted opacity-50">Query results will appear here...</span>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="config-section" data-section="comm">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">通信与协议配置</h5>
+                                <form id="comm-config-form">
+                                    <div class="mb-3">
+                                        <label class="form-label">核心协议 (Protocol)</label>
+                                        <select class="form-select" id="comm_protocol">
+                                            <option value="unified">Unified API Gateway (Standard)</option>
+                                            <option value="onebot">OneBot V11 (Reverse WebSocket)</option>
+                                        </select>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Service Host</label>
+                                            <input type="text" class="form-control" id="comm_host" placeholder="127.0.0.1">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Service Port</label>
+                                            <input type="number" class="form-control" id="comm_port" placeholder="Port">
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label">Access Token / Secret</label>
+                                            <input type="password" class="form-control" id="comm_token" placeholder="Optional">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 text-end">
+                                        <button type="button" class="btn btn-success" onclick="saveCommConfigOnly()">保存通信配置</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <span class="text-muted small" id="cfg-status-msg"></span>
+            </div>
+        </div>
+
+        <!-- Persona Tab -->
+        <div class="tab-pane fade" id="v-persona" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h3 class="mb-1"><i class="fas fa-face-smile-beam me-2"></i> 人格设定</h3>
+                    <p class="text-muted small mb-0">直接管理 data/personas 下的人设文件，也可以一键打开目录查看原始 JSON。</p>
+                </div>
+                <div class="btn-group persona-actions">
+                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="refreshPersonas()"><i class="fas fa-sync"></i> 刷新列表</button>
+                    <button class="btn btn-outline-primary btn-sm" type="button" onclick="openPersonaFolder()"><i class="fas fa-folder-open"></i> 打开目录</button>
+                </div>
+            </div>
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <div class="row mb-3 gy-3">
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <span class="input-group-text">当前人格</span>
+                                <select class="form-select" id="persona-select" onchange="loadSelectedPersona()">
+                                    <option value="" disabled selected>Loading...</option>
+                                </select>
+                                <button class="btn btn-outline-secondary" type="button" onclick="refreshPersonas()" title="Refresh List"><i class="fas fa-sync"></i></button>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <div class="btn-group persona-actions" role="group">
+                                <button class="btn btn-sm btn-success" onclick="createNewPersona()"><i class="fas fa-plus"></i> 新建</button>
+                                <button class="btn btn-sm btn-primary" onclick="saveCurrentPersona()"><i class="fas fa-save"></i> 保存</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteCurrentPersona()"><i class="fas fa-trash"></i> 删除</button>
+                                <button class="btn btn-sm btn-info text-white" onclick="document.getElementById('import-persona-input').click()"><i class="fas fa-file-import"></i> 导入</button>
+                                <input type="file" id="import-persona-input" accept=".json" style="display: none;" onchange="importPersona(this)">
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- API Keys -->
-                    <div class="col-12">
-                        <div class="card mb-4">
-                            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-                                <span>API 密钥管理 (支持多模型配置)</span>
-                                <small class="text-muted">请确保 Base URL 包含 /v1 (如适用)</small>
+                    <form id="persona-form" class="persona-form">
+                        <input type="hidden" id="current-persona-filename">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">角色名称 (Name)</label>
+                                <input type="text" class="form-control" name="char_name" id="char_name">
                             </div>
-                            <div class="card-body">
-                                <div id="api-keys-container">
-                                    <!-- Dynamic API Key Fields will be injected here -->
-                                    <div class="text-center text-muted py-3">Loading configuration...</div>
-                                </div>
-                                <div class="mt-3">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addApiKeySlot()">
-                                        <i class="fas fa-plus"></i> 添加新的 API 配置
-                                    </button>
-                                </div>
+                            <div class="col-md-6">
+                                <label class="form-label">哥哥QQ号 (Reference ID)</label>
+                                <input type="text" class="form-control" name="brother_qqid" id="brother_qqid">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">性格特征 (Personality)</label>
+                                <textarea class="form-control" name="char_persona" id="char_persona" rows="2"></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">身高 (Height)</label>
+                                <input type="text" class="form-control" name="char_height" id="char_height">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">体重 (Weight)</label>
+                                <input type="text" class="form-control" name="char_weight" id="char_weight">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">口癖/口头禅 (Catchphrases - Comma separated)</label>
+                                <input type="text" class="form-control" name="char_catchphrases" id="char_catchphrases">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">系统提示词模板 (System Prompt Template)</label>
+                                <div class="form-text mb-1">使用 {name}, {personality} 等占位符。留空则使用默认。</div>
+                                <textarea class="form-control font-monospace" name="system_prompt_template" id="system_prompt_template" rows="6" style="font-size: 0.85em; background-color: #f8f9fa;"></textarea>
                             </div>
                         </div>
-                    </div>
+                    </form>
                 </div>
-                
-                <div class="fixed-bottom bg-white border-top p-3 shadow-lg" style="left: 250px;">
-                    <div class="container-fluid d-flex justify-content-between align-items-center">
-                        <span class="text-muted small" id="cfg-status-msg"></span>
-                        <button type="button" class="btn btn-success px-5" onclick="saveConfig()"><i class="fas fa-save me-2"></i> 保存所有更改</button>
-                    </div>
-                </div>
-            </form>
-            <div style="height: 60px;"></div> <!-- Spacer for fixed footer -->
+            </div>
+            <p class="text-muted small mt-3">也可以在 <span id="persona-folder-path" class="fw-semibold">data/personas</span> 目录中直接编辑文件，保存后刷新即可。</p>
         </div>
 
         <!-- Agent Tab -->
@@ -411,6 +538,66 @@
             </div>
         </div>
 
+        <!-- Terminal Tab -->
+        <div class="tab-pane fade" id="v-terminal" role="tabpanel">
+            <h3 class="mb-4">💻 终端命令行</h3>
+            <div class="card bg-dark text-light border-0 shadow">
+                <div class="card-header border-bottom border-secondary d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-terminal me-2"></i>System Shell</span>
+                    <span class="badge bg-secondary">Caution</span>
+                </div>
+                <div class="card-body p-0 d-flex flex-column" style="height: 600px;">
+                    <pre id="term-output" class="flex-grow-1 m-0 p-3" style="overflow-y: auto; color: #0f0; font-family: 'Consolas', monospace; font-size: 0.9rem;"></pre>
+                    <div class="p-2 border-top border-secondary bg-secondary bg-opacity-25">
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent text-light border-0">$</span>
+                            <input type="text" id="term-input" class="form-control bg-transparent text-light border-0 shadow-none" placeholder="Enter command..." autocomplete="off">
+                            <button class="btn btn-primary" onclick="execCmd()">Execute</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gateway Console -->
+        <div class="tab-pane fade" id="v-gateway" role="tabpanel">
+            <h3 class="mb-4">🌐 网关控制台</h3>
+            <div class="row g-4 mb-3">
+                <div class="col-md-6">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="card-title mb-0">Agent API</h5>
+                                <span class="badge bg-primary">可作为 Agent API</span>
+                            </div>
+                            <p class="mb-2">基础地址：<span id="adapter-base-url">http://localhost:5000/v1</span></p>
+                            <p class="mb-2">文档：<a id="adapter-docs-link" href="http://localhost:5000/docs" target="_blank">/docs</a></p>
+                            <p class="mb-2">聊天接口：<code>/v1/chat/completions</code> (POST)</p>
+                            <p class="text-muted small mb-0">支持 OpenAI Chat Completion 兼容参数，可被 ASTR/NoneBot/Napcat 等前端直连。</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="card-title mb-0">HTTP & WebSocket 连接</h5>
+                                <span class="badge bg-secondary">保留 OneBot 接口</span>
+                            </div>
+                            <p class="mb-2"><i class="fas fa-globe me-1"></i> HTTP: <span id="onebot-http-url">未配置</span></p>
+                            <p class="mb-2"><i class="fas fa-wave-square me-1"></i> WebSocket: <span id="onebot-ws-url">未配置</span></p>
+                            <p class="mb-0 text-muted"><i class="fas fa-undo me-1"></i> 反向 WebSocket：<span id="onebot-reverse-url">未配置</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card border-0 shadow-sm" style="height: 560px;">
+                <div class="card-body p-0 overflow-hidden rounded">
+                    <iframe src="/adapter_console" class="w-100 h-100 border-0" title="Gateway Console"></iframe>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -448,17 +635,26 @@
         }
     }
 
-    function triggerFileUpload() { document.getElementById('file-upload').click(); }
+    function triggerFileUpload() { 
+        const el = document.getElementById('file-upload');
+        if(el) el.click(); 
+    }
     
-    document.getElementById('file-upload').addEventListener('change', function(e) {
-        const preview = document.getElementById('file-preview-area');
-        preview.innerHTML = '';
-        if(this.files && this.files.length > 0) {
-            Array.from(this.files).forEach(f => {
-                const badge = document.createElement('span');
-                badge.className = 'badge bg-secondary me-1';
-                badge.innerText = f.name + (f.size > 1024*1024 ? ` ${(f.size/1024/1024).toFixed(1)}MB` : ` ${(f.size/1024).toFixed(1)}KB`);
-                preview.appendChild(badge);
+    document.addEventListener('DOMContentLoaded', () => {
+        const fileInput = document.getElementById('file-upload');
+        if (fileInput) {
+            fileInput.addEventListener('change', function(e) {
+                const preview = document.getElementById('file-preview-area');
+                if (!preview) return;
+                preview.innerHTML = '';
+                if(this.files && this.files.length > 0) {
+                    Array.from(this.files).forEach(f => {
+                        const badge = document.createElement('span');
+                        badge.className = 'badge bg-secondary me-1';
+                        badge.innerText = f.name + (f.size > 1024*1024 ? ` ${(f.size/1024/1024).toFixed(1)}MB` : ` ${(f.size/1024).toFixed(1)}KB`);
+                        preview.appendChild(badge);
+                    });
+                }
             });
         }
     });
@@ -560,21 +756,12 @@
         } else {
             div.textContent = text;
         }
-        
         box.appendChild(div);
         box.scrollTop = box.scrollHeight;
     }
-    
-    function triggerImageUpload() { document.getElementById('img-upload').click(); }
-    /*
-    document.getElementById('img-upload').addEventListener('change', function(e) {
-         if(this.files && this.files[0]) {
-             const f = this.files[0];
-             document.getElementById('img-preview-area').innerHTML = `<span class="badge bg-secondary">Image selected: ${f.name}</span>`;
-         }
-    });
-    */
 
+    
+    // 3. Monitor Logic
 
     document.getElementById('chat-input').addEventListener('keypress', function (e) {
         if (e.key === 'Enter' && e.ctrlKey) {
@@ -587,36 +774,27 @@
     }
 
     // 2. Config Logic
-    let apiKeysMap = {}; // Store current api key config
-
+    
+    // --- API & General ---
     function createApiKeySlot(keyName, config = {key: '', base_url: ''}) {
         const div = document.createElement('div');
-        div.className = 'card mb-3 api-key-card shadow-sm';
+        div.className = 'card mb-2 api-key-card border-light shadow-sm';
         div.innerHTML = `
-            <div class="card-body p-3">
-                <div class="row align-items-center">
+            <div class="card-body p-2">
+                <div class="row align-items-center g-2">
                     <div class="col-md-3">
-                        <label class="form-label fw-bold mb-0 text-primary small text-uppercase" style="letter-spacing: 0.5px;">
-                            <i class="fas fa-tag me-1"></i>${keyName.replace(/_/g, ' ')}
-                        </label>
-                        <input type="hidden" class="api-name" value="${keyName}">
+                        <input type="text" class="form-control form-control-sm border-0 fw-bold text-primary" 
+                               value="${keyName}" placeholder="Service Name" 
+                               onchange="this.dataset.keyname = this.value; this.setAttribute('value', this.value);">
                     </div>
                     <div class="col-md-4">
-                        <div class="input-group input-group-sm">
-                            <span class="input-group-text bg-light text-muted"><i class="fas fa-key"></i></span>
-                            <input type="password" class="form-control api-key" placeholder="API Key" value="${config.key || ''}">
-                        </div>
+                        <input type="password" class="form-control form-control-sm api-key" placeholder="API Key" value="${config.key || ''}">
                     </div>
                     <div class="col-md-4">
-                        <div class="input-group input-group-sm">
-                            <span class="input-group-text bg-light text-muted"><i class="fas fa-globe"></i></span>
-                            <input type="text" class="form-control api-url" placeholder="Custom Base URL (Optional)" value="${config.base_url || ''}">
-                        </div>
+                        <input type="text" class="form-control form-control-sm api-url" placeholder="Base URL" value="${config.base_url || ''}">
                     </div>
                     <div class="col-md-1 text-end">
-                        <button type="button" class="btn btn-outline-danger btn-sm rounded-circle" style="width: 32px; height: 32px; padding: 0;" onclick="confirm('Delete this key?') && this.closest('.card').remove()" title="Remove Service">
-                            <i class="fas fa-times"></i>
-                        </button>
+                        <button type="button" class="btn btn-sm text-danger" onclick="this.closest('.card').remove()"><i class="fas fa-times"></i></button>
                     </div>
                 </div>
             </div>
@@ -625,110 +803,402 @@
     }
 
     function addApiKeySlot() {
-        const name = prompt("Enter API Name (key identifier):", "new_api_service");
+        const name = prompt("Enter Service Name (e.g. deepseek_chat):", "new_service");
         if(name) {
             document.getElementById('api-keys-container').appendChild(createApiKeySlot(name));
         }
     }
 
+    // --- Main Load function ---
     async function loadConfig() {
         try {
+            // 1. Fetch Main Config
             const res = await fetch('/api/config');
             const data = await res.json();
             
-            // Populate form
-            const form = document.getElementById('full-config-form');
-            if (data.database) {
-                if (form.elements['db_host']) form.elements['db_host'].value = data.database.host || '';
-                if (form.elements['db_user']) form.elements['db_user'].value = data.database.user || '';
-                if (form.elements['db_password']) form.elements['db_password'].value = data.database.password || '';
-                if (form.elements['db_name']) form.elements['db_name'].value = data.database.database || '';
-            }
-            if (data.character) {
-                if (form.elements['char_name']) form.elements['char_name'].value = data.character.name || '';
-                if (form.elements['char_persona']) form.elements['char_persona'].value = data.character.personality || '';
-                if (form.elements['char_height']) form.elements['char_height'].value = data.character.height || '';
-                if (form.elements['char_weight']) form.elements['char_weight'].value = data.character.weight || '';
-                if (form.elements['char_catchphrases']) form.elements['char_catchphrases'].value = data.character.catchphrases || '';
+            // Database Form
+            const dbForm = document.getElementById('db-config-form');
+            if(dbForm && data.database) {
+                dbForm.elements['db_host'].value = data.database.host || '';
+                dbForm.elements['db_user'].value = data.database.user || '';
+                dbForm.elements['db_password'].value = data.database.password || '';
+                dbForm.elements['db_name'].value = data.database.database || '';
             }
 
-            // Populate API Keys
+            // General API Keys
             const container = document.getElementById('api-keys-container');
             container.innerHTML = '';
-            
-            // Expected Keys (Ensure these always exist even if empty)
             const defaultKeys = ['deepseek_chat', 'search', 'image_recognition', 'image_generation', 'video_generation', 'speech_to_text', 'text_to_speech'];
             const currentKeys = data.api_keys || {};
             
-            // Merge defaults
-            defaultKeys.forEach(k => {
-                if(!currentKeys[k]) currentKeys[k] = {key: '', base_url: ''};
-            });
+            // Ensure defaults appear
+            defaultKeys.forEach(k => { if(!currentKeys[k]) currentKeys[k] = {key: '', base_url: ''}; });
             
-            // Render all
             Object.keys(currentKeys).forEach(k => {
                 const cfg = currentKeys[k];
-                // Handle both old string format and new dict format if necessary, though backend seems to use dict
                 const configObj = (typeof cfg === 'string') ? {key: cfg, base_url: ''} : cfg;
                 container.appendChild(createApiKeySlot(k, configObj));
             });
-            
+
+            // Communication Form
+            // Assuming config has 'unified_api' or 'onebot'
+            if(data.unified_api) {
+                document.getElementById('comm_protocol').value = 'unified';
+                document.getElementById('comm_host').value = data.unified_api.host || '127.0.0.1';
+                document.getElementById('comm_port').value = data.unified_api.port || 8000;
+                document.getElementById('comm_token').value = data.unified_api.access_token || '';
+            } else if (data.onebot) {
+                document.getElementById('comm_protocol').value = 'onebot';
+                document.getElementById('comm_host').value = data.onebot.host || '127.0.0.1';
+                document.getElementById('comm_port').value = data.onebot.port || 3000;
+                document.getElementById('comm_token').value = data.onebot.access_token || '';
+            }
+
+                    const adapterBaseEl = document.getElementById('adapter-base-url');
+                    const adapterDocsLink = document.getElementById('adapter-docs-link');
+                    if(adapterBaseEl) {
+                        const host = data.unified_api?.host || '127.0.0.1';
+                        const port = data.unified_api?.port || 8000;
+                        const baseUrl = data.unified_api?.base_url || `http://${host}:${port}`;
+                        adapterBaseEl.textContent = `${baseUrl.replace(/\/+$/, '')}/v1`;
+                        if(adapterDocsLink) {
+                            adapterDocsLink.href = `${baseUrl.replace(/\/+$/, '')}/docs`;
+                        }
+                    }
+
+                    const onebotHttp = data.onebot?.http;
+                    const onebotWs = data.onebot?.ws;
+                    const onebotReverse = data.onebot?.ws_reverse;
+                    const setSpan = (id, value, fallback = '未配置') => {
+                        const el = document.getElementById(id);
+                        if(el) el.textContent = value || fallback;
+                    };
+
+                    setSpan('onebot-http-url', onebotHttp?.enable ? `http://${onebotHttp.host}:${onebotHttp.port}` : '', '未启用');
+                    setSpan('onebot-ws-url', onebotWs?.enable ? `ws://${onebotWs.host}:${onebotWs.port}` : '', '未启用');
+                    setSpan('onebot-reverse-url', onebotReverse?.enable ? (onebotReverse.url || '') : '', '未启用');
+
+            // 2. Load Personas List
+            refreshPersonas();
+
         } catch(e) {
             console.error('Config Load Error:', e);
-            // alert('Failed to load config'); // Optional: suppress alert to avoid annoyance on load
+            document.getElementById('cfg-status-msg').innerText = '❌ Load failed: ' + e;
         }
     }
 
-    async function saveConfig() {
-        const form = document.getElementById('full-config-form');
-        const payload = {
-            database: {
-                host: form.elements['db_host'] ? form.elements['db_host'].value : '',
-                user: form.elements['db_user'] ? form.elements['db_user'].value : '',
-                password: form.elements['db_password'] ? form.elements['db_password'].value : '',
-                database: form.elements['db_name'] ? form.elements['db_name'].value : ''
+    function switchConfigSection(target) {
+        document.querySelectorAll('#config-sidebar [data-config-section]').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.config-section').forEach(section => section.classList.remove('active'));
+        const button = document.querySelector(`#config-sidebar [data-config-section="${target}"]`);
+        const panel = document.querySelector(`.config-section[data-section="${target}"]`);
+        if(button) button.classList.add('active');
+        if(panel) panel.classList.add('active');
+    }
+
+    function setupConfigSidebarNavigation() {
+        document.querySelectorAll('#config-sidebar [data-config-section]').forEach(btn => {
+            btn.addEventListener('click', () => switchConfigSection(btn.dataset.configSection));
+        });
+    }
+
+    // --- Persona Management ---
+    let currentPersonaFile = '';
+
+    async function refreshPersonas() {
+        const select = document.getElementById('persona-select');
+        select.innerHTML = '<option disabled>Loading...</option>';
+        try {
+            const res = await fetch('/api/personas');
+            const data = await res.json();
+            
+            select.innerHTML = '';
+            data.personas.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.filename;
+                opt.text = `${p.name} (${p.filename}) ${p.is_active ? '[Active]' : ''}`;
+                if(p.is_active) opt.selected = true;
+                select.appendChild(opt);
+            });
+            
+            // If active returned separately or relying on select
+            if(data.active) {
+                select.value = data.active;
+                currentPersonaFile = data.active;
+            } else if(select.options.length > 0) {
+                 select.selectedIndex = 0;
+                 currentPersonaFile = select.value;
+            }
+            
+            // Load details of selected
+            loadSelectedPersona();
+            
+        } catch(e) {
+            select.innerHTML = '<option disabled>Error loading list</option>';
+        }
+    }
+
+    async function loadSelectedPersona() {
+        const filename = document.getElementById('persona-select').value;
+        if(!filename) return;
+        currentPersonaFile = filename;
+        
+        try {
+            const res = await fetch(`/api/personas/${filename}`);
+            const data = await res.json();
+            
+            // Fill Form
+            const form = document.getElementById('persona-form');
+            const char = data.character || {};
+            const sys = data.system_prompt || {};
+            
+            form.elements['char_name'].value = char.name || '';
+            form.elements['char_persona'].value = char.personality || '';
+            form.elements['brother_qqid'].value = char.brother_qqid || '';
+            form.elements['char_height'].value = char.height || '';
+            form.elements['char_weight'].value = char.weight || '';
+            form.elements['char_catchphrases'].value = char.catchphrases || '';
+            form.elements['system_prompt_template'].value = sys.template || '';
+            
+        } catch(e) {
+            alert("Failed to load persona details: " + e);
+        }
+    }
+
+    async function saveCurrentPersona() {
+        if(!currentPersonaFile) return;
+        const form = document.getElementById('persona-form');
+        
+        const content = {
+            meta: {
+                name: form.elements['char_name'].value,
+                description: "Created via Control Panel",
+                version: "1.0",
+                author: "User"
             },
             character: {
-                name: form.elements['char_name'] ? form.elements['char_name'].value : '',
-                personality: form.elements['char_persona'] ? form.elements['char_persona'].value : '',
-                height: form.elements['char_height'] ? form.elements['char_height'].value : '',
-                weight: form.elements['char_weight'] ? form.elements['char_weight'].value : '',
-                catchphrases: form.elements['char_catchphrases'] ? form.elements['char_catchphrases'].value : ''
+                name: form.elements['char_name'].value,
+                personality: form.elements['char_persona'].value,
+                brother_qqid: form.elements['brother_qqid'].value,
+                height: form.elements['char_height'].value,
+                weight: form.elements['char_weight'].value,
+                catchphrases: form.elements['char_catchphrases'].value
             },
-            api_keys: {}
-        };
-        
-        // Collect API Keys
-        const keySlots = document.querySelectorAll('#api-keys-container .card');
-        keySlots.forEach(slot => {
-            const name = slot.querySelector('.api-name').value;
-            const key = slot.querySelector('.api-key').value;
-            const url = slot.querySelector('.api-url').value;
-            if(name) {
-                payload.api_keys[name] = { key: key, base_url: url };
+            system_prompt: {
+                template: form.elements['system_prompt_template'].value
             }
-        });
+        };
 
         try {
+            // Save file
+            await fetch('/api/personas', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ filename: currentPersonaFile, content: content })
+            });
+            
+            // If it is the active one, we might want to reload core config too so it takes effect?
+            // User likely wants to "Activate" too if it wasn't active.
+            // But let's just save for now.
+            const select = document.getElementById('persona-select');
+            // If currently selected is active (checked via text? or we need state)
+            // Just notify success
+            alert('Persona saved!');
+            refreshPersonas(); // Refresh list to update names
+            
+            // If user wants to activate this specific one:
+            if(confirm('Do you want to set this as the ACTIVE persona now?')) {
+                await fetch('/api/personas/activate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ filename: currentPersonaFile })
+                });
+            }
+
+        } catch(e) {
+            alert('Error saving persona: ' + e);
+        }
+    }
+
+    async function createNewPersona() {
+        const name = prompt("Enter filename for new persona (e.g. neko.json):");
+        if(name) {
+            currentPersonaFile = name.endsWith('.json') ? name : name+'.json';
+            // Clear form
+            document.getElementById('persona-form').reset();
+            // User fills and hits save
+            alert(`Created context for ${currentPersonaFile}. Fill details and click SAVE.`);
+        }
+    }
+    
+    async function deleteCurrentPersona() {
+        if(!currentPersonaFile) return;
+        if(confirm(`Are you sure you want to delete ${currentPersonaFile}?`)) {
+            await fetch(`/api/personas/${currentPersonaFile}`, { method: 'DELETE' });
+            refreshPersonas();
+        }
+    }
+    
+    function importPersona(input) {
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const content = JSON.parse(e.target.result);
+                    // ask for filename
+                    currentPersonaFile = file.name;
+                    // Upload
+                     await fetch('/api/personas', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ filename: currentPersonaFile, content: content })
+                    });
+                    refreshPersonas();
+                    alert('Imported successfully!');
+                } catch(err) {
+                    alert('Invalid JSON file');
+                }
+            };
+            reader.readAsText(file);
+        }
+    }
+
+    async function openPersonaFolder() {
+        try {
+            const res = await fetch('/api/personas/open-folder');
+            const data = await res.json();
+            if(data.success) {
+                document.getElementById('persona-folder-path').textContent = data.path || 'data/personas';
+                toastr.success('已在文件管理器中打开人格目录');
+            } else {
+                toastr.error(data.error || '无法打开目录');
+            }
+        } catch(e) {
+            toastr.error('打开人格目录失败: ' + e.message);
+        }
+    }
+
+    document.getElementById('v-persona-tab')?.addEventListener('shown.bs.tab', () => {
+        refreshPersonas();
+    });
+
+    // --- Database & Comm ---
+    function saveDbConfigOnly() {
+        // Just triggers main save but could be separated
+        saveAllConfig(); 
+    }
+    function saveCommConfigOnly() {
+        saveAllConfig(); 
+    }
+
+    async function testDbConnection() {
+        // Implement a simple check via query
+        runSqlQuery('SELECT 1');
+    }
+
+    async function runSqlQuery(queryOverride) {
+        let query = queryOverride;
+        if (!query) {
+            query = document.getElementById('sql-query-input').value;
+        }
+        if(!query) return;
+        
+        const resArea = document.getElementById('sql-result-area');
+        resArea.innerHTML = 'Executing...';
+        
+        try {
+            const res = await fetch('/api/database/query', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({query: query})
+            });
+            const data = await res.json();
+            if(data.error) {
+                resArea.innerText = 'Error: ' + data.error;
+                resArea.className = 'mt-2 bg-danger text-white p-2 rounded';
+            } else {
+                 resArea.className = 'mt-2 bg-dark text-white p-2 rounded';
+                 if(data.data) {
+                     resArea.innerText = JSON.stringify(data.data, null, 2);
+                 } else {
+                     resArea.innerText = data.message || 'Success';
+                 }
+            }
+        } catch(e) {
+            resArea.innerText = 'Request Failed: ' + e;
+        }
+    }
+
+    async function saveAllConfig() {
+        const btn = document.querySelector('button[onclick="saveAllConfig()"]');
+        if(btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+        try {
+            // 1. DB
+            const dbPayload = {
+                host: document.getElementById('db_host').value,
+                user: document.getElementById('db_user').value,
+                password: document.getElementById('db_password').value,
+                database: document.getElementById('db_name').value
+            };
+
+            // 2. Comm
+            const proto = document.getElementById('comm_protocol').value;
+            const commPayload = {
+                host: document.getElementById('comm_host').value,
+                port: parseInt(document.getElementById('comm_port').value),
+                access_token: document.getElementById('comm_token').value
+            };
+            
+            // 3. API Keys
+            const apiKeys = {};
+            document.querySelectorAll('#api-keys-container .card').forEach(card => {
+                const nameInput = card.querySelector('input[placeholder="Service Name"]');
+                const keyInput = card.querySelector('input.api-key');
+                const urlInput = card.querySelector('input.api-url');
+                if(nameInput && nameInput.value) {
+                     apiKeys[nameInput.value] = { 
+                         key: keyInput.value, 
+                         base_url: urlInput.value 
+                     };
+                }
+            });
+
+            // Construct full payload
+            const payload = {
+                database: dbPayload,
+                api_keys: apiKeys
+            };
+            
+            if(proto === 'unified') {
+                payload.unified_api = commPayload;
+            } else {
+                payload.onebot = commPayload;
+            }
+
             const res = await fetch('/api/config', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
             });
             const result = await res.json();
-            const status = document.getElementById('cfg-status-msg');
+            
             if(res.ok) {
-                status.className = 'text-success fw-bold';
-                status.innerText = '✅ Saved Successfully!';
-                setTimeout(() => status.innerText = '', 3000);
+                 document.getElementById('cfg-status-msg').innerText = '✅ Global Config Saved';
+                 setTimeout(() => document.getElementById('cfg-status-msg').innerText = '', 3000);
             } else {
-                status.className = 'text-danger fw-bold';
-                status.innerText = '❌ Error: ' + (result.error || 'Unknown error');
+                 document.getElementById('cfg-status-msg').innerText = '❌ Error: ' + (result.error || 'Unknown');
             }
+
         } catch(e) {
             alert('Save failed: ' + e);
+        } finally {
+            if(btn) btn.innerHTML = '<i class="fas fa-save me-2"></i> 保存所有设置';
         }
     }
+
+
 
     // 3. Monitoring & Charts
     let mainChart, diskChart, detailCpuChart, detailMemChart;
@@ -804,6 +1274,8 @@
                 });
             });
 
+            setupConfigSidebarNavigation();
+
             // Start Loop
             monitorLoop();
             
@@ -815,6 +1287,44 @@
             console.error("Initialization Error:", e);
         }
     });
+    // Terminal Logic
+    function initTerminal() {
+         document.getElementById('term-input').focus();
+    }
+
+    document.getElementById('term-input').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') execCmd();
+    });
+
+    async function execCmd() {
+        const input = document.getElementById('term-input');
+        const output = document.getElementById('term-output');
+        const cmd = input.value.trim();
+        if(!cmd) return;
+
+        output.innerHTML += `<div class="text-white opacity-50">$ ${cmd}</div>`;
+        input.value = '';
+        output.scrollTop = output.scrollHeight;
+
+        try {
+            const res = await fetch('/api/exec_cmd', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({cmd: cmd})
+            });
+            const html = await res.text();
+            // Backend returns <pre>...</pre>, strip it if needed or just append
+            // But we want to preserve color/fmt if any.
+            // Since backend uses <pre>, we can append it directly but stripping the pre tag might be better for formatting consistency.
+            // Let's just append inner content.
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            output.innerHTML += temp.innerText; // Basic text for now
+            output.scrollTop = output.scrollHeight;
+        } catch(e) {
+            output.innerHTML += `<div class="text-danger">Error: ${e}</div>`;
+        }
+    }
 
     function runDiagnosis() {
         const resultEl = document.getElementById('diag-result');
@@ -831,18 +1341,51 @@
     }
 
     function monitorLoop() {
+        if (typeof Chart === 'undefined') {
+            console.warn("Chart.js failed to load. Will retry.");
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+            script.onload = () => {
+                console.log("Chart.js loaded via fallback.");
+                document.dispatchEvent(new Event('DOMContentLoaded')); // Re-init
+            };
+            document.head.appendChild(script);
+            return;
+        }
+
         setInterval(async () => {
             try {
                 const res = await fetch('/api/monitoring');
                 if (!res.ok) throw new Error('Network response was not ok');
                 const data = await res.json();
-                if(data.error) return;
+                
+                // Show status if backend is initializing
+                if(data.error) {
+                    const badge = document.getElementById('sys-status-badge');
+                    if(badge) {
+                        badge.innerText = data.error === 'Initializing' ? 'Waiting...' : 'Backend Error';
+                        badge.className = 'badge bg-warning rounded-pill';
+                    }
+                    if(data.error !== 'Initializing') console.warn("Monitor Error:", data.error);
+                    return;
+                }
+
+                // If success, update badge
+                const badge = document.getElementById('sys-status-badge');
+                if(badge) {
+                    badge.innerText = 'Running';
+                    badge.className = 'badge bg-success rounded-pill';
+                }
 
                 // --- Sidebar/Badges ---
                 if(document.getElementById('dash-cpu')) document.getElementById('dash-cpu').innerText = data.cpu_percent + '%';
                 if(document.getElementById('dash-mem')) document.getElementById('dash-mem').innerText = data.memory_percent + '%';
-                if(document.getElementById('dash-token')) document.getElementById('dash-token').innerText = (data.token_stats.total_tokens || 0).toLocaleString();
-                if(document.getElementById('sys-uptime')) document.getElementById('sys-uptime').innerText = Math.floor(data.uptime/60) + " min";
+                if(document.getElementById('dash-token')) {
+                    const total = (data.token_stats && data.token_stats.total_tokens) || (data.input_tokens + data.output_tokens) || 0;
+                    document.getElementById('dash-token').innerText = total.toLocaleString();
+                }
+                if(document.getElementById('sys-uptime')) document.getElementById('sys-uptime').innerText = Math.floor((data.uptime_seconds || 0)/60) + " min";
+
 
                 // --- Charts Update ---
                 const time = new Date().toLocaleTimeString();

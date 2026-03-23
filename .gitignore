@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.log
+*.tmp
+tmp_*
+data/database.json
+data/config.json.bak
+target/
+.vscode/
+.idea/
+venv/
+env/
+node_modules/
