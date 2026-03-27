@@ -5,7 +5,7 @@
 
 功能描述:
     作为程序的启动入口，根据命令行参数或用户交互选择运行模式。
-    支持启动 Web 服务器、控制面板、Koishi 服务、数据库管理等多种模式。
+    支持启动 Web 服务器、控制面板、适配器服务、数据库管理等多种模式。
 """
 import sys
 import io
@@ -34,8 +34,8 @@ def check_ports():
         (8081, "控制面板"),
         (8082, "数据库管理"),
         (8083, "日志服务"),
-        (5000, "Koishi主端口"),
-        (5001, "Koishi备用端口")
+        (5000, "适配器主端口"),
+        (5001, "适配器备用端口")
     ]
 
     print(Fore.CYAN + "端口检查:")
@@ -115,8 +115,8 @@ def run_mode(mode):
     """根据模式编号运行相应的服务"""
     try:
         if mode == 0:
-            from src.koishi_service import run_koishi_service
-            run_koishi_service()
+            from src.adapter_service import run_adapter_service
+            run_adapter_service()
         elif mode == 1:
             from src.web_server import run_terminal_chat
             run_terminal_chat()
@@ -165,7 +165,7 @@ if __name__ == "__main__":
         print(Fore.CYAN + "=" * 50)
         print(Fore.YELLOW + "🐱 ShizukuNyaBot - 运行模式选择")
         print(Fore.CYAN + "=" * 50)
-        print(Fore.GREEN + "0: 映射至Koishi\\AstrBot等前端 (OpenAI API兼容)")
+        print(Fore.GREEN + "0: 启动核心适配器服务 (OpenAI API兼容)")
         print(Fore.GREEN + "1: 终端聊天模式")
         print(Fore.GREEN + "2: 沙箱聊天模式 (Web界面)")
         print(Fore.GREEN + "3: 运行服务诊断")

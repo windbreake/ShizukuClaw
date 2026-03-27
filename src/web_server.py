@@ -15,6 +15,8 @@ import locale
 import platform
 import mimetypes
 import datetime
+import hashlib
+import hmac
 mimetypes.add_type('application/javascript', '.js')
 mimetypes.add_type('text/css', '.css')
 mimetypes.add_type('text/html', '.html')
@@ -42,6 +44,34 @@ _LATEST_CPU_PERCENT = 0.0 # 最新CPU使用率
 _LATEST_SYSTEM_STATS = {}
 _MONITOR_THREAD_STARTED = False
 
+
+def _hash_password(raw_password: str) -> str:
+    return hashlib.sha256((raw_password or '').encode('utf-8')).hexdigest()
+
+
+def _verify_password(raw_password: str, password_hash: str) -> bool:
+    if not raw_password or not password_hash:
+        return False
+    return hmac.compare_digest(_hash_password(raw_password), password_hash)
+
+
+def _is_work_mode_enabled(frontend_source: str = '') -> bool:
+    wm = CONFIG.get('work_mode', {})
+    global_enabled = bool(wm.get('enabled', False))
+    sandbox_enabled = bool(wm.get('sandbox_enabled', False))
+    source = (frontend_source or '').strip().lower()
+    return global_enabled or (sandbox_enabled and source == 'sandbox')
+
+
+def _default_work_mode_features(existing: dict = None) -> dict:
+    existing = existing or {}
+    return {
+        'allow_file_write': bool(existing.get('allow_file_write', True)),
+        'allow_code_exec': bool(existing.get('allow_code_exec', True)),
+        'allow_plan_update': bool(existing.get('allow_plan_update', True)),
+        'allow_coder_tool': bool(existing.get('allow_coder_tool', True))
+    }
+
 def start_monitor_thread():
     """启动后台监控线程"""
     global _MONITOR_THREAD_STARTED
@@ -50,7 +80,7 @@ def start_monitor_thread():
     _MONITOR_THREAD_STARTED = True
     
     def monitor_loop():
-        global _LATEST_SYSTEM_STATS, _CPU_NAME_CACHE
+        global _LATEST_SYSTEM_STATS, _CPU_NAME_CACHE, _LATEST_CPU_PERCENT
         
         # 0. Fast Initialization
         try:
@@ -110,16 +140,33 @@ def start_monitor_thread():
         except:
             pass
 
+        # Prime psutil CPU counters to avoid the first-sample spike/zero.
+        try:
+            psutil.cpu_percent(interval=None)
+            psutil.cpu_percent(interval=None, percpu=True)
+        except Exception:
+            pass
+
         while True:
             try:
                 # 1. CPU
-                current_percent = psutil.cpu_percent(interval=1)
-                current_per_core = psutil.cpu_percent(interval=None, percpu=True)
+                current_per_core = psutil.cpu_percent(interval=0.8, percpu=True)
+                if current_per_core:
+                    sampled_percent = sum(current_per_core) / len(current_per_core)
+                else:
+                    sampled_percent = psutil.cpu_percent(interval=None)
+
+                # Task Manager is visually smoothed; apply light smoothing to reduce jitter.
+                if _LATEST_CPU_PERCENT <= 0:
+                    current_percent = round(sampled_percent, 1)
+                else:
+                    current_percent = round((_LATEST_CPU_PERCENT * 0.6) + (sampled_percent * 0.4), 1)
+                _LATEST_CPU_PERCENT = current_percent
                 
                 # 2. Memory
                 memory = psutil.virtual_memory()
                 memory_percent = memory.percent
-                 # 获取详细的内存信息
+                # 获取详细的内存信息
                 memory_details = {
                     'total': memory.total,
                     'available': memory.available,
@@ -157,6 +204,7 @@ def start_monitor_thread():
                     boot_time = psutil.boot_time()
                     boot_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(boot_time))
                 except:
+                    boot_time = 0
                     boot_time_str = "Unknown"
 
                 try:
@@ -167,23 +215,46 @@ def start_monitor_thread():
                 except Exception:
                     load_avg = (0, 0, 0)
 
-                 # 构造完整数据
+                # 构造完整数据（兼容前端依赖的扁平字段 + system_info 嵌套结构）
+                nested_system_info = {
+                    'cpu': _CPU_NAME_CACHE,
+                    'cpu_count': psutil.cpu_count(),
+                    'platform': platform.platform(),
+                    'python_version': platform.python_version(),
+                    'total_memory': memory.total,
+                    'used_memory': memory.used,
+                    'available_memory': memory.available,
+                    'memory_percent': memory_percent,
+                    'memory_details': memory_details,
+                    'total_disk': disk.total,
+                    'used_disk': disk.used,
+                    'free_disk': disk.free,
+                    'disk_percent': disk.percent,
+                    'net_bytes_sent': net_io.bytes_sent,
+                    'net_bytes_recv': net_io.bytes_recv,
+                    'boot_time': int(boot_time) if boot_time else 0,
+                    'boot_time_str': boot_time_str,
+                    'load_avg': load_avg
+                }
+
                 system_info = {
                     'cpu': _CPU_NAME_CACHE,
                     'cpu_count': psutil.cpu_count(),
                     'total_memory': memory.total,
                     'used_memory': memory.used,
                     'available_memory': memory.available,
+                    'memory_percent': memory_percent,
                     'memory_unit': memory_percent,
+                    'memory_details': memory_details,
                     'total_disk': disk.total,
                     'used_disk': disk.used,
                     'free_disk': disk.free,
-                    'disk_percent': (disk.used / disk.total * 100) if disk.total > 0 else 0,
+                    'disk_percent': disk.percent,
                     'sent_bytes': net_io.bytes_sent,
                     'recv_bytes': net_io.bytes_recv,
                     'cpu_percent': current_percent,
                     'cpu_per_core': current_per_core,
-                    'memory_details': memory_details,
+                    'system_info': nested_system_info,
                     'boot_time': boot_time_str,
                     'load_avg': load_avg,
                     'input_tokens': INPUT_TOKENS,
@@ -202,9 +273,8 @@ def start_monitor_thread():
                 # app.logger.error(f"Monitor Thread Error: {e}")
                 time.sleep(1)
             
-            # Sleep a bit if psutil.cpu_percent(interval=1) wasn't blocking (it usually is)
-            # but just in case
-            time.sleep(0.1)
+            # Additional small sleep to keep update cadence stable.
+            time.sleep(0.2)
 
     # Start the thread
     t = threading.Thread(target=monitor_loop, daemon=True)
@@ -223,6 +293,12 @@ def api_sandbox_execute():
         code = data.get('code')
         if not code:
             return jsonify({'success': False, 'error': 'No code provided'}), 400
+
+        frontend_source = request.headers.get('X-Frontend-Source', '')
+        if not _is_work_mode_enabled(frontend_source):
+            return jsonify({'success': False, 'error': 'Work Mode is disabled. Local code execution is blocked for safety.'}), 403
+        if not CONFIG.get('work_mode', {}).get('features', {}).get('allow_code_exec', True):
+            return jsonify({'success': False, 'error': 'allow_code_exec is disabled in Work Mode settings.'}), 403
         
         # Security check (basic)
         if 'os.system' in code or 'subprocess' in code:
@@ -351,14 +427,165 @@ def run_web_server():
             if not data or (not data.get('message') and not data.get('image') and not data.get('attachments')):
                 return jsonify({'success': False, 'error': '无效请求'}), 400
 
+            frontend_source = request.headers.get('X-Frontend-Source', 'control_panel')
+
             # Web请求被视为管理员操作，允许使用Agent工具
             response = chat_system.chat(
                 data.get('message'), 
                 data.get('image'), 
                 is_admin=True, 
-                attachments=data.get('attachments')
+                attachments=data.get('attachments'),
+                frontend_source=frontend_source
             )
             return jsonify({'success': True, 'reply': response})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/work_mode/status', methods=['GET'])
+    def api_work_mode_status():
+        try:
+            wm = CONFIG.get('work_mode', {})
+            return jsonify({
+                'success': True,
+                'global_enabled': bool(wm.get('enabled', False)),
+                'sandbox_enabled': bool(wm.get('sandbox_enabled', False)),
+                'has_password': bool(wm.get('password_hash')),
+                'features': _default_work_mode_features(wm.get('features', {}))
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/work_mode/password', methods=['POST'])
+    def api_work_mode_set_password():
+        try:
+            data = request.get_json() or {}
+            password = data.get('password') or ''
+            current_password = data.get('current_password') or ''
+            if len(password) < 6:
+                return jsonify({'success': False, 'error': '安全密码至少 6 位'}), 400
+
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            config_path = os.path.join(base_path, 'data', 'config.json')
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+
+            if 'work_mode' not in config_data:
+                config_data['work_mode'] = {}
+
+            existing_hash = config_data['work_mode'].get('password_hash', '')
+            if existing_hash and not _verify_password(current_password, existing_hash):
+                return jsonify({'success': False, 'error': '旧密码错误，无法修改'}), 403
+
+            config_data['work_mode']['password_hash'] = _hash_password(password)
+
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, ensure_ascii=False, indent=2)
+
+            if 'work_mode' not in CONFIG:
+                CONFIG['work_mode'] = {}
+            CONFIG['work_mode']['password_hash'] = config_data['work_mode']['password_hash']
+
+            return jsonify({'success': True, 'message': '安全密码已设置'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/work_mode/options', methods=['POST'])
+    def api_work_mode_options():
+        try:
+            data = request.get_json() or {}
+            incoming = data.get('features', {})
+            features = _default_work_mode_features(incoming)
+
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            config_path = os.path.join(base_path, 'data', 'config.json')
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+
+            if 'work_mode' not in config_data:
+                config_data['work_mode'] = {}
+            config_data['work_mode']['features'] = features
+
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, ensure_ascii=False, indent=2)
+
+            if 'work_mode' not in CONFIG:
+                CONFIG['work_mode'] = {}
+            CONFIG['work_mode']['features'] = features
+
+            return jsonify({'success': True, 'features': features})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/work_mode/reset_password_terminal', methods=['POST'])
+    def api_work_mode_reset_password_terminal():
+        try:
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            script_path = os.path.join(project_root, 'src', 'reset_workmode_password.py')
+            py_exe = sys.executable or 'python'
+            if not os.path.exists(script_path):
+                return jsonify({'success': False, 'error': f'重置脚本不存在: {script_path}'}), 404
+
+            if os.name == 'nt':
+                # 在新控制台中直接运行，避免 cmd + shell 的双层引号解析导致路径被错误拼接。
+                cmd_line = f'"{py_exe}" "{script_path}" && echo. && echo Password reset finished. You can close this window.'
+                subprocess.Popen(
+                    ['cmd.exe', '/k', cmd_line],
+                    cwd=project_root,
+                    creationflags=getattr(subprocess, 'CREATE_NEW_CONSOLE', 0)
+                )
+            else:
+                subprocess.Popen([py_exe, script_path], cwd=project_root)
+
+            return jsonify({'success': True, 'message': '已启动重置终端，请按提示完成密码重置。'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/work_mode/toggle', methods=['POST'])
+    def api_work_mode_toggle():
+        try:
+            data = request.get_json() or {}
+            scope = (data.get('scope') or '').strip().lower()
+            enable = bool(data.get('enable', False))
+
+            if scope not in ['sandbox', 'global']:
+                return jsonify({'success': False, 'error': 'scope 必须是 sandbox 或 global'}), 400
+
+            if scope == 'sandbox':
+                if 'work_mode' not in CONFIG:
+                    CONFIG['work_mode'] = {}
+                CONFIG['work_mode']['sandbox_enabled'] = enable
+                return jsonify({'success': True, 'scope': 'sandbox', 'enabled': enable})
+
+            # Global scope requires password verification
+            wm = CONFIG.get('work_mode', {})
+            saved_hash = wm.get('password_hash', '')
+            if not saved_hash:
+                return jsonify({'success': False, 'error': '请先在设置中配置安全密码'}), 400
+
+            password = data.get('password') or ''
+            if not _verify_password(password, saved_hash):
+                return jsonify({'success': False, 'error': '安全密码错误'}), 403
+
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            config_path = os.path.join(base_path, 'data', 'config.json')
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+
+            if 'work_mode' not in config_data:
+                config_data['work_mode'] = {}
+            config_data['work_mode']['enabled'] = enable
+            if 'features' not in config_data['work_mode']:
+                config_data['work_mode']['features'] = _default_work_mode_features({})
+
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, ensure_ascii=False, indent=2)
+
+            if 'work_mode' not in CONFIG:
+                CONFIG['work_mode'] = {}
+            CONFIG['work_mode']['enabled'] = enable
+            CONFIG['work_mode']['features'] = _default_work_mode_features(CONFIG['work_mode'].get('features', {}))
+
+            return jsonify({'success': True, 'scope': 'global', 'enabled': enable})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -969,6 +1196,13 @@ def run_web_server():
                     conn.close()
             except Exception as e:
                 print(f"获取角色信息时出错: {e}")
+
+            # Work mode: never expose password hash to frontend
+            wm = config_data.get('work_mode', {})
+            config_data['work_mode'] = {
+                'enabled': bool(wm.get('enabled', False)),
+                'has_password': bool(wm.get('password_hash', ''))
+            }
             
             return jsonify(config_data)
         except Exception as e:
@@ -999,6 +1233,10 @@ def run_web_server():
             # 更新Unified API配置
             if 'unified_api' in new_config:
                 config_data['unified_api'] = new_config['unified_api']
+
+            # 更新 Coder API 聚合配置
+            if 'coder_api' in new_config:
+                config_data['coder_api'] = new_config['coder_api']
             
             # 更新角色配置到数据库
             if 'character' in new_config:
@@ -1058,6 +1296,10 @@ def run_web_server():
                 if 'unified_api' not in CONFIG:
                     CONFIG['unified_api'] = {}
                 CONFIG['unified_api'].update(new_config['unified_api'])
+
+            # 更新 Coder API 配置（在内存中）
+            if 'coder_api' in new_config:
+                CONFIG['coder_api'] = new_config['coder_api']
             
             # 写入主配置文件
             with open(config_path, 'w', encoding='utf-8') as f:

@@ -52,14 +52,48 @@ You can read/write files and execute Python code within this sandbox.
         except Exception as e:
             return f"[Agent Context Error: {str(e)}]"
 
-    def execute_tool(self, tool_name, args, is_admin=False):
+    def execute_tool(self, tool_name, args, is_admin=False, frontend_source='control_panel'):
         """Execute a tool call from the LLM"""
         
-        # Permission check
-        # Non-admins (e.g. QQ bot) can ONLY read, not write or execute
+        # 模式检查
+        work_mode_cfg = CONFIG.get('work_mode', {})
+        global_work_mode = bool(work_mode_cfg.get('enabled', False))
+        sandbox_work_mode = bool(work_mode_cfg.get('sandbox_enabled', False))
+        features = work_mode_cfg.get('features', {})
+        source = (frontend_source or '').strip().lower()
+        work_mode = global_work_mode or (sandbox_work_mode and source == 'sandbox')
+
+        # 1. 娱乐模式限制 (Entertainment Mode)
+        # 仅允许只读操作和安全操作 (包括 ask_coder)。禁用写操作和 Python 执行。
+        if not work_mode:
+            allowed_tools = ['read_file', 'list_dir', 'ask_coder']
+            if tool_name not in allowed_tools:
+                return "Error: System is in Entertainment Mode. Write operations and code execution are disabled for safety. Please switch to Work Mode to perform these actions."
+
+        # 1.1 工作模式功能开关限制
+        tool_feature_map = {
+            'write_file': 'allow_file_write',
+            'exec_python': 'allow_code_exec',
+            'update_plan': 'allow_plan_update',
+            'ask_coder': 'allow_coder_tool'
+        }
+        feature_name = tool_feature_map.get(tool_name)
+        if feature_name and not features.get(feature_name, True):
+            return f"Error: Feature '{feature_name}' is disabled in Work Mode settings."
+
+        # 2. 权限检查 (Permission Check)
+        # 非管理员只能进行读取操作 (即使在工作模式下，也需要管理员权限才能执行危险操作)
         if not is_admin:
             if tool_name in ['write_file', 'exec_python', 'update_plan']:
-                 return "Error: Permission Denied. You are not authorized to perform file modifications or code execution from this interface."
+                 return "Error: Permission Denied. You are not authorized to perform file modifications or code execution."
+
+        # 3. 危险操作三重验证 (Hazardous Operation Verification)
+        if tool_name == 'exec_python':
+            code = args.get('code', '')
+            # For admin, we trust their judgment but block extreme malice
+            if 'rm -rf /' in code or 'format c:' in code.lower():
+                 return "Error: Extremely dangerous command detected and blocked."
+
 
         try:
             if tool_name == 'read_file':
@@ -77,6 +111,12 @@ You can read/write files and execute Python code within this sandbox.
             elif tool_name == 'update_plan':
                 self.planner.update_plan(args.get('content'))
                 return "Success: Plan updated."
+            
+            elif tool_name == 'ask_coder':
+                if not self.ai_chat_system:
+                    return "Error: Chat system not initialized."
+                # Coder is allowed in entertainment mode as it returns text/code suggestion only
+                return self.ai_chat_system.coder_agent(args.get('task'), args.get('context', ''))
             
             else:
                 return f"Error: Unknown tool '{tool_name}'"
@@ -145,7 +185,8 @@ You can read/write files and execute Python code within this sandbox.
                             "type": "object",
                             "properties": {
                                 "code": {"type": "string", "description": "Python code to execute"},
-                                "filename": {"type": "string", "description": "Filename to save script as"}
+                                "filename": {"type": "string", "description": "Filename to save script as"},
+                                "confirmation_token": {"type": "string", "description": "Verification token for dangerous operations"}
                             },
                             "required": ["code"]
                         }
@@ -162,6 +203,21 @@ You can read/write files and execute Python code within this sandbox.
                                 "content": {"type": "string", "description": "New content for the plan"}
                             },
                             "required": ["content"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "ask_coder",
+                        "description": "Consult a specialized Coder Agent (e.g. Kimi Coder) for code generation or review.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "task": {"type": "string", "description": "Description of the coding task"},
+                                "context": {"type": "string", "description": "Existing code context or file content"}
+                            },
+                            "required": ["task"]
                         }
                     }
                 }

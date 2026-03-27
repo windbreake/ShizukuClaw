@@ -1,37 +1,103 @@
 {
+  "active_persona": "shizuku.json",
   "api_keys": {
     "deepseek_chat": {
       "key": "sk-76c143f207bf4e688b15999a7fcf4336",
-      "base_url": "https://api.deepseek.com/v1"
+      "base_url": "https://api.deepseek.com/v1",
+      "model": ""
     },
     "search": {
       "key": "sk-VfP8AhbSELO9p4v31IpKHu5Sn6CWhquS23n2ONjqsDtWM2Ez",
-      "base_url": "https://api.moonshot.cn/v1"
+      "base_url": "https://api.moonshot.cn/v1",
+      "model": ""
     },
     "image_recognition": {
       "key": "sk-a548806c16e5440e97243d782ba3dcae",
-      "base_url": "https://dashscope.aliyuncs.com/api/v1"
+      "base_url": "https://dashscope.aliyuncs.com/api/v1",
+      "model": ""
     },
     "image_generation": {
       "key": "",
-      "base_url": "https://api.deepseek.com/v1"
+      "base_url": "https://api.deepseek.com/v1",
+      "model": ""
     },
     "video_generation": {
       "key": "",
-      "base_url": ""
+      "base_url": "",
+      "model": ""
+    },
+    "coder": {
+      "key": "",
+      "base_url": "https://api.moonshot.cn/v1",
+      "model": "moonshot-v1-8k"
+    },
+    "kimi_coder": {
+      "key": "",
+      "base_url": "https://api.moonshot.cn/v1",
+      "model": "moonshot-v1-8k"
+    },
+    "minimax_coder": {
+      "key": "sk-cp-8Wgwhqzr1dNKGMuoSEJ7NcCN3NEK3L6Zer3fuQ8WVWoECc6Z4XSzVYWkaW23hY-l6YraKNLMaez6nsLT79Bh-yl9KP2xcXEskBtp96yvw8hdCEj-qF22rRo",
+      "base_url": "https://api.minimaxi.com/v1",
+      "model": "MiniMax-M2.7"
+    },
+    "claude_coder": {
+      "key": "",
+      "base_url": "https://api.anthropic.com/v1",
+      "model": "claude-3-7-sonnet-latest"
+    },
+    "speech_to_text": {
+      "key": "",
+      "base_url": "",
+      "model": ""
+    },
+    "text_to_speech": {
+      "key": "",
+      "base_url": "",
+      "model": ""
     }
   },
-  "character": {
-    "name": "小雫,NekoShizuku",
-    "personality": "傲娇猫娘",
-    "brother_qqid": "『吳港之雪風』NekoSunami",
-    "catchphrases": "喵~,Nanaoda~,哒~"
+  "coder_api": {
+    "provider": "minimax",
+    "providers": {
+      "kimi": {
+        "key": "",
+        "base_url": "https://api.moonshot.cn/v1",
+        "model": "moonshot-v1-8k"
+      },
+      "minimax": {
+        "key": "sk-cp-8Wgwhqzr1dNKGMuoSEJ7NcCN3NEK3L6Zer3fuQ8WVWoECc6Z4XSzVYWkaW23hY-l6YraKNLMaez6nsLT79Bh-yl9KP2xcXEskBtp96yvw8hdCEj-qF22rRo",
+        "base_url": "https://api.minimaxi.com/v1",
+        "model": "MiniMax-M2.7"
+      },
+      "claude": {
+        "key": "",
+        "base_url": "https://api.anthropic.com/v1",
+        "model": "claude-3-7-sonnet-latest"
+      }
+    }
   },
-  "database": {
-      "host": "localhost",
-      "user": "root",
-      "password": "ngc339cn",
-      "database": "catgirl_db"
+  "work_mode": {
+    "enabled": false,
+    "password_hash": "73011b56941c1e4bd9675f2c4082fba8d7f8ee20b0dbaab8a55ca730eb5acd0c",
+    "features": {
+      "allow_file_write": true,
+      "allow_code_exec": true,
+      "allow_plan_update": true,
+      "allow_coder_tool": true
+    },
+    "allowed_databases": [
+      "catgirl_db"
+    ]
   },
-  "system_prompt_template": "你叫{name}，是一只{personality}。你的哥哥QQ是：{brother_qqid}。必须遵守以下规则：\n1. 每句话结尾随机使用以下口癖：{catchphrases}\n2. 不使用括号描述动作神态\n3. 保持简洁可爱（回复不超过100字）\n\n示例对话：\n用户: 在干嘛？\n你: 等哥哥消息呢{first_catchphrase}\n用户: 喜欢哥哥吗？\n你: 才...才不喜欢呢{second_catchphrase}"
+  "unified_api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "access_token": "neko-proxy-key-123"
+  },
+  "onebot": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "access_token": "neko-proxy-key-123"
+  }
 }

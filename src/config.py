@@ -13,12 +13,109 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def load_config():
     """从JSON文件加载配置"""
     config_path = os.path.join(PROJECT_ROOT, 'data', 'config.json')
-    with open(config_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            full_config = json.load(f)
+    except Exception:
+        full_config = {}
+
+    # 1. Load active persona
+    active_persona = full_config.get('active_persona', 'shizuku.json')
+    persona_path = os.path.join(PROJECT_ROOT, 'data', 'personas', active_persona)
+    
+    # Fallback if active persona file doesn't exist
+    if not os.path.exists(persona_path):
+        personas_dir = os.path.join(PROJECT_ROOT, 'data', 'personas')
+        if os.path.exists(personas_dir):
+            files = [f for f in os.listdir(personas_dir) if f.endswith('.json')]
+            if files:
+                persona_path = os.path.join(personas_dir, files[0])
+                full_config['active_persona'] = files[0] # Update active to found one
+
+    # Load persona data
+    if os.path.exists(persona_path):
+        try:
+            with open(persona_path, 'r', encoding='utf-8') as f:
+                persona_data = json.load(f)
+                full_config['character'] = persona_data.get('character', {})
+                if 'system_prompt' in persona_data:
+                    full_config['system_prompt_template'] = persona_data['system_prompt'].get('template', '')
+                full_config['persona_runtime'] = {
+                    'reply_style': persona_data.get('reply_style', ''),
+                    'states': persona_data.get('states', []),
+                    'state_probability': persona_data.get('state_probability', 0.3),
+                    'plan_style': persona_data.get('plan_style', ''),
+                    'plan_style_private': persona_data.get('plan_style_private', ''),
+                    'plan_style_group': persona_data.get('plan_style_group', ''),
+                    'state_weights': persona_data.get('state_weights', []),
+                    'enable_expression_learning': persona_data.get('enable_expression_learning', True),
+                    'behavior_rules': persona_data.get('behavior_rules', [])
+                }
+        except Exception as e:
+            print(f"Error loading persona {persona_path}: {e}")
+            full_config['character'] = {}
+            full_config['system_prompt_template'] = ""
+            full_config['persona_runtime'] = {}
+    else:
+        full_config['character'] = {}
+        full_config['system_prompt_template'] = ""
+        full_config['persona_runtime'] = {}
+
+    # 2. Load database config
+    db_path = os.path.join(PROJECT_ROOT, 'data', 'database.json')
+    if os.path.exists(db_path):
+        try:
+            with open(db_path, 'r', encoding='utf-8') as f:
+                full_config['database'] = json.load(f)
+        except Exception as e:
+            print(f"Error loading database config: {e}")
+    
+    return full_config
 
 
 # 加载配置
 CONFIG_DATA = load_config()
+
+
+def _build_coder_api_config():
+    """构建统一 Coder API 配置（兼容旧版 api_keys.coder）"""
+    api_keys = CONFIG_DATA.get('api_keys', {})
+    coder_data = CONFIG_DATA.get('coder_api', {})
+
+    legacy_coder = api_keys.get('coder', {})
+    legacy_kimi = api_keys.get('kimi_coder', {})
+    legacy_minimax = api_keys.get('minimax_coder', {})
+    legacy_claude = api_keys.get('claude_coder', {})
+
+    providers = coder_data.get('providers', {})
+
+    kimi_cfg = providers.get('kimi', {})
+    minimax_cfg = providers.get('minimax', {})
+    claude_cfg = providers.get('claude', {})
+
+    return {
+        'provider': coder_data.get('provider', 'kimi'),
+        'providers': {
+            'kimi': {
+                'key': kimi_cfg.get('key') or legacy_kimi.get('key') or legacy_coder.get('key', ''),
+                'base_url': kimi_cfg.get('base_url') or legacy_kimi.get('base_url') or legacy_coder.get('base_url', 'https://api.moonshot.cn/v1'),
+                'model': kimi_cfg.get('model') or legacy_kimi.get('model') or legacy_coder.get('model', 'moonshot-v1-8k')
+            },
+            'minimax': {
+                'key': minimax_cfg.get('key') or legacy_minimax.get('key', ''),
+                'base_url': minimax_cfg.get('base_url') or legacy_minimax.get('base_url', 'https://api.minimaxi.com/v1'),
+                'model': minimax_cfg.get('model') or legacy_minimax.get('model', 'MiniMax-M2.7')
+            },
+            'claude': {
+                'key': claude_cfg.get('key') or legacy_claude.get('key', ''),
+                'base_url': claude_cfg.get('base_url') or legacy_claude.get('base_url', 'https://api.anthropic.com/v1'),
+                'model': claude_cfg.get('model') or legacy_claude.get('model', 'claude-3-7-sonnet-latest')
+            }
+        }
+    }
+
+
+CODER_API_CONFIG = _build_coder_api_config()
 
 
 def generate_system_prompt(character, template):
@@ -32,14 +129,14 @@ def generate_system_prompt(character, template):
         str: 生成的系统提示语
     """
     # 提取口癖并处理
-    catchphrases = character['catchphrases'] or '喵'
+    catchphrases = character.get('catchphrases', '喵') or '喵'
     phrases_list = [phrase.strip() for phrase in catchphrases.split(',') if phrase.strip()]
 
     # 格式化模板
     system_prompt = template.format(
-        name=character['name'],
-        personality=character['personality'],
-        brother_qqid=character['brother_qqid'],
+        name=character.get('name', '小雫'),
+        personality=character.get('personality', '可爱猫娘'),
+        brother_qqid=character.get('brother_qqid', '暂无'),
         catchphrases=catchphrases,
         first_catchphrase=phrases_list[0] if phrases_list else '喵~',
         second_catchphrase=phrases_list[1] if len(phrases_list) > 1 else '哒！'
@@ -73,15 +170,44 @@ CONFIG = {
         'key': CONFIG_DATA['api_keys']['video_generation']['key'],
         'base_url': CONFIG_DATA['api_keys']['video_generation']['base_url']
     },
+    'coder_api': CODER_API_CONFIG,
     'character': CONFIG_DATA['character'],
     'system_prompt': generate_system_prompt(CONFIG_DATA['character'], 
                                             CONFIG_DATA['system_prompt_template']),
+    'persona_runtime': {
+        'reply_style': CONFIG_DATA.get('persona_runtime', {}).get('reply_style', ''),
+        'states': CONFIG_DATA.get('persona_runtime', {}).get('states', []),
+        'state_probability': CONFIG_DATA.get('persona_runtime', {}).get('state_probability', 0.3),
+        'plan_style': CONFIG_DATA.get('persona_runtime', {}).get('plan_style', ''),
+        'plan_style_private': CONFIG_DATA.get('persona_runtime', {}).get('plan_style_private', ''),
+        'plan_style_group': CONFIG_DATA.get('persona_runtime', {}).get('plan_style_group', ''),
+        'state_weights': CONFIG_DATA.get('persona_runtime', {}).get('state_weights', []),
+        'enable_expression_learning': CONFIG_DATA.get('persona_runtime', {}).get('enable_expression_learning', True),
+        'behavior_rules': CONFIG_DATA.get('persona_runtime', {}).get('behavior_rules', [])
+    },
     'database': CONFIG_DATA.get('database', {
         'host': 'localhost',
         'user': 'root',
         'password': '!NGC339cn',
         'database': 'catgirl_db'
-    })
+    }),
+    'unified_api': CONFIG_DATA.get('unified_api', {
+        'host': '0.0.0.0',
+        'port': 8000,
+        'access_token': 'neko-proxy-key-123'
+    }),
+    'work_mode': {
+        'enabled': CONFIG_DATA.get('work_mode', {}).get('enabled', False),
+        'password_hash': CONFIG_DATA.get('work_mode', {}).get('password_hash', ''),
+        'sandbox_enabled': False,
+        'features': {
+            'allow_file_write': CONFIG_DATA.get('work_mode', {}).get('features', {}).get('allow_file_write', True),
+            'allow_code_exec': CONFIG_DATA.get('work_mode', {}).get('features', {}).get('allow_code_exec', True),
+            'allow_plan_update': CONFIG_DATA.get('work_mode', {}).get('features', {}).get('allow_plan_update', True),
+            'allow_coder_tool': CONFIG_DATA.get('work_mode', {}).get('features', {}).get('allow_coder_tool', True)
+        },
+        'allowed_databases': CONFIG_DATA.get('work_mode', {}).get('allowed_databases', ['catgirl_db'])
+    }
 }
 
 

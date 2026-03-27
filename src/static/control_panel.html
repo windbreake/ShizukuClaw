@@ -175,6 +175,14 @@
         <!-- Sandbox Chat Tab -->
         <div class="tab-pane fade" id="v-sandbox" role="tabpanel">
             <h3 class="mb-4">💬 沙箱对话测试</h3>
+            <div class="alert alert-warning d-flex justify-content-between align-items-center py-2" role="alert">
+                <div>
+                    <i class="fas fa-shield-alt me-2"></i>
+                    沙箱工作模式：<span id="sandbox-workmode-badge" class="badge bg-secondary">关闭</span>
+                    <small class="text-muted ms-2">仅影响沙箱会话，不影响其他前端。</small>
+                </div>
+                <button id="sandbox-workmode-toggle-btn" class="btn btn-sm btn-outline-danger" onclick="onSandboxWorkModeClick()">开启沙箱工作模式</button>
+            </div>
             <div class="card h-100 shadow-sm border-0 d-flex flex-column" style="min-height: 600px;">
                 <div id="chat-box" class="card-body bg-light overflow-auto p-4" style="flex: 1; min-height: 400px; border-radius: 0.5rem;">
                     <div class="message bot-message p-3 mb-2 bg-white rounded shadow-sm border" style="width: fit-content; max-width: 80%;">
@@ -199,7 +207,7 @@
                             <i class="far fa-smile"></i>
                         </button>
                         <input type="file" id="file-upload" class="d-none" multiple>
-                        <input type="text" id="chat-input" class="form-control" placeholder="Type a message... (Ctrl+Enter to send)" autocomplete="off">
+                        <input type="text" id="chat-input" class="form-control" placeholder="Type a message... (Ctrl+Enter to send)" autocomplete="off" inputmode="text" lang="zh-CN" spellcheck="false">
                         <button class="btn btn-primary px-4" type="button" onclick="sendChat()">
                             <i class="fas fa-paper-plane me-1"></i> 发送
                         </button>
@@ -243,6 +251,9 @@
                     <button class="list-group-item list-group-item-action active" type="button" data-config-section="general">
                         <i class="fas fa-key me-2"></i> 通用 &amp; API密钥
                     </button>
+                    <button class="list-group-item list-group-item-action" type="button" data-config-section="workmode">
+                        <i class="fas fa-user-shield me-2"></i> 工作模式
+                    </button>
                     <button class="list-group-item list-group-item-action" type="button" data-config-section="database">
                         <i class="fas fa-database me-2"></i> 数据库
                     </button>
@@ -258,6 +269,19 @@
                                 <form id="general-config-form">
                                     <div class="mb-3">
                                         <label class="form-label">API 服务密钥配置</label>
+                                        <div class="row g-2 mb-2">
+                                            <div class="col-md-6">
+                                                <label class="form-label small mb-1">Coder API Provider</label>
+                                                <select id="coder-provider" class="form-select form-select-sm">
+                                                    <option value="kimi">Kimi Coder</option>
+                                                    <option value="minimax">MiniMax Coder</option>
+                                                    <option value="claude">Claude Coder</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6 d-flex align-items-end">
+                                                <small class="text-muted">无需额外官方 SDK，项目使用 HTTP API 直接接入。</small>
+                                            </div>
+                                        </div>
                                         <div id="api-keys-container">
                                             <!-- Dynamic API Key Slots -->
                                         </div>
@@ -265,7 +289,69 @@
                                             <i class="fas fa-plus"></i> 添加服务密钥
                                         </button>
                                     </div>
+
                                 </form>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="config-section" data-section="workmode">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3"><i class="fas fa-user-shield me-2"></i>工作模式与安全控制</h5>
+                                <p class="text-muted small">工作模式默认支持全部能力。你可以按需关闭某些高风险功能，降低本地安全风险。</p>
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small">全局模式状态</label><br>
+                                        <span id="global-workmode-badge" class="badge bg-secondary">关闭</span>
+                                        <span id="global-workmode-password-hint" class="small ms-2 text-danger">未设置安全密码</span>
+                                    </div>
+                                    <div class="col-md-6 text-md-end">
+                                        <button id="global-workmode-toggle-btn" type="button" class="btn btn-danger btn-sm" onclick="onGlobalWorkModeClick()">开启全局工作模式</button>
+                                    </div>
+                                </div>
+
+                                <div class="row g-2 align-items-end mb-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label small">当前安全密码</label>
+                                        <input type="password" id="global-workmode-current-password" class="form-control form-control-sm" placeholder="修改时必填">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small">新安全密码</label>
+                                        <input type="password" id="global-workmode-password" class="form-control form-control-sm" placeholder="至少6位">
+                                    </div>
+                                    <div class="col-md-4 d-grid">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="setWorkModePassword()">保存 / 修改安全密码</button>
+                                    </div>
+                                </div>
+
+                                <div class="p-3 border rounded bg-light mb-3">
+                                    <h6 class="mb-2">功能开关（可选择性开启）</h6>
+                                    <div class="form-check mb-1">
+                                        <input class="form-check-input" type="checkbox" id="wm-feature-file-write" checked>
+                                        <label class="form-check-label" for="wm-feature-file-write">允许文件写入（write_file）</label>
+                                    </div>
+                                    <div class="form-check mb-1">
+                                        <input class="form-check-input" type="checkbox" id="wm-feature-code-exec" checked>
+                                        <label class="form-check-label" for="wm-feature-code-exec">允许代码执行（exec_python / sandbox execute）</label>
+                                    </div>
+                                    <div class="form-check mb-1">
+                                        <input class="form-check-input" type="checkbox" id="wm-feature-plan-update" checked>
+                                        <label class="form-check-label" for="wm-feature-plan-update">允许计划更新（update_plan）</label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="wm-feature-coder-tool" checked>
+                                        <label class="form-check-label" for="wm-feature-coder-tool">允许调用 Coder Agent（ask_coder）</label>
+                                    </div>
+                                    <button type="button" class="btn btn-success btn-sm" onclick="saveWorkModeOptions()">保存工作模式选项</button>
+                                </div>
+
+                                <div class="alert alert-secondary mb-0 py-2">
+                                    忘记密码？
+                                    <button type="button" class="btn btn-sm btn-outline-dark ms-2" onclick="resetWorkModePasswordByTerminal()">启动重置终端</button>
+                                    <span class="small text-muted ms-2">将打开一个终端执行重置脚本，类似服务器面板的找回流程。</span>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -382,6 +468,7 @@
                             <div class="btn-group persona-actions" role="group">
                                 <button class="btn btn-sm btn-success" onclick="createNewPersona()"><i class="fas fa-plus"></i> 新建</button>
                                 <button class="btn btn-sm btn-primary" onclick="saveCurrentPersona()"><i class="fas fa-save"></i> 保存</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="previewPersonaPrompt()"><i class="fas fa-eye"></i> 预览提示词</button>
                                 <button class="btn btn-sm btn-danger" onclick="deleteCurrentPersona()"><i class="fas fa-trash"></i> 删除</button>
                                 <button class="btn btn-sm btn-info text-white" onclick="document.getElementById('import-persona-input').click()"><i class="fas fa-file-import"></i> 导入</button>
                                 <input type="file" id="import-persona-input" accept=".json" style="display: none;" onchange="importPersona(this)">
@@ -419,6 +506,51 @@
                                 <label class="form-label">系统提示词模板 (System Prompt Template)</label>
                                 <div class="form-text mb-1">使用 {name}, {personality} 等占位符。留空则使用默认。</div>
                                 <textarea class="form-control font-monospace" name="system_prompt_template" id="system_prompt_template" rows="6" style="font-size: 0.85em; background-color: #f8f9fa;"></textarea>
+                            </div>
+
+                            <div class="col-12"><hr class="my-2"></div>
+                            <div class="col-12">
+                                <label class="form-label">回复风格 (reply_style)</label>
+                                <textarea class="form-control" name="reply_style" id="reply_style" rows="2" placeholder="例如：更像真实网友，减少模板感"></textarea>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">状态切换概率 (state_probability)</label>
+                                <input type="number" class="form-control" name="state_probability" id="state_probability" step="0.05" min="0" max="1" value="0.3">
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">多状态列表 (states，每行一条)</label>
+                                <textarea class="form-control" name="states_text" id="states_text" rows="3" placeholder="今天比较黏人...&#10;今天有点傲娇..."></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">状态权重 (state_weights，每行一条: 状态|权重)</label>
+                                <div class="form-text mb-1">示例：今天比较黏人，想多互动，语气软一点。|1.5。留空则各状态等概率。</div>
+                                <textarea class="form-control" name="state_weights_text" id="state_weights_text" rows="3" placeholder="状态A|1.2&#10;状态B|0.8"></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">行为规划 (plan_style)</label>
+                                <textarea class="form-control" name="plan_style" id="plan_style" rows="3" placeholder="先判断是否在对你说，再决定回复长度与语气..." ></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">私聊规划 (plan_style_private)</label>
+                                <textarea class="form-control" name="plan_style_private" id="plan_style_private" rows="3" placeholder="偏细致、可适度追问，重视一对一情绪承接"></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">群聊规划 (plan_style_group)</label>
+                                <textarea class="form-control" name="plan_style_group" id="plan_style_group" rows="3" placeholder="优先判断是否在对你说，避免抢话，回复更简洁"></textarea>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check mt-1">
+                                    <input class="form-check-input" type="checkbox" id="enable_expression_learning" name="enable_expression_learning" checked>
+                                    <label class="form-check-label" for="enable_expression_learning">启用表达学习 (enable_expression_learning)</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">行为规则 (behavior_rules，每行一条)</label>
+                                <textarea class="form-control" name="behavior_rules_text" id="behavior_rules_text" rows="3" placeholder="避免每句都同一种口癖&#10;优先承接上下文"></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">系统提示词预览</label>
+                                <textarea class="form-control font-monospace" id="persona_prompt_preview" rows="10" style="font-size: 0.85em; background-color: #f8f9fa;" readonly placeholder="点击上方“预览提示词”后显示..." ></textarea>
                             </div>
                         </div>
                     </form>
@@ -601,10 +733,162 @@
     </div>
 </div>
 
+<div class="modal fade" id="workModeConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-warning-subtle">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2 text-danger"></i>安全风险提示</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">开启工作模式后，系统将允许代码执行与本地文件写入操作。</p>
+                <p class="mb-2 text-danger fw-bold">请仅在信任环境中启用，并确认你了解潜在风险。</p>
+                <div id="work-mode-modal-extra" class="small text-muted"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">那还是算了吧</button>
+                <button type="button" class="btn btn-danger" onclick="confirmWorkModeAction()">我已知晓风险，开启工作模式</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="unifiedActionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div id="unifiedActionModalHeader" class="modal-header bg-primary-subtle">
+                <h5 class="modal-title" id="unifiedActionModalTitle"><i id="unifiedActionModalIcon" class="fas fa-circle-info me-2 text-primary"></i>提示</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="unifiedActionModalMessage" class="mb-0"></p>
+                <div id="unifiedActionModalInputWrap" class="mt-3 d-none">
+                    <input type="text" id="unifiedActionModalInput" class="form-control" placeholder="请输入...">
+                    <div id="unifiedActionModalInputHint" class="form-text text-danger d-none">请输入有效内容</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="unifiedActionModalCancel" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" id="unifiedActionModalConfirm" class="btn btn-primary">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="static/js/app.js"></script>
 <script>
     // --- Unified Logic ---
+    let workModeAction = null;
+    let unifiedActionModalResolver = null;
+
+    function showUnifiedActionModal(options = {}) {
+        const {
+            title = '提示',
+            message = '',
+            level = 'info',
+            confirmText = '确定',
+            cancelText = '',
+            confirmClass = 'btn-primary',
+            input = null,
+            inputRequired = false
+        } = options;
+
+        const modalEl = document.getElementById('unifiedActionModal');
+        if (!modalEl) return Promise.resolve(false);
+
+        const headerEl = document.getElementById('unifiedActionModalHeader');
+        const titleEl = document.getElementById('unifiedActionModalTitle');
+        const iconEl = document.getElementById('unifiedActionModalIcon');
+        const messageEl = document.getElementById('unifiedActionModalMessage');
+        const confirmBtn = document.getElementById('unifiedActionModalConfirm');
+        const cancelBtn = document.getElementById('unifiedActionModalCancel');
+        const inputWrapEl = document.getElementById('unifiedActionModalInputWrap');
+        const inputEl = document.getElementById('unifiedActionModalInput');
+        const inputHintEl = document.getElementById('unifiedActionModalInputHint');
+
+        const levelMap = {
+            info: {header: 'bg-primary-subtle', icon: 'fas fa-circle-info me-2 text-primary'},
+            success: {header: 'bg-success-subtle', icon: 'fas fa-circle-check me-2 text-success'},
+            warning: {header: 'bg-warning-subtle', icon: 'fas fa-triangle-exclamation me-2 text-warning'},
+            danger: {header: 'bg-danger-subtle', icon: 'fas fa-circle-exclamation me-2 text-danger'}
+        };
+        const cfg = levelMap[level] || levelMap.info;
+
+        if (headerEl) {
+            headerEl.classList.remove('bg-primary-subtle', 'bg-success-subtle', 'bg-warning-subtle', 'bg-danger-subtle');
+            headerEl.classList.add(cfg.header);
+        }
+        if (titleEl) titleEl.innerHTML = `<i id="unifiedActionModalIcon" class="${cfg.icon}"></i>${title}`;
+        if (messageEl) messageEl.textContent = message;
+        const hasInput = !!input;
+        if (inputWrapEl) inputWrapEl.classList.toggle('d-none', !hasInput);
+        if (inputEl) {
+            inputEl.value = hasInput ? (input.value || '') : '';
+            inputEl.placeholder = hasInput ? (input.placeholder || '请输入...') : '请输入...';
+            inputEl.classList.remove('is-invalid');
+        }
+        if (inputHintEl) {
+            inputHintEl.textContent = hasInput ? (input.errorText || '请输入有效内容') : '请输入有效内容';
+            inputHintEl.classList.add('d-none');
+        }
+
+        if (confirmBtn) {
+            confirmBtn.textContent = confirmText;
+            confirmBtn.className = `btn ${confirmClass}`;
+        }
+        if (cancelBtn) {
+            if (cancelText) {
+                cancelBtn.textContent = cancelText;
+                cancelBtn.classList.remove('d-none');
+            } else {
+                cancelBtn.classList.add('d-none');
+            }
+        }
+
+        const modal = new bootstrap.Modal(modalEl);
+
+        return new Promise((resolve) => {
+            unifiedActionModalResolver = resolve;
+
+            const cleanup = () => {
+                if (unifiedActionModalResolver) {
+                    unifiedActionModalResolver(false);
+                    unifiedActionModalResolver = null;
+                }
+            };
+
+            const onHidden = () => {
+                modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                cleanup();
+            };
+
+            modalEl.addEventListener('hidden.bs.modal', onHidden);
+
+            if (confirmBtn) {
+                confirmBtn.onclick = () => {
+                    if (unifiedActionModalResolver) {
+                        if (hasInput) {
+                            const v = (inputEl?.value || '').trim();
+                            if (inputRequired && !v) {
+                                if (inputEl) inputEl.classList.add('is-invalid');
+                                if (inputHintEl) inputHintEl.classList.remove('d-none');
+                                return;
+                            }
+                            unifiedActionModalResolver(v);
+                        } else {
+                            unifiedActionModalResolver(true);
+                        }
+                        unifiedActionModalResolver = null;
+                    }
+                    modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                    modal.hide();
+                };
+            }
+
+            modal.show();
+        });
+    }
     
     // 1. Chat Logic
     const EMOJI_LIST = ["😀","😁","😂","🤣","😃","😄","😅","😆","😉","😊","😋","😎","😍","😘","🥰","😗","😙","😚","🙂","🤗","🤩","🤔","🤨","😐","😑","😶","🙄","😏","😣","😥","😮","🤐","😯","😪","😫","😴","😌","😛","😜","😝","🤤","😒","😓","😔","😕","🙃","🤑","😲","☹️","🙁","😖","😞","😟","😤","😢","😭","😦","😧","😨","😩","🤯","😬","😰","😱","🥵","🥶","😳","🤪","😵","😡","😠","🤬","😷","🤒","🤕","🤢","🤮","🤧","😇","🤠","🤡","🥳","🥴","🥺","🤥","🤫","🤭","🧐","🤓","😈","👿","👹","👺","💀","👻","👽","🤖","💩","😺","😸","😹","😻","😼","😽","🙀","😿","😾"];
@@ -612,9 +896,11 @@
     function toggleEmojiPicker() {
         const picker = document.getElementById('emoji-picker');
         const list = document.getElementById('emoji-list');
+        if (!picker || !list) return;
+
         if(picker.classList.contains('d-none')) {
-            // Render if empty
-            if(list.innerHTML.trim() === '') {
+            // Render once when no emoji button has been created yet.
+            if (list.querySelectorAll('span').length === 0) {
                 EMOJI_LIST.forEach(e => {
                     const span = document.createElement('span');
                     span.className = 'btn btn-light btn-sm';
@@ -729,7 +1015,10 @@
 
             const res = await fetch('/chat', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Frontend-Source': 'sandbox'
+                },
                 body: JSON.stringify(payload)
             });
             const data = await res.json();
@@ -746,15 +1035,26 @@
         }
     }
 
+    function normalizeEmojiText(text) {
+        if (typeof text !== 'string') return text;
+        let out = text;
+        // Decode escaped unicode sequences like "\\uD83D\\uDE00".
+        if (/\\u[0-9a-fA-F]{4}/.test(out)) {
+            out = out.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+        }
+        return out;
+    }
+
     function appendMessage(text, isUser) {
         const box = document.getElementById('chat-box');
         const div = document.createElement('div');
         div.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+        const safeText = normalizeEmojiText(text);
         // Basic Markdown Support via marked.js if needed, or simple text
         if(window.marked && !isUser) {
-            div.innerHTML = marked.parse(text);
+            div.innerHTML = marked.parse(safeText);
         } else {
-            div.textContent = text;
+            div.textContent = safeText;
         }
         box.appendChild(div);
         box.scrollTop = box.scrollHeight;
@@ -776,22 +1076,25 @@
     // 2. Config Logic
     
     // --- API & General ---
-    function createApiKeySlot(keyName, config = {key: '', base_url: ''}) {
+    function createApiKeySlot(keyName, config = {key: '', base_url: '', model: ''}) {
         const div = document.createElement('div');
         div.className = 'card mb-2 api-key-card border-light shadow-sm';
         div.innerHTML = `
             <div class="card-body p-2">
                 <div class="row align-items-center g-2">
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <input type="text" class="form-control form-control-sm border-0 fw-bold text-primary" 
                                value="${keyName}" placeholder="Service Name" 
                                onchange="this.dataset.keyname = this.value; this.setAttribute('value', this.value);">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <input type="password" class="form-control form-control-sm api-key" placeholder="API Key" value="${config.key || ''}">
                     </div>
                     <div class="col-md-4">
                         <input type="text" class="form-control form-control-sm api-url" placeholder="Base URL" value="${config.base_url || ''}">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" class="form-control form-control-sm api-model" placeholder="Model (optional)" value="${config.model || ''}">
                     </div>
                     <div class="col-md-1 text-end">
                         <button type="button" class="btn btn-sm text-danger" onclick="this.closest('.card').remove()"><i class="fas fa-times"></i></button>
@@ -802,8 +1105,21 @@
         return div;
     }
 
-    function addApiKeySlot() {
-        const name = prompt("Enter Service Name (e.g. deepseek_chat):", "new_service");
+    async function addApiKeySlot() {
+        const name = await showUnifiedActionModal({
+            title: '新增服务密钥',
+            message: '请输入服务名称（例如 deepseek_chat）。',
+            level: 'info',
+            confirmText: '添加',
+            cancelText: '取消',
+            confirmClass: 'btn-primary',
+            input: {
+                value: 'new_service',
+                placeholder: 'deepseek_chat',
+                errorText: '服务名称不能为空'
+            },
+            inputRequired: true
+        });
         if(name) {
             document.getElementById('api-keys-container').appendChild(createApiKeySlot(name));
         }
@@ -828,15 +1144,28 @@
             // General API Keys
             const container = document.getElementById('api-keys-container');
             container.innerHTML = '';
-            const defaultKeys = ['deepseek_chat', 'search', 'image_recognition', 'image_generation', 'video_generation', 'speech_to_text', 'text_to_speech'];
+            const defaultKeys = ['deepseek_chat', 'search', 'image_recognition', 'image_generation', 'video_generation', 'speech_to_text', 'text_to_speech', 'coder', 'kimi_coder', 'minimax_coder', 'claude_coder'];
             const currentKeys = data.api_keys || {};
+
+            // Inject coder_api providers into api_keys view for unified editing.
+            if (data.coder_api && data.coder_api.providers) {
+                const p = data.coder_api.providers;
+                currentKeys.kimi_coder = currentKeys.kimi_coder || p.kimi || {};
+                currentKeys.minimax_coder = currentKeys.minimax_coder || p.minimax || {};
+                currentKeys.claude_coder = currentKeys.claude_coder || p.claude || {};
+            }
+
+            const providerSelect = document.getElementById('coder-provider');
+            if (providerSelect && data.coder_api && data.coder_api.provider) {
+                providerSelect.value = data.coder_api.provider;
+            }
             
             // Ensure defaults appear
-            defaultKeys.forEach(k => { if(!currentKeys[k]) currentKeys[k] = {key: '', base_url: ''}; });
+            defaultKeys.forEach(k => { if(!currentKeys[k]) currentKeys[k] = {key: '', base_url: '', model: ''}; });
             
             Object.keys(currentKeys).forEach(k => {
                 const cfg = currentKeys[k];
-                const configObj = (typeof cfg === 'string') ? {key: cfg, base_url: ''} : cfg;
+                const configObj = (typeof cfg === 'string') ? {key: cfg, base_url: '', model: ''} : cfg;
                 container.appendChild(createApiKeySlot(k, configObj));
             });
 
@@ -904,6 +1233,101 @@
 
     // --- Persona Management ---
     let currentPersonaFile = '';
+    let currentPersonaData = null;
+
+    function _safePersonaLines(text) {
+        return (text || '')
+            .split('\n')
+            .map(x => x.trim())
+            .filter(Boolean);
+    }
+
+    function _parseStateWeights(text, states) {
+        const lines = _safePersonaLines(text);
+        if (!lines.length) return [];
+
+        const hasPipe = lines.some(line => line.includes('|'));
+        if (hasPipe) {
+            const mapping = {};
+            lines.forEach(line => {
+                const idx = line.lastIndexOf('|');
+                if (idx <= 0) return;
+                const state = line.slice(0, idx).trim();
+                const value = Number(line.slice(idx + 1).trim());
+                if (state && Number.isFinite(value) && value > 0) {
+                    mapping[state] = value;
+                }
+            });
+            return Object.keys(mapping).length ? mapping : [];
+        }
+
+        const arr = lines
+            .map(x => Number(x))
+            .filter(x => Number.isFinite(x) && x > 0);
+        return arr.length === states.length ? arr : [];
+    }
+
+    function _formatStateWeights(stateWeights, states) {
+        if (Array.isArray(stateWeights)) {
+            if (!stateWeights.length) return '';
+            if (Array.isArray(states) && states.length === stateWeights.length) {
+                return states.map((s, i) => `${s}|${stateWeights[i]}`).join('\n');
+            }
+            return stateWeights.join('\n');
+        }
+        if (stateWeights && typeof stateWeights === 'object') {
+            return Object.entries(stateWeights)
+                .map(([k, v]) => `${k}|${v}`)
+                .join('\n');
+        }
+        return '';
+    }
+
+    function previewPersonaPrompt() {
+        const form = document.getElementById('persona-form');
+        const previewEl = document.getElementById('persona_prompt_preview');
+        if (!form || !previewEl) return;
+
+        const template = form.elements['system_prompt_template'].value || '';
+        const charName = form.elements['char_name'].value || '小雫';
+        const personality = form.elements['char_persona'].value || '可爱猫娘';
+        const brotherQqid = form.elements['brother_qqid'].value || '暂无';
+        const catchphrases = form.elements['char_catchphrases'].value || '喵~';
+        const phrasesList = catchphrases.split(',').map(x => x.trim()).filter(Boolean);
+
+        let basePrompt = template;
+        if (basePrompt) {
+            basePrompt = basePrompt
+                .replaceAll('{name}', charName)
+                .replaceAll('{personality}', personality)
+                .replaceAll('{brother_qqid}', brotherQqid)
+                .replaceAll('{catchphrases}', catchphrases)
+                .replaceAll('{first_catchphrase}', phrasesList[0] || '喵~')
+                .replaceAll('{second_catchphrase}', phrasesList[1] || phrasesList[0] || '哒！');
+        }
+
+        const states = _safePersonaLines(form.elements['states_text'].value);
+        const behaviorRules = _safePersonaLines(form.elements['behavior_rules_text'].value);
+        const currentState = states.length ? states[0] : '';
+        const planStyle = form.elements['plan_style'].value || '';
+        const planPrivate = form.elements['plan_style_private'].value || '';
+        const planGroup = form.elements['plan_style_group'].value || '';
+        const replyStyle = form.elements['reply_style'].value || '';
+        const expressionLearning = form.elements['enable_expression_learning'].checked;
+
+        const blocks = [];
+        if (basePrompt) blocks.push(basePrompt);
+        if (currentState) blocks.push(`[当前状态]\n${currentState}`);
+        if (replyStyle) blocks.push(`[回复风格]\n${replyStyle}`);
+        if (planStyle) blocks.push(`[行为规划]\n${planStyle}`);
+        if (planPrivate) blocks.push(`[私聊规划]\n${planPrivate}`);
+        if (planGroup) blocks.push(`[群聊规划]\n${planGroup}`);
+        if (behaviorRules.length) blocks.push(`[行为规则]\n${behaviorRules.map(x => `- ${x}`).join('\n')}`);
+        if (expressionLearning) blocks.push('[表达学习]\n根据最近用户消息微调口语词汇与标点节奏。');
+        blocks.push('[当前轮建议]\n优先自然、像真人聊天，不要机械枚举；允许保留轻微情绪与主见，但避免无意义攻击。');
+
+        previewEl.value = blocks.join('\n\n');
+    }
 
     async function refreshPersonas() {
         const select = document.getElementById('persona-select');
@@ -946,6 +1370,7 @@
         try {
             const res = await fetch(`/api/personas/${filename}`);
             const data = await res.json();
+            currentPersonaData = data;
             
             // Fill Form
             const form = document.getElementById('persona-form');
@@ -959,35 +1384,69 @@
             form.elements['char_weight'].value = char.weight || '';
             form.elements['char_catchphrases'].value = char.catchphrases || '';
             form.elements['system_prompt_template'].value = sys.template || '';
+            form.elements['reply_style'].value = data.reply_style || '';
+            form.elements['state_probability'].value = (data.state_probability ?? 0.3);
+            form.elements['states_text'].value = Array.isArray(data.states) ? data.states.join('\n') : '';
+            form.elements['plan_style'].value = data.plan_style || '';
+            form.elements['plan_style_private'].value = data.plan_style_private || '';
+            form.elements['plan_style_group'].value = data.plan_style_group || '';
+            form.elements['state_weights_text'].value = _formatStateWeights(data.state_weights, data.states || []);
+            form.elements['enable_expression_learning'].checked = (data.enable_expression_learning !== false);
+            form.elements['behavior_rules_text'].value = Array.isArray(data.behavior_rules) ? data.behavior_rules.join('\n') : '';
+
+            previewPersonaPrompt();
             
         } catch(e) {
-            alert("Failed to load persona details: " + e);
+            await showUnifiedActionModal({
+                title: '加载失败',
+                message: `加载人格详情失败: ${e}`,
+                level: 'danger'
+            });
         }
     }
 
     async function saveCurrentPersona() {
         if(!currentPersonaFile) return;
         const form = document.getElementById('persona-form');
-        
-        const content = {
-            meta: {
-                name: form.elements['char_name'].value,
-                description: "Created via Control Panel",
-                version: "1.0",
-                author: "User"
-            },
-            character: {
-                name: form.elements['char_name'].value,
-                personality: form.elements['char_persona'].value,
-                brother_qqid: form.elements['brother_qqid'].value,
-                height: form.elements['char_height'].value,
-                weight: form.elements['char_weight'].value,
-                catchphrases: form.elements['char_catchphrases'].value
-            },
-            system_prompt: {
-                template: form.elements['system_prompt_template'].value
-            }
+
+        const states = _safePersonaLines(form.elements['states_text'].value);
+        const behaviorRules = _safePersonaLines(form.elements['behavior_rules_text'].value);
+        const stateWeights = _parseStateWeights(form.elements['state_weights_text'].value, states);
+
+        const base = currentPersonaData && typeof currentPersonaData === 'object'
+            ? JSON.parse(JSON.stringify(currentPersonaData))
+            : {};
+
+        if (!base.meta) base.meta = {};
+        base.meta.name = form.elements['char_name'].value;
+        base.meta.description = base.meta.description || 'Created via Control Panel';
+        base.meta.version = base.meta.version || '1.0';
+        base.meta.author = base.meta.author || 'User';
+
+        base.character = {
+            name: form.elements['char_name'].value,
+            personality: form.elements['char_persona'].value,
+            brother_qqid: form.elements['brother_qqid'].value,
+            height: form.elements['char_height'].value,
+            weight: form.elements['char_weight'].value,
+            catchphrases: form.elements['char_catchphrases'].value
         };
+
+        base.system_prompt = {
+            template: form.elements['system_prompt_template'].value
+        };
+
+        base.reply_style = form.elements['reply_style'].value || '';
+        base.state_probability = Number(form.elements['state_probability'].value || 0.3);
+        base.states = states;
+        base.plan_style = form.elements['plan_style'].value || '';
+        base.plan_style_private = form.elements['plan_style_private'].value || '';
+        base.plan_style_group = form.elements['plan_style_group'].value || '';
+        base.enable_expression_learning = form.elements['enable_expression_learning'].checked;
+        base.state_weights = stateWeights;
+        base.behavior_rules = behaviorRules;
+
+        const content = base;
 
         try {
             // Save file
@@ -1003,11 +1462,23 @@
             const select = document.getElementById('persona-select');
             // If currently selected is active (checked via text? or we need state)
             // Just notify success
-            alert('Persona saved!');
+            await showUnifiedActionModal({
+                title: '保存成功',
+                message: '人格已保存。',
+                level: 'success'
+            });
             refreshPersonas(); // Refresh list to update names
             
             // If user wants to activate this specific one:
-            if(confirm('Do you want to set this as the ACTIVE persona now?')) {
+            const shouldActivate = await showUnifiedActionModal({
+                title: '设为当前人格',
+                message: '是否将这个人格设置为当前激活人格？',
+                level: 'info',
+                confirmText: '设为激活',
+                cancelText: '暂不',
+                confirmClass: 'btn-primary'
+            });
+            if(shouldActivate) {
                 await fetch('/api/personas/activate', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -1016,24 +1487,74 @@
             }
 
         } catch(e) {
-            alert('Error saving persona: ' + e);
+            await showUnifiedActionModal({
+                title: '保存失败',
+                message: `保存人格失败: ${e}`,
+                level: 'danger'
+            });
         }
     }
 
     async function createNewPersona() {
-        const name = prompt("Enter filename for new persona (e.g. neko.json):");
+        const name = await showUnifiedActionModal({
+            title: '新建人格文件',
+            message: '请输入新人格文件名（例如 neko.json）。',
+            level: 'info',
+            confirmText: '创建',
+            cancelText: '取消',
+            confirmClass: 'btn-success',
+            input: {
+                value: '',
+                placeholder: 'neko.json',
+                errorText: '文件名不能为空'
+            },
+            inputRequired: true
+        });
         if(name) {
             currentPersonaFile = name.endsWith('.json') ? name : name+'.json';
+            currentPersonaData = {
+                meta: {
+                    name: '',
+                    description: 'Created via Control Panel',
+                    version: '1.0',
+                    author: 'User'
+                },
+                character: {},
+                system_prompt: { template: '' },
+                reply_style: '',
+                states: [],
+                state_probability: 0.3,
+                plan_style: '',
+                plan_style_private: '',
+                plan_style_group: '',
+                state_weights: [],
+                enable_expression_learning: true,
+                behavior_rules: []
+            };
             // Clear form
             document.getElementById('persona-form').reset();
+            const form = document.getElementById('persona-form');
+            if (form.elements['state_probability']) form.elements['state_probability'].value = 0.3;
             // User fills and hits save
-            alert(`Created context for ${currentPersonaFile}. Fill details and click SAVE.`);
+            await showUnifiedActionModal({
+                title: '已创建',
+                message: `已创建上下文：${currentPersonaFile}，请填写内容后点击保存。`,
+                level: 'success'
+            });
         }
     }
     
     async function deleteCurrentPersona() {
         if(!currentPersonaFile) return;
-        if(confirm(`Are you sure you want to delete ${currentPersonaFile}?`)) {
+        const ok = await showUnifiedActionModal({
+            title: '删除人格',
+            message: `确认删除 ${currentPersonaFile} 吗？此操作不可撤销。`,
+            level: 'danger',
+            confirmText: '确认删除',
+            cancelText: '取消',
+            confirmClass: 'btn-danger'
+        });
+        if(ok) {
             await fetch(`/api/personas/${currentPersonaFile}`, { method: 'DELETE' });
             refreshPersonas();
         }
@@ -1055,9 +1576,17 @@
                         body: JSON.stringify({ filename: currentPersonaFile, content: content })
                     });
                     refreshPersonas();
-                    alert('Imported successfully!');
+                    await showUnifiedActionModal({
+                        title: '导入成功',
+                        message: '人格文件导入成功。',
+                        level: 'success'
+                    });
                 } catch(err) {
-                    alert('Invalid JSON file');
+                    await showUnifiedActionModal({
+                        title: '导入失败',
+                        message: 'JSON 文件格式无效。',
+                        level: 'danger'
+                    });
                 }
             };
             reader.readAsText(file);
@@ -1157,18 +1686,44 @@
                 const nameInput = card.querySelector('input[placeholder="Service Name"]');
                 const keyInput = card.querySelector('input.api-key');
                 const urlInput = card.querySelector('input.api-url');
+                const modelInput = card.querySelector('input.api-model');
                 if(nameInput && nameInput.value) {
                      apiKeys[nameInput.value] = { 
                          key: keyInput.value, 
-                         base_url: urlInput.value 
+                         base_url: urlInput.value,
+                         model: modelInput ? modelInput.value : ''
                      };
                 }
             });
 
+            const providerSelect = document.getElementById('coder-provider');
+            const coderProvider = providerSelect ? providerSelect.value : 'kimi';
+            const coderApiConfig = {
+                provider: coderProvider,
+                providers: {
+                    kimi: {
+                        key: (apiKeys.kimi_coder && apiKeys.kimi_coder.key) || (apiKeys.coder && apiKeys.coder.key) || '',
+                        base_url: (apiKeys.kimi_coder && apiKeys.kimi_coder.base_url) || 'https://api.moonshot.cn/v1',
+                        model: (apiKeys.kimi_coder && apiKeys.kimi_coder.model) || (apiKeys.coder && apiKeys.coder.model) || 'moonshot-v1-8k'
+                    },
+                    minimax: {
+                        key: (apiKeys.minimax_coder && apiKeys.minimax_coder.key) || '',
+                        base_url: (apiKeys.minimax_coder && apiKeys.minimax_coder.base_url) || 'https://api.minimaxi.com/v1',
+                        model: (apiKeys.minimax_coder && apiKeys.minimax_coder.model) || 'MiniMax-M2.7'
+                    },
+                    claude: {
+                        key: (apiKeys.claude_coder && apiKeys.claude_coder.key) || '',
+                        base_url: (apiKeys.claude_coder && apiKeys.claude_coder.base_url) || 'https://api.anthropic.com/v1',
+                        model: (apiKeys.claude_coder && apiKeys.claude_coder.model) || 'claude-3-7-sonnet-latest'
+                    }
+                }
+            };
+
             // Construct full payload
             const payload = {
                 database: dbPayload,
-                api_keys: apiKeys
+                api_keys: apiKeys,
+                coder_api: coderApiConfig
             };
             
             if(proto === 'unified') {
@@ -1192,10 +1747,322 @@
             }
 
         } catch(e) {
-            alert('Save failed: ' + e);
+            await showUnifiedActionModal({
+                title: '保存失败',
+                message: `保存配置失败: ${e}`,
+                level: 'danger'
+            });
         } finally {
             if(btn) btn.innerHTML = '<i class="fas fa-save me-2"></i> 保存所有设置';
         }
+    }
+
+    async function loadWorkModeStatus() {
+        try {
+            const res = await fetch('/api/work_mode/status');
+            const data = await res.json();
+            if (!data.success) return;
+
+            const globalBadge = document.getElementById('global-workmode-badge');
+            const sandboxBadge = document.getElementById('sandbox-workmode-badge');
+            const hint = document.getElementById('global-workmode-password-hint');
+            const globalToggleBtn = document.getElementById('global-workmode-toggle-btn');
+            const sandboxToggleBtn = document.getElementById('sandbox-workmode-toggle-btn');
+
+            if (globalBadge) {
+                globalBadge.innerText = data.global_enabled ? '开启' : '关闭';
+                globalBadge.className = `badge ${data.global_enabled ? 'bg-danger' : 'bg-secondary'}`;
+            }
+            if (sandboxBadge) {
+                sandboxBadge.innerText = data.sandbox_enabled ? '开启' : '关闭';
+                sandboxBadge.className = `badge ${data.sandbox_enabled ? 'bg-warning text-dark' : 'bg-secondary'}`;
+            }
+            if (globalToggleBtn) {
+                if (data.global_enabled) {
+                    globalToggleBtn.innerText = '关闭全局工作模式';
+                    globalToggleBtn.className = 'btn btn-outline-secondary btn-sm';
+                } else {
+                    globalToggleBtn.innerText = '开启全局工作模式';
+                    globalToggleBtn.className = 'btn btn-danger btn-sm';
+                }
+            }
+            if (sandboxToggleBtn) {
+                if (data.sandbox_enabled) {
+                    sandboxToggleBtn.innerText = '关闭沙箱工作模式';
+                    sandboxToggleBtn.className = 'btn btn-sm btn-outline-secondary';
+                } else {
+                    sandboxToggleBtn.innerText = '开启沙箱工作模式';
+                    sandboxToggleBtn.className = 'btn btn-sm btn-outline-danger';
+                }
+            }
+            if (hint) {
+                hint.innerText = data.has_password ? '安全密码已设置' : '未设置安全密码';
+                hint.className = `small ms-2 ${data.has_password ? 'text-success' : 'text-danger'}`;
+            }
+
+            if (data.features) {
+                const setChecked = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (el) el.checked = !!value;
+                };
+                setChecked('wm-feature-file-write', data.features.allow_file_write);
+                setChecked('wm-feature-code-exec', data.features.allow_code_exec);
+                setChecked('wm-feature-plan-update', data.features.allow_plan_update);
+                setChecked('wm-feature-coder-tool', data.features.allow_coder_tool);
+            }
+        } catch (e) {
+            console.warn('loadWorkModeStatus failed', e);
+        }
+    }
+
+    async function onSandboxWorkModeClick() {
+        const current = document.getElementById('sandbox-workmode-badge')?.innerText === '开启';
+        if (!current) {
+            openWorkModeModal('sandbox');
+            return;
+        }
+
+        const res = await fetch('/api/work_mode/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({scope: 'sandbox', enable: false})
+        });
+        const data = await res.json();
+        if (!data.success) {
+            await showUnifiedActionModal({
+                title: '操作失败',
+                message: data.error || '关闭失败',
+                level: 'danger'
+            });
+            return;
+        }
+        loadWorkModeStatus();
+    }
+
+    async function onGlobalWorkModeClick() {
+        const current = document.getElementById('global-workmode-badge')?.innerText === '开启';
+        if (!current) {
+            openWorkModeModal('global_on');
+            return;
+        }
+
+        const password = document.getElementById('global-workmode-password')?.value || '';
+        if (!password) {
+            await showUnifiedActionModal({
+                title: '需要安全密码',
+                message: '请输入安全密码后再关闭全局工作模式。',
+                level: 'warning'
+            });
+            return;
+        }
+
+        const res = await fetch('/api/work_mode/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({scope: 'global', enable: false, password})
+        });
+        const data = await res.json();
+        if (!data.success) {
+            await showUnifiedActionModal({
+                title: '操作失败',
+                message: data.error || '关闭失败',
+                level: 'danger'
+            });
+            return;
+        }
+        loadWorkModeStatus();
+    }
+
+    function openWorkModeModal(action) {
+        workModeAction = action;
+        const extra = document.getElementById('work-mode-modal-extra');
+        const confirmBtn = document.querySelector('#workModeConfirmModal .btn.btn-danger');
+        if (extra) {
+            if (action === 'sandbox') {
+                extra.innerText = '本次操作仅切换沙箱工作模式，其他前端不会获得代码执行权限。';
+                if (confirmBtn) confirmBtn.innerText = '我已知晓风险，继续操作';
+            } else if (action === 'global_off') {
+                extra.innerText = '你正在关闭全局工作模式。关闭后高风险能力将被立即禁用。';
+                if (confirmBtn) confirmBtn.innerText = '我已知晓风险，继续关闭';
+            } else {
+                extra.innerText = '全局模式会影响所有前端调用。请先设置并确认安全密码。';
+                if (confirmBtn) confirmBtn.innerText = '我已知晓风险，开启工作模式';
+            }
+        }
+        const modal = new bootstrap.Modal(document.getElementById('workModeConfirmModal'));
+        modal.show();
+    }
+
+    function getPasswordCharLength(password) {
+        return Array.from(password || '').length;
+    }
+
+    async function setWorkModePassword() {
+        const pwdEl = document.getElementById('global-workmode-password');
+        const currentPwdEl = document.getElementById('global-workmode-current-password');
+        const password = (pwdEl && pwdEl.value) ? pwdEl.value : '';
+        const currentPassword = (currentPwdEl && currentPwdEl.value) ? currentPwdEl.value : '';
+        const pwdLen = getPasswordCharLength(password);
+        if (!password) {
+            await showUnifiedActionModal({
+                title: '请输入新密码',
+                message: '新安全密码不能为空。',
+                level: 'warning'
+            });
+            return;
+        }
+        if (pwdLen < 6) {
+            await showUnifiedActionModal({
+                title: '密码长度不足',
+                message: `新安全密码至少 6 位，你当前输入的是 ${pwdLen} 位。`,
+                level: 'warning'
+            });
+            return;
+        }
+        const res = await fetch('/api/work_mode/password', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({password, current_password: currentPassword})
+        });
+        const data = await res.json();
+        if (!data.success) {
+            await showUnifiedActionModal({
+                title: '设置失败',
+                message: data.error || '设置失败',
+                level: 'danger'
+            });
+            return;
+        }
+        await showUnifiedActionModal({
+            title: '设置成功',
+            message: '安全密码已设置成功。',
+            level: 'success'
+        });
+        if (pwdEl) pwdEl.value = '';
+        if (currentPwdEl) currentPwdEl.value = '';
+        loadWorkModeStatus();
+    }
+
+    async function saveWorkModeOptions() {
+        const payload = {
+            features: {
+                allow_file_write: !!document.getElementById('wm-feature-file-write')?.checked,
+                allow_code_exec: !!document.getElementById('wm-feature-code-exec')?.checked,
+                allow_plan_update: !!document.getElementById('wm-feature-plan-update')?.checked,
+                allow_coder_tool: !!document.getElementById('wm-feature-coder-tool')?.checked
+            }
+        };
+        const res = await fetch('/api/work_mode/options', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!data.success) {
+            await showUnifiedActionModal({
+                title: '保存失败',
+                message: data.error || '保存失败',
+                level: 'danger'
+            });
+            return;
+        }
+        await showUnifiedActionModal({
+            title: '已保存',
+            message: '工作模式选项已保存。',
+            level: 'success'
+        });
+        loadWorkModeStatus();
+    }
+
+    async function resetWorkModePasswordByTerminal() {
+        const ok = await showUnifiedActionModal({
+            title: '重置安全密码',
+            message: '将启动一个终端来重置工作模式密码，是否继续？',
+            level: 'warning',
+            confirmText: '继续',
+            cancelText: '取消',
+            confirmClass: 'btn-warning'
+        });
+        if (!ok) return;
+
+        const res = await fetch('/api/work_mode/reset_password_terminal', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await res.json();
+        if (!data.success) {
+            await showUnifiedActionModal({
+                title: '启动失败',
+                message: data.error || '启动失败',
+                level: 'danger'
+            });
+            return;
+        }
+        await showUnifiedActionModal({
+            title: '已启动',
+            message: data.message || '已启动重置终端',
+            level: 'success'
+        });
+    }
+
+    async function confirmWorkModeAction() {
+        if (!workModeAction) return;
+        let payload = {};
+
+        if (workModeAction === 'sandbox') {
+            const current = document.getElementById('sandbox-workmode-badge')?.innerText === '开启';
+            payload = {scope: 'sandbox', enable: !current};
+        } else if (workModeAction === 'global_on') {
+            const password = document.getElementById('global-workmode-password')?.value || '';
+            const pwdLen = getPasswordCharLength(password);
+            if (!password) {
+                await showUnifiedActionModal({
+                    title: '需要安全密码',
+                    message: '请先输入安全密码。',
+                    level: 'warning'
+                });
+                return;
+            }
+            if (pwdLen < 6) {
+                await showUnifiedActionModal({
+                    title: '密码长度不足',
+                    message: `新安全密码至少 6 位，你当前输入的是 ${pwdLen} 位。`,
+                    level: 'warning'
+                });
+                return;
+            }
+            payload = {scope: 'global', enable: true, password};
+        } else if (workModeAction === 'global_off') {
+            const password = document.getElementById('global-workmode-password')?.value || '';
+            if (!password) {
+                await showUnifiedActionModal({
+                    title: '需要安全密码',
+                    message: '关闭全局模式也需要安全密码。',
+                    level: 'warning'
+                });
+                return;
+            }
+            payload = {scope: 'global', enable: false, password};
+        }
+
+        const res = await fetch('/api/work_mode/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!data.success) {
+            await showUnifiedActionModal({
+                title: '切换失败',
+                message: data.error || '切换失败',
+                level: 'danger'
+            });
+            return;
+        }
+        const modalEl = document.getElementById('workModeConfirmModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        loadWorkModeStatus();
     }
 
 
@@ -1283,6 +2150,7 @@
             fetchAgentStatus();
             refreshRecords();
             loadConfig(); // Load config on startup as well
+            loadWorkModeStatus();
         } catch (e) {
             console.error("Initialization Error:", e);
         }
@@ -1378,8 +2246,12 @@
                 }
 
                 // --- Sidebar/Badges ---
+                const memoryPercent = Number.isFinite(data.memory_percent)
+                    ? data.memory_percent
+                    : Number.isFinite(data?.system_info?.memory_percent) ? data.system_info.memory_percent : 0;
+
                 if(document.getElementById('dash-cpu')) document.getElementById('dash-cpu').innerText = data.cpu_percent + '%';
-                if(document.getElementById('dash-mem')) document.getElementById('dash-mem').innerText = data.memory_percent + '%';
+                if(document.getElementById('dash-mem')) document.getElementById('dash-mem').innerText = memoryPercent + '%';
                 if(document.getElementById('dash-token')) {
                     const total = (data.token_stats && data.token_stats.total_tokens) || (data.input_tokens + data.output_tokens) || 0;
                     document.getElementById('dash-token').innerText = total.toLocaleString();
@@ -1398,7 +2270,7 @@
                     mainChart.data.datasets[0].data.push(data.cpu_percent);
                     if(mainChart.data.datasets[0].data.length > 20) mainChart.data.datasets[0].data.shift();
                     
-                    mainChart.data.datasets[1].data.push(data.memory_percent);
+                    mainChart.data.datasets[1].data.push(memoryPercent);
                     if(mainChart.data.datasets[1].data.length > 20) mainChart.data.datasets[1].data.shift();
                     
                     mainChart.update();
@@ -1412,7 +2284,9 @@
                     if(document.getElementById('net-recv')) document.getElementById('net-recv').innerText = (data.system_info.net_bytes_recv/1024/1024).toFixed(1) + " MB";
                     
                     if(diskChart) {
-                        diskChart.data.datasets[0].data = [data.system_info.used_disk, data.system_info.free_disk];
+                        const usedDisk = Number.isFinite(data.system_info.used_disk) ? data.system_info.used_disk : 0;
+                        const freeDisk = Number.isFinite(data.system_info.free_disk) ? data.system_info.free_disk : 0;
+                        diskChart.data.datasets[0].data = [usedDisk, freeDisk];
                         diskChart.update();
                     }
                 }
@@ -1429,7 +2303,7 @@
                 if(detailMemChart) {
                     if(detailMemChart.data.labels.length > 30) detailMemChart.data.labels.shift();
                     detailMemChart.data.labels.push(time);
-                    detailMemChart.data.datasets[0].data.push(data.memory_percent);
+                    detailMemChart.data.datasets[0].data.push(memoryPercent);
                     if(detailMemChart.data.datasets[0].data.length > 30) detailMemChart.data.datasets[0].data.shift();
                     detailMemChart.update();
                 }
@@ -1510,7 +2384,15 @@
     }
 
     async function deleteRecord(id) {
-        if(!confirm('Delete this record?')) return;
+        const ok = await showUnifiedActionModal({
+            title: '删除记录',
+            message: '确认删除这条记录吗？此操作不可恢复。',
+            level: 'danger',
+            confirmText: '确认删除',
+            cancelText: '取消',
+            confirmClass: 'btn-danger'
+        });
+        if(!ok) return;
         try {
             await fetch('/api/delete_record', {
                 method: 'POST',
@@ -1518,7 +2400,13 @@
                 body: JSON.stringify({id: id})
             });
             refreshRecords();
-        } catch(e) { alert('Delete failed: ' + e); }
+        } catch(e) {
+            await showUnifiedActionModal({
+                title: '删除失败',
+                message: `删除失败: ${e}`,
+                level: 'danger'
+            });
+        }
     }
     
     async function refreshLog() {

@@ -10,6 +10,7 @@ Agent 沙箱环境模块 (Agent Sandbox)
 """Sandbox execution module for the AI agent"""
 
 import os
+import sys
 import subprocess
 import shutil
 
@@ -22,6 +23,11 @@ class AgentSandbox:
         self.root_dir = os.path.abspath(root_dir)
         if not os.path.exists(self.root_dir):
             os.makedirs(self.root_dir, exist_ok=True)
+            
+        # Ensure workspace directory exists for execution
+        self.workspace_dir = os.path.join(self.root_dir, "workspace")
+        if not os.path.exists(self.workspace_dir):
+            os.makedirs(self.workspace_dir, exist_ok=True)
 
     def validate_path(self, path):
         """Ensure path is within the sandbox root"""
@@ -74,7 +80,7 @@ class AgentSandbox:
             # Execute in subprocess, setting CWD to workspace
             cwd = os.path.join(self.root_dir, "workspace")
             result = subprocess.run(
-                ["python", filename],
+                [sys.executable, filename],
                 cwd=cwd,
                 capture_output=True,
                 text=True,

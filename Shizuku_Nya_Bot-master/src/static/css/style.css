@@ -1,0 +1,23 @@
+/* 调整卡片间距和内边距 */
+.card {
+    margin-bottom: 10px; /* 减少卡片间距 */
+}
+
+.card-body {
+    padding: 10px; /* 减少卡片内容区内边距 */
+}
+
+/* 调整图标大小和颜色 */
+.fa-paper-plane, .fa-microchip, .fa-tools, .fa-list-alt {
+    color: #007bff; /* 调整图标颜色 */
+    font-size: 2rem; /* 增大图标尺寸 */
+}
+
+/* 调整文字样式 */
+.card-title {
+    font-size: 1.2rem; /* 增大标题字体 */
+}
+
+.card-text {
+    font-size: 0.9rem; /* 减小描述字体 */
+}
