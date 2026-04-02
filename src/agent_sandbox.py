@@ -60,6 +60,65 @@ class AgentSandbox:
         except Exception as e:
             return f"Error writing file: {str(e)}"
 
+    def append_file_content(self, path, content, position=None):
+        safe_path = self.validate_path(path)
+        try:
+            os.makedirs(os.path.dirname(safe_path), exist_ok=True)
+            if not os.path.exists(safe_path):
+                if position not in (None, 0):
+                    return "Error: position must be 0 when creating a new file"
+                with open(safe_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                return f"Success: Appended to {path}"
+
+            with open(safe_path, 'r', encoding='utf-8') as f:
+                original_content = f.read()
+
+            insert_at = len(original_content) if position is None else int(position)
+            if insert_at < 0:
+                return "Error: position must be non-negative"
+            if insert_at > len(original_content):
+                return "Error: position is out of range"
+
+            updated_content = original_content[:insert_at] + content + original_content[insert_at:]
+
+            with open(safe_path, 'w', encoding='utf-8') as f:
+                f.write(updated_content)
+
+            return f"Success: Appended to {path} at position {insert_at}"
+        except Exception as e:
+            return f"Error appending file: {str(e)}"
+
+    def delete_file_content(self, path, position, length):
+        safe_path = self.validate_path(path)
+        try:
+            if not os.path.exists(safe_path):
+                return f"Error: File not found: {path}"
+            if os.path.isdir(safe_path):
+                return f"Error: Path is a directory, not a file: {path}"
+
+            with open(safe_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            start = int(position)
+            delete_length = int(length)
+            if start < 0 or delete_length < 0:
+                return "Error: position and length must be non-negative"
+            if start > len(content):
+                return "Error: position is out of range"
+
+            end = min(start + delete_length, len(content))
+            updated_content = content[:start] + content[end:]
+
+            with open(safe_path, 'w', encoding='utf-8') as f:
+                f.write(updated_content)
+
+            return f"Success: Deleted content from {path}"
+        except ValueError:
+            return "Error: position and length must be integers"
+        except Exception as e:
+            return f"Error deleting file content: {str(e)}"
+
     def delete_file(self, path):
         safe_path = self.validate_path(path)
         try:

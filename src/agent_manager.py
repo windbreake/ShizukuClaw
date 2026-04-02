@@ -42,8 +42,21 @@ class AgentManager:
 You have autonomous agent capabilities restricted to the './agent_datas/workspace/' workspace.
 You can read/write/delete files and execute Python code within this sandbox.
 
+[Output Format Requirements]
+- Do NOT use DSML, XML, or any markup language format in your responses
+- Do NOT use < | DSML | ... > format
+- Return plain text, JSON, or natural language only
+- When calling tools, use the standard function call format provided by the system
+- After tool execution, respond in natural conversational language without any special markup
+
 [Tool Selection Policy]
 When the user's intent is to delete, remove, or clear a file in the workspace, always prefer the delete_file tool first.
+When the user's intent is to append, add, or continue writing content in an existing file, prefer append_file_content instead of write_file.
+Use write_file mainly for full file replacement or initial file creation.
+When the user's intent is to delete part of a file, remove a segment, or delete content by position and length, prefer delete_file_content first.
+In partial deletion tasks, do not guess and rewrite the whole file unless delete_file_content is not applicable.
+When inserting content into an existing file, first read the file, calculate the exact character position, and then call append_file_content with that position.
+Do not guess the insertion point when the user asks to write content at a specific location.
 Do not use exec_python just to delete a file or to check whether a file exists before deletion.
 Use exec_python only when file deletion requires more complex logic that cannot be handled by delete_file.
 
@@ -57,7 +70,7 @@ Use exec_python only when file deletion requires more complex logic that cannot 
         except Exception as e:
             return f"[Agent Context Error: {str(e)}]"
 
-    def execute_tool(self, tool_name, args, is_admin=False, frontend_source='control_panel'):
+    def execute_tool(self, tool_name, args, is_admin=False, frontend_source='control_panel', user_input=''):
         """Execute a tool call from the LLM"""
         
         # 模式检查
@@ -78,6 +91,8 @@ Use exec_python only when file deletion requires more complex logic that cannot 
         # 1.1 工作模式功能开关限制
         tool_feature_map = {
             'write_file': 'allow_file_write',
+            'append_file_content': 'allow_file_write',
+            'delete_file_content': 'allow_file_write',
             'delete_file': 'allow_file_write',
             'exec_python': 'allow_code_exec',
             'update_plan': 'allow_plan_update',
@@ -90,8 +105,14 @@ Use exec_python only when file deletion requires more complex logic that cannot 
         # 2. 权限检查 (Permission Check)
         # 非管理员只能进行读取操作 (即使在工作模式下，也需要管理员权限才能执行危险操作)
         if not is_admin:
-            if tool_name in ['write_file', 'delete_file', 'exec_python', 'update_plan']:
+            if tool_name in ['write_file', 'append_file_content', 'delete_file_content', 'delete_file', 'exec_python', 'update_plan']:
                  return "Error: Permission Denied. You are not authorized to perform file modifications or code execution."
+
+        # 2.1 强制策略：当用户明确要求“添加/追加/后面写入”时，禁用 write_file，仅允许 append_file_content
+        normalized_user_input = str(user_input or '')
+        append_intent_keywords = ['添加', '追加', '后面写入']
+        if tool_name == 'write_file' and any(k in normalized_user_input for k in append_intent_keywords):
+            return "Error: Append intent detected from user message. write_file is blocked by policy. Use append_file_content instead."
 
         # 3. 危险操作三重验证 (Hazardous Operation Verification)
         if tool_name == 'exec_python':
@@ -107,6 +128,20 @@ Use exec_python only when file deletion requires more complex logic that cannot 
             
             elif tool_name == 'write_file':
                 return self.sandbox.write_file(args.get('path'), args.get('content'))
+
+            elif tool_name == 'append_file_content':
+                return self.sandbox.append_file_content(
+                    args.get('path'),
+                    args.get('content'),
+                    args.get('position')
+                )
+
+            elif tool_name == 'delete_file_content':
+                return self.sandbox.delete_file_content(
+                    args.get('path'),
+                    args.get('position'),
+                    args.get('length')
+                )
 
             elif tool_name == 'delete_file':
                 return self.sandbox.delete_file(args.get('path'))
@@ -182,6 +217,38 @@ Use exec_python only when file deletion requires more complex logic that cannot 
                                 "content": {"type": "string", "description": "Content to write"}
                             },
                             "required": ["path", "content"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "append_file_content",
+                        "description": "Insert content into a file in the agent workspace at a given character position; if position is omitted, append to the end",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string", "description": "Relative path to file"},
+                                "content": {"type": "string", "description": "Content to insert"},
+                                "position": {"type": "integer", "description": "Character offset where content should be inserted"}
+                            },
+                            "required": ["path", "content"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "delete_file_content",
+                        "description": "Delete content from a file by character position and length",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string", "description": "Relative path to file"},
+                                "position": {"type": "integer", "description": "Character offset where deletion starts"},
+                                "length": {"type": "integer", "description": "Number of characters to delete"}
+                            },
+                            "required": ["path", "position", "length"]
                         }
                     }
                 },

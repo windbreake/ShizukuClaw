@@ -208,6 +208,9 @@ class AIChatSystem:
         if user_input:
             parts.append("[当前轮建议]\n优先自然、像真人聊天，不要机械枚举；允许保留轻微情绪与主见，但避免无意义攻击。")
 
+        # 添加严格的格式要求
+        parts.append("[格式要求]严禁输出任何DSML、XML或特殊标记格式。不要使用 <| |> 符号。只回复纯文本对话。")
+
         return '\n\n'.join(parts)
 
     @staticmethod
@@ -276,6 +279,35 @@ class AIChatSystem:
         except Exception as e:
             print(f"图片压缩错误: {e}")
             return base64_data.split(',')[-1] if ',' in base64_data else base64_data
+
+    @staticmethod
+    def clean_dsml_markup(text):
+        """清理DSML及类似标记格式，确保输出为纯文本"""
+        if not text:
+            return text
+        
+        # 直接和彻底的方法：移除所有 < ... > 形式的标记，如果它们包含｜或|
+        max_iterations = 15
+        iteration = 0
+        while iteration < max_iterations:
+            original_text = text
+            
+            # 移除所有包含｜或|的 <...> 标记
+            text = re.sub(r'<[^>]*[\|｜][^>]*>', '', text)
+            # 也移除 </...> 格式的
+            text = re.sub(r'</[^>]*[\|｜][^>]*>', '', text)
+            
+            if text == original_text:
+                break
+            iteration += 1
+        
+        # 移除残留的孤立竖线
+        text = text.replace('｜', '').replace('|', '')
+        
+        # 清理多余空白
+        text = re.sub(r'\s+', ' ', text)
+        
+        return text.strip()
 
     @staticmethod
     def analyze_image_with_aliyun(image_data):
@@ -777,7 +809,7 @@ If the request involves modifying existing code, output the full modified file c
             choice = response.choices[0]
             message = choice.message
             
-            ai_response = message.content # 默认回复
+            ai_response = self.clean_dsml_markup(message.content) # 默认回复，清理DSML标记
 
             # 处理工具调用
             if hasattr(message, 'tool_calls') and message.tool_calls:
@@ -790,7 +822,10 @@ If the request involves modifying existing code, output the full modified file c
                 for tool_call in tool_calls:
                     function_name = tool_call.function.name
                     try:
-                        function_args = json.loads(tool_call.function.arguments)
+                        # 清理工具参数中的DSML标记
+                        raw_arguments = tool_call.function.arguments
+                        raw_arguments = AIChatSystem.clean_dsml_markup(raw_arguments)
+                        function_args = json.loads(raw_arguments)
                     except:
                         function_args = {}
                     
@@ -801,7 +836,8 @@ If the request involves modifying existing code, output the full modified file c
                         function_name,
                         function_args,
                         is_admin=is_admin,
-                        frontend_source=frontend_source
+                        frontend_source=frontend_source,
+                        user_input=user_input
                     )
                     
                     # 记录操作到 AgentMemory (Short Term)
@@ -825,7 +861,7 @@ If the request involves modifying existing code, output the full modified file c
                         temperature=0.7,
                         timeout=60
                     )
-                    ai_response = second_response.choices[0].message.content
+                    ai_response = self.clean_dsml_markup(second_response.choices[0].message.content)
                     
                     # 更新 response 对象以便后续统计
                     response = second_response
@@ -855,6 +891,9 @@ If the request involves modifying existing code, output the full modified file c
             # 这里简单追加，但建议在后续代码中尽量使用数据库作为单一事实来源
             # self.messages.append({"role": "assistant", "content": ai_response})
 
+            # 清理DSML标记（二次清理，以防万一）
+            ai_response = self.clean_dsml_markup(ai_response)
+            
             # 保存对话记录（包括图片描述）
             self.db.save_chat(user_input or "[图片]", ai_response, image_description)
 

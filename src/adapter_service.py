@@ -136,7 +136,7 @@ async def chat_completions(request: Request):
         duration = time.time() - start_t
         logger.info(f"[{request_id}] 上游 API 响应耗时: {duration:.2f}s")
         
-        ai_response = response.choices[0].message.content
+        ai_response = AIChatSystem.clean_dsml_markup(response.choices[0].message.content)
         # chat_system.messages.append({"role": "assistant", "content": ai_response})
         chat_system.db.save_chat(user_input, ai_response)
         logger.info(f"[{request_id}] 对话已保存到数据库")
@@ -370,7 +370,7 @@ def run_adapter_service():
                 max_tokens=200,
                 timeout=30
             )
-            ai_response = response.choices[0].message.content
+            ai_response = AIChatSystem.clean_dsml_markup(response.choices[0].message.content)
             # chat_system.messages.append({"role": "assistant", "content": ai_response})
             chat_system.db.save_chat(user_input, ai_response)
 
