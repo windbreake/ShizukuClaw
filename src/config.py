@@ -188,7 +188,7 @@ CONFIG = {
     'database': CONFIG_DATA.get('database', {
         'host': 'localhost',
         'user': 'root',
-        'password': '!NGC339cn',
+        'password': 'Fjh0729!',
         'database': 'catgirl_db'
     }),
     'unified_api': CONFIG_DATA.get('unified_api', {

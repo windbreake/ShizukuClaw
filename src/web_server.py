@@ -670,17 +670,29 @@ def run_web_server():
     def api_agent_status():
         try:
             # Read Plan
-            plan_path = os.path.join("agent_datas", "plan.md")
+            plan_path = os.path.join("agent_datas", "workspace", "plan.md")
+            legacy_plan_path = os.path.join("agent_datas", "plan.md")
             plan_content = ""
             if os.path.exists(plan_path):
                 with open(plan_path, 'r', encoding='utf-8') as f:
                     plan_content = f.read()
+            elif os.path.exists(legacy_plan_path):
+                with open(legacy_plan_path, 'r', encoding='utf-8') as f:
+                    plan_content = f.read()
 
             # Read Short Term Memory Stats
-            memory_path = os.path.join("agent_datas", "memory", "short_term.json")
+            memory_path = os.path.join("agent_datas", "workspace", "memory", "short_term.json")
+            legacy_memory_path = os.path.join("agent_datas", "memory", "short_term.json")
             memory_count = 0
             if os.path.exists(memory_path):
                 with open(memory_path, 'r', encoding='utf-8') as f:
+                    try:
+                        mem_data = json.load(f)
+                        memory_count = len(mem_data)
+                    except:
+                        pass
+            elif os.path.exists(legacy_memory_path):
+                with open(legacy_memory_path, 'r', encoding='utf-8') as f:
                     try:
                         mem_data = json.load(f)
                         memory_count = len(mem_data)

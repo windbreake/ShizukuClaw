@@ -26,9 +26,9 @@ class AgentManager:
         self.ai_chat_system = ai_chat_system
         self.memory = AgentMemory(ai_chat_system)
         self.planner = AgentPlanner()
-        # Define sandbox root: project_root/agent_datas
+        # Define sandbox root: project_root/agent_datas/workspace
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        sandbox_root = os.path.join(project_root, 'agent_datas')
+        sandbox_root = os.path.join(project_root, 'agent_datas', 'workspace')
         self.sandbox = AgentSandbox(sandbox_root)
 
     def get_agent_context(self):
@@ -39,8 +39,13 @@ class AgentManager:
             
             context = f"""
 [Agent Capabilities]
-You have autonomous agent capabilities restricted to the './agent_datas/' workspace.
-You can read/write files and execute Python code within this sandbox.
+You have autonomous agent capabilities restricted to the './agent_datas/workspace/' workspace.
+You can read/write/delete files and execute Python code within this sandbox.
+
+[Tool Selection Policy]
+When the user's intent is to delete, remove, or clear a file in the workspace, always prefer the delete_file tool first.
+Do not use exec_python just to delete a file or to check whether a file exists before deletion.
+Use exec_python only when file deletion requires more complex logic that cannot be handled by delete_file.
 
 [Current Plan]
 {plan}
@@ -73,6 +78,7 @@ You can read/write files and execute Python code within this sandbox.
         # 1.1 工作模式功能开关限制
         tool_feature_map = {
             'write_file': 'allow_file_write',
+            'delete_file': 'allow_file_write',
             'exec_python': 'allow_code_exec',
             'update_plan': 'allow_plan_update',
             'ask_coder': 'allow_coder_tool'
@@ -84,7 +90,7 @@ You can read/write files and execute Python code within this sandbox.
         # 2. 权限检查 (Permission Check)
         # 非管理员只能进行读取操作 (即使在工作模式下，也需要管理员权限才能执行危险操作)
         if not is_admin:
-            if tool_name in ['write_file', 'exec_python', 'update_plan']:
+            if tool_name in ['write_file', 'delete_file', 'exec_python', 'update_plan']:
                  return "Error: Permission Denied. You are not authorized to perform file modifications or code execution."
 
         # 3. 危险操作三重验证 (Hazardous Operation Verification)
@@ -101,6 +107,9 @@ You can read/write files and execute Python code within this sandbox.
             
             elif tool_name == 'write_file':
                 return self.sandbox.write_file(args.get('path'), args.get('content'))
+
+            elif tool_name == 'delete_file':
+                return self.sandbox.delete_file(args.get('path'))
             
             elif tool_name == 'list_dir':
                 return self.sandbox.list_dir(args.get('path', '.'))
@@ -173,6 +182,20 @@ You can read/write files and execute Python code within this sandbox.
                                 "content": {"type": "string", "description": "Content to write"}
                             },
                             "required": ["path", "content"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "delete_file",
+                        "description": "Delete a file in the agent workspace",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string", "description": "Relative path to file"}
+                            },
+                            "required": ["path"]
                         }
                     }
                 },

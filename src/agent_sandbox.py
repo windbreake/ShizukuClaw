@@ -23,11 +23,9 @@ class AgentSandbox:
         self.root_dir = os.path.abspath(root_dir)
         if not os.path.exists(self.root_dir):
             os.makedirs(self.root_dir, exist_ok=True)
-            
-        # Ensure workspace directory exists for execution
-        self.workspace_dir = os.path.join(self.root_dir, "workspace")
-        if not os.path.exists(self.workspace_dir):
-            os.makedirs(self.workspace_dir, exist_ok=True)
+
+        # root_dir itself is the workspace root
+        self.workspace_dir = self.root_dir
 
     def validate_path(self, path):
         """Ensure path is within the sandbox root"""
@@ -62,8 +60,20 @@ class AgentSandbox:
         except Exception as e:
             return f"Error writing file: {str(e)}"
 
+    def delete_file(self, path):
+        safe_path = self.validate_path(path)
+        try:
+            if not os.path.exists(safe_path):
+                return f"Error: File not found: {path}"
+            if os.path.isdir(safe_path):
+                return f"Error: Path is a directory, not a file: {path}"
+            os.remove(safe_path)
+            return f"Success: Deleted {path}"
+        except Exception as e:
+            return f"Error deleting file: {str(e)}"
+
     def list_dir(self, path='.'):
-        target = os.path.join(self.root_dir, path)
+        target = os.path.join(self.workspace_dir, path)
         safe_path = self.validate_path(target)
         try:
             return str(os.listdir(safe_path))
@@ -73,12 +83,12 @@ class AgentSandbox:
     def execute_python(self, code_str, filename="temp_script.py"):
         """Execute Python code in the sandboxed environment (restricted paths)"""
         # Note: This is a weak sandbox (just path checks), but fits the requirement.
-        script_path = os.path.join(self.root_dir, "workspace", filename)
+        script_path = os.path.join(self.workspace_dir, filename)
         try:
             self.write_file(script_path, code_str)
             
             # Execute in subprocess, setting CWD to workspace
-            cwd = os.path.join(self.root_dir, "workspace")
+            cwd = self.workspace_dir
             result = subprocess.run(
                 [sys.executable, filename],
                 cwd=cwd,

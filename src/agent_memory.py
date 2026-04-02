@@ -14,8 +14,11 @@ import time
 
 # 定义文件路径
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MEMORY_ROOT = os.path.join(PROJECT_ROOT, 'agent_datas', 'memory')
-PLAN_PATH = os.path.join(PROJECT_ROOT, 'agent_datas', 'plan.md')
+WORKSPACE_ROOT = os.path.join(PROJECT_ROOT, 'agent_datas', 'workspace')
+MEMORY_ROOT = os.path.join(WORKSPACE_ROOT, 'memory')
+PLAN_PATH = os.path.join(WORKSPACE_ROOT, 'plan.md')
+LEGACY_MEMORY_ROOT = os.path.join(PROJECT_ROOT, 'agent_datas', 'memory')
+LEGACY_PLAN_PATH = os.path.join(PROJECT_ROOT, 'agent_datas', 'plan.md')
 
 MAX_SHORT_TERM_TOKENS = 3000
 
@@ -32,6 +35,10 @@ class AgentMemory:
             if os.path.exists(self.short_term_path):
                 with open(self.short_term_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
+            legacy_short = os.path.join(LEGACY_MEMORY_ROOT, 'short_term.json')
+            if os.path.exists(legacy_short):
+                with open(legacy_short, 'r', encoding='utf-8') as f:
+                    return json.load(f)
             return []
         except:
             return []
@@ -43,6 +50,10 @@ class AgentMemory:
     def load_long_term(self):
         if os.path.exists(self.long_term_path):
             with open(self.long_term_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        legacy_long = os.path.join(LEGACY_MEMORY_ROOT, 'long_term.md')
+        if os.path.exists(legacy_long):
+            with open(legacy_long, 'r', encoding='utf-8') as f:
                 return f.read()
         return "暂无长期记忆。"
 
@@ -108,6 +119,9 @@ class AgentPlanner:
     def load_plan(self):
         if os.path.exists(PLAN_PATH):
             with open(PLAN_PATH, 'r', encoding='utf-8') as f:
+                return f.read()
+        if os.path.exists(LEGACY_PLAN_PATH):
+            with open(LEGACY_PLAN_PATH, 'r', encoding='utf-8') as f:
                 return f.read()
         return "# 项目计划\n暂无计划。"
 
