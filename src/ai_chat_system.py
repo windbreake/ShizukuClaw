@@ -22,6 +22,7 @@ from openai import OpenAI, APITimeoutError
 from src.config import CONFIG
 from src.database import get_connection, DatabaseManager
 from src.shared_utils import count_tokens, estimate_tokens
+from src.plugin_framework import PluginContext, PluginManager
 
 # 全局变量用于跟踪Token使用（需要在web_server.py中更新这些值）
 try:
@@ -62,6 +63,10 @@ class AIChatSystem:
         from src.agent_manager import AgentManager
         self.agent_manager = AgentManager(self)
 
+        # 初始化插件框架
+        self.plugin_manager = PluginManager(self)
+        self.plugin_manager.load_all()
+
         # 使用配置中的基础URL
         client = OpenAI(
             api_key=CONFIG['api']['key'],
@@ -79,6 +84,54 @@ class AIChatSystem:
         self.messages = messages
         self.persona_runtime = persona_runtime
         self.current_persona_state = None
+
+    def reload_plugins(self):
+        """Reload plugin framework and return latest status."""
+        self.plugin_manager.reload_all()
+        return self.plugin_manager.get_framework_status()
+
+    def get_plugin_status(self):
+        """Return plugin framework status for admin API/UI."""
+        return self.plugin_manager.get_framework_status()
+
+    def set_plugin_framework_enabled(self, enabled):
+        """Enable or disable the plugin framework."""
+        self.plugin_manager.set_framework_enabled(bool(enabled), persist=True)
+        return self.plugin_manager.get_framework_status()
+
+    def update_plugin_policy(self, plugin_name, policy):
+        """Update plugin isolation policy and return normalized policy."""
+        return self.plugin_manager.update_plugin_policy(plugin_name, policy, persist=True)
+
+    def get_plugin_runtime_config(self, plugin_name):
+        """Read a plugin runtime config from its project directory."""
+        return self.plugin_manager.get_plugin_runtime_config(plugin_name)
+
+    def update_plugin_runtime_config(self, plugin_name, config_data):
+        """Write a plugin runtime config to its project directory."""
+        return self.plugin_manager.update_plugin_runtime_config(plugin_name, config_data)
+
+    def run_plugin_command(self, command_text, is_admin=True, frontend_source='control_panel'):
+        """Execute a plugin command directly (e.g. /plugins reload, /kemono_crawl ...)."""
+        context = PluginContext(
+            user_input=command_text,
+            is_admin=is_admin,
+            frontend_source=frontend_source,
+            attachments=None,
+            metadata={"invoked_from": "api"},
+            chat_system=self
+        )
+        result = self.plugin_manager.process_input(context)
+        if not result:
+            return {"handled": False, "response": ""}
+
+        response_text = result.response or ""
+        response_text = self.plugin_manager.process_response(context, response_text)
+        return {
+            "handled": bool(result.handled),
+            "response": response_text,
+            "metadata": result.metadata,
+        }
 
     def _pick_persona_state(self):
         """按概率切换 persona 状态，模拟更自然的人格波动。"""
@@ -706,7 +759,7 @@ If the request involves modifying existing code, output the full modified file c
         
         # 手动将 agent_context 添加到 messages 的第一个系统消息中
         if messages and messages[0]['role'] == 'system':
-             messages[0]['content'] += f"\n\n{agent_context}"
+            messages[0]['content'] += f"\n\n{agent_context}"
 
         image_description = None
 
@@ -753,6 +806,26 @@ If the request involves modifying existing code, output the full modified file c
 
         # 处理文本输入
         if user_input:
+            plugin_context = PluginContext(
+                user_input=user_input,
+                is_admin=is_admin,
+                frontend_source=frontend_source,
+                attachments=attachments,
+                metadata={"image_present": bool(image)},
+                chat_system=self
+            )
+
+            plugin_result = self.plugin_manager.process_input(plugin_context)
+            if plugin_result.handled and plugin_result.response is not None:
+                plugin_response = self.clean_dsml_markup(plugin_result.response)
+                plugin_response = self.plugin_manager.process_response(plugin_context, plugin_response)
+                self.db.save_chat(user_input, plugin_response, image_description)
+                return plugin_response
+
+            if plugin_result.rewritten_input:
+                user_input = plugin_result.rewritten_input
+                plugin_context.user_input = user_input
+
             # 判断是否需要搜索
             if AIChatSystem.should_search(user_input):
                 print(f"检测到搜索请求: {user_input}")
@@ -893,6 +966,15 @@ If the request involves modifying existing code, output the full modified file c
 
             # 清理DSML标记（二次清理，以防万一）
             ai_response = self.clean_dsml_markup(ai_response)
+            response_context = PluginContext(
+                user_input=user_input or "",
+                is_admin=is_admin,
+                frontend_source=frontend_source,
+                attachments=attachments,
+                metadata={"image_present": bool(image)},
+                chat_system=self
+            )
+            ai_response = self.plugin_manager.process_response(response_context, ai_response)
             
             # 保存对话记录（包括图片描述）
             self.db.save_chat(user_input or "[图片]", ai_response, image_description)

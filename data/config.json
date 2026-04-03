@@ -99,5 +99,37 @@
     "host": "0.0.0.0",
     "port": 8000,
     "access_token": "neko-proxy-key-123"
+  },
+  "plugin_framework": {
+    "enabled": true,
+    "plugins": {
+      "builtin.basic": {
+        "enabled": true,
+        "allow_network": true,
+        "allowed_domains": [
+          "1"
+        ],
+        "allowed_commands": [],
+        "max_execution_ms": 10000
+      },
+      "example.weather": {
+        "enabled": true,
+        "allow_network": false,
+        "allowed_domains": [],
+        "allowed_commands": [],
+        "max_execution_ms": 10000
+      },
+      "crawler.kemono": {
+        "enabled": true,
+        "allow_network": true,
+        "allowed_domains": [
+          "kemono.su"
+        ],
+        "allowed_commands": [
+          "crawl"
+        ],
+        "max_execution_ms": 35000
+      }
+    }
   }
 }

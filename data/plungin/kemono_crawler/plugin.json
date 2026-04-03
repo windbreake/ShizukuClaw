@@ -1,0 +1,5 @@
+{
+  "name": "crawler.kemono",
+  "entry": "plugin.py",
+  "module_name": "kemono_crawler"
+}

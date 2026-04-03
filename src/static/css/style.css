@@ -318,7 +318,155 @@ body {
     border-radius: 8px 0 0 8px;
 }
 
+/* Plugin panel styles */
+.plugin-toolbar-search {
+    position: relative;
+    min-width: 220px;
+}
+
+.plugin-toolbar-search i {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8a8a8a;
+    font-size: 0.8rem;
+}
+
+.plugin-toolbar-search input {
+    border-radius: 999px;
+    padding-left: 28px;
+    border: 1px solid #e4e7ec;
+    background: #f8fafc;
+}
+
+.plugin-entry-card {
+    border-radius: 14px;
+    border: 1px solid #e8edf3;
+    background: #f8fafc;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.plugin-entry-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(44, 62, 80, 0.08);
+    border-color: #d9e2ec;
+}
+
+.plugin-entry-card.is-selected {
+    border-color: #70a7d0;
+    box-shadow: 0 0 0 2px rgba(112, 167, 208, 0.2);
+}
+
+.plugin-entry-card .form-switch .form-check-input {
+    cursor: pointer;
+    width: 2.45rem;
+    height: 1.35rem;
+    border: none;
+    background-color: #9aa0a6;
+}
+
+.plugin-entry-card .form-switch .form-check-input:checked {
+    background-color: #6baad3;
+}
+
+.plugin-title-wrap {
+    min-width: 0;
+}
+
+.plugin-title-meta {
+    min-width: 0;
+}
+
+.plugin-name {
+    font-size: 1rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.plugin-mini-badge {
+    font-size: 0.72rem;
+    font-weight: 500;
+    border-radius: 6px;
+}
+
+.plugin-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #e7f3fb;
+    color: #66a8d2;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.plugin-ban-icon {
+    color: #e35454;
+    font-size: 1.05rem;
+}
+
+.plugin-desc {
+    min-height: 48px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.plugin-policy-line {
+    color: #667085;
+}
+
+.plugin-action-row {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.plugin-settings-btn {
+    border-radius: 999px;
+    background: #dff2ff;
+    color: #2a82b4;
+    border: 1px solid #c2e5f8;
+    font-weight: 600;
+    padding: 0.28rem 0.75rem;
+}
+
+.plugin-settings-btn:hover {
+    background: #cfeaff;
+    color: #1c6f9d;
+}
+
+.plugin-settings-modal {
+    border-radius: 14px;
+    border: 1px solid #e6ebf2;
+}
+
+.plugin-settings-modal .modal-header {
+    border-bottom: 1px solid #eef2f7;
+}
+
+.plugin-settings-modal .modal-footer {
+    border-top: 1px solid #eef2f7;
+}
+
+.plugin-settings-intro {
+    border: 1px solid #e7edf4;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    background: #f8fbff;
+}
+
 @media (max-width: 992px) {
+    .plugin-toolbar-search {
+        min-width: 160px;
+    }
     .config-shell {
         flex-direction: column;
         padding: 1rem;

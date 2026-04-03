@@ -145,6 +145,29 @@
 - 使用AI Search API获取搜索结果并整合到回复中
 - 作者现使用Kimi API来实现Bot搜索功能
 
+### 模块化插件框架（新增）
+- 新增可扩展插件框架，支持命令式插件与规则匹配插件
+- 支持 `data/plungin/` 下的独立插件项目加载（每个插件一个目录）
+- 支持热重载：`/plugins reload`（管理员）
+- 内置示例命令：`/plugins`、`/echo hello`
+- 内置规则示例：当用户输入“现在几点/今天几号”等语句时由规则插件响应
+- 示例插件项目：`data/plungin/example_weather/`、`data/plungin/kemono_crawler/`
+- 生命周期钩子（Astr 风格兼容思路）：`on_startup`、`on_shutdown`、`on_message`、`on_response`、`on_error`
+- 插件元信息与依赖：`PLUGIN_META`（name/version/description/author/dependencies）
+- 插件隔离策略：enabled、allow_network、allowed_domains、allowed_commands、max_execution_ms
+- 插件运行参数：每个插件目录内 `config.json`，通过控制面板 JSON 编辑器直接修改
+
+爬虫插件命令：
+- Selective Crawl 命令：`/crawl <url> [max_paragraphs]`
+- Kemono Crawl 命令：`/kemono_crawl <kemono_post_url>`
+- 对应插件项目：`data/plungin/kemono_crawler/`
+
+插件框架核心目录：
+- `src/plugin_framework/base.py`：上下文与返回模型
+- `src/plugin_framework/registry.py`：命令/规则/响应钩子注册中心
+- `src/plugin_framework/manager.py`：插件加载与分发调度
+- `src/plugin_framework/builtin_plugins.py`：内置插件
+
 ### Web控制面板(2025年10月30日正式修复完成)
 - 提供Web界面的控制面板，可管理服务和查看日志
 - 访问 `http://localhost:8888/control_panel`

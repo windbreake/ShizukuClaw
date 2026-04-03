@@ -1,0 +1,144 @@
+[INFO] Checking for dependency updates. Using mirror: https://mirrors.aliyun.com/pypi/simple.
+WARNING: Ignoring invalid distribution ~oogle-genai (D:\Windbreak339\Toolbox\AstrBotLauncher-0.1.5.6\AstrBot\venv\Lib\site-packages)
+WARNING: Ignoring invalid distribution ~oogle-genai (D:\Windbreak339\Toolbox\AstrBotLauncher-0.1.5.6\AstrBot\venv\Lib\site-packages)
+WARNING: Ignoring invalid distribution ~oogle-genai (D:\Windbreak339\Toolbox\AstrBotLauncher-0.1.5.6\AstrBot\venv\Lib\site-packages)
+WARNING: Ignoring invalid distribution ~oogle-genai (D:\Windbreak339\Toolbox\AstrBotLauncher-0.1.5.6\AstrBot\venv\Lib\site-packages)
+WARNING: Ignoring invalid distribution ~oogle-genai (D:\Windbreak339\Toolbox\AstrBotLauncher-0.1.5.6\AstrBot\venv\Lib\site-packages)
+WARNING: Ignoring invalid distribution ~oogle-genai (D:\Windbreak339\Toolbox\AstrBotLauncher-0.1.5.6\AstrBot\venv\Lib\site-packages)
+Using Python 3.12.3 environment at: venv
+warning: Ignoring dangling temporary directory: `D:\Windbreak339\Toolbox\AstrBotLauncher-0.1.5.6\AstrBot\venv\Lib\site-packages\~oogle_genai-1.65.0.dist-info`
+Audited 57 packages in 68ms
+[INFO] Starting AstrBot.
+
+[01:07:16.578] [Core] [DBUG] [asyncio.proactor_events:634]: Using proactor: IocpProactor
+[01:07:16.579] [Core] [DBUG] [tzlocal.win32:55]: Looking up time zone info from registry
+[01:07:16.590] [Core] [INFO] [schedulers.base:507]: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+[01:07:16.591] [Core] [INFO] [schedulers.base:1090]: Added job "SharedPreferences._clear_temporary_cache" to job store "default"
+[01:07:16.592] [Core] [INFO] [schedulers.base:214]: Scheduler started
+[01:07:16.593] [Core] [DBUG] [schedulers.base:1151]: Looking for jobs to run
+[01:07:16.593] [Core] [INFO] [AstrBot.runtime_bootstrap:41]: Bootstrapping runtime CA bundle.
+[01:07:16.593] [Core] [DBUG] [schedulers.base:1258]: Next wakeup is due at 2026-04-05 01:07:16.590411+08:00 (in 86399.996803 seconds)
+[01:07:17.485] [Core] [INFO] [AstrBot.runtime_bootstrap:33]: Configured aiohttp verified SSL context with system+certifi trust chain.
+[01:07:21.518] [Core] [DBUG] [agent.tool_image_cache:55]: ToolImageCache initialized, cache dir: D:\Windbreak339\Toolbox\AstrBotLauncher-0.1.5.6\AstrBot\data\temp\tool_images
+[01:07:21.842] [Core] [DBUG] [faiss.loader:95]: Environment variable FAISS_OPT_LEVEL is not set, so let's pick the instruction set according to the current CPU
+[01:07:21.842] [Core] [INFO] [faiss.loader:131]: Loading faiss with AVX2 support.
+[01:07:21.936] [Core] [INFO] [faiss.loader:133]: Successfully loaded faiss with AVX2 support.
+D:\Windbreak339\Toolbox\AstrBotLauncher-0.1.5.6\AstrBot\venv\Lib\site-packages\jieba\_compat.py:18: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+[01:07:23.477] [Core] [DBUG] [platform.register:60]: 平台适配器 aiocqhttp 已注册
+[01:07:23.585] [Core] [DBUG] [platform.register:60]: 平台适配器 wecom_ai_bot 已注册
+[01:07:23.597] [Core] [DBUG] [platform.register:60]: 平台适配器 webchat 已注册
+[01:07:23.868] [Core] [DBUG] [asyncio.proactor_events:634]: Using proactor: IocpProactor
+[01:07:23.875] [Core] [INFO] [AstrBot.main:83]: WebUI 版本已是最新。
+[01:07:23.876] [Core] [INFO] [AstrBot.main:126]:
+     ___           _______.___________..______      .______     ______   .___________.
+    /   \         /       |           ||   _  \     |   _  \   /  __  \  |           |
+   /  ^  \       |   (----`---|  |----`|  |_)  |    |  |_)  | |  |  |  | `---|  |----`
+  /  /_\  \       \   \       |  |     |      /     |   _  <  |  |  |  |     |  |
+ /  _____  \  .----)   |      |  |     |  |\  \----.|  |_)  | |  `--'  |     |  |
+/__/     \__\ |_______/       |__|     | _| `._____||______/   \______/      |__|
+
+
+[01:07:23.877] [Core] [DBUG] [asyncio.proactor_events:634]: Using proactor: IocpProactor
+[01:07:23.878] [Core] [DBUG] [core.core_lifecycle:80]: HTTP proxy cleared
+[01:07:23.878] [Core] [INFO] [core.core_lifecycle:106]: AstrBot v4.18.3
+[01:07:25.797] [Core] [INFO] [core.persona_mgr:36]: 已加载 0 个人格。
+[01:07:25.821] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_auto_ban_new ...
+[01:07:25.835] [Core] [INFO] [star.star_manager:634]: Plugin 进群禁言 (v1.4) by 糯米茨: 在指定群聊中对新入群用户自动禁言并发送欢迎消息，支持多种方式解除监听。帮助群管理员更好地管理新成员，确保新成员先阅读群规再发言。
+[01:07:25.836] [Core] [INFO] [star.star_manager:668]: 插件 进群禁言 已被禁用。
+[01:07:25.836] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_heartflow ...
+[01:07:25.842] [Core] [INFO] [star.star_manager:634]: Plugin astrbot_plugin_Heartflow (1.3.0) by Jason.Joestar: 基于简单的心流机制的群聊主动回复插件，带来更生动的主动回复体验
+[01:07:25.843] [Core] [INFO] [star.star_manager:668]: 插件 astrbot_plugin_Heartflow 已被禁用。
+[01:07:25.846] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_keywordsreply ...
+[01:07:25.857] [Core] [INFO] [star.star_manager:634]: Plugin astrbot_plugin_keywordsreply (v1.2.0) by Origin173: 一个简单的关键词自动回复插件
+[01:07:25.858] [Core] [INFO] [star.star_manager:668]: 插件 astrbot_plugin_keywordsreply 已被禁用。
+[01:07:25.858] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_knowledge_base ...
+[01:07:28.665] [Core] [INFO] [star.star_manager:634]: Plugin astrbot_plugin_knowledge_base (v0.5.9) by lxfight: 为AstrBot实现了一个简单的知识库,实现在对话过程中补充额外的知识
+[01:07:28.666] [Core] [INFO] [star.star_manager:668]: 插件 astrbot_plugin_knowledge_base 已被禁用。
+[01:07:28.666] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_letai_sendemojis ...
+[01:07:28.682] [Core] [INFO] [star.star_manager:634]: Plugin letai_sendemojis (v1.0.0) by Heyh520: 智能分析AI对话内容并发送匹配表情包，支持情感识别、历史记录和多数据源，让聊天更生动有趣
+[01:07:28.682] [Core] [INFO] [star.star_manager:668]: 插件 letai_sendemojis 已被禁用。
+[01:07:28.682] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_lmarena ...
+[01:07:29.181] [Core] [INFO] [star.star_manager:634]: Plugin astrbot_plugin_lmarena (v2.1.2) by Zhalslar: 全面对接lmarena(模型竞技场)，免费无限调用模型，如调用nano-banana进行手办化
+[01:07:29.181] [Core] [INFO] [star.star_manager:668]: 插件 astrbot_plugin_lmarena 已被禁用。
+[01:07:29.181] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_mememaker_api ...
+[01:07:29.285] [Core] [INFO] [star.star_manager:634]: Plugin astrbot_plugin_mememaker_api (v1.0.1) by jmt059: 表情包制作插件(api版)，功能齐全，需要调用 meme-generator 服务
+[01:07:29.285] [Core] [INFO] [star.star_manager:668]: 插件 astrbot_plugin_mememaker_api 已被禁用。
+[01:07:29.286] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_meme_generator ...
+[01:07:29.413] [Core] [INFO] [star.star_manager:634]: Plugin astrbot_plugin_meme_generator (v1.0.0) by SodaSizzle: 高性能表情包生成器 - 支持多种模板和智能参数识别，具备头像缓存、用户冷却、超时控制等高级功能
+[01:07:29.414] [Core] [INFO] [star.star_manager:668]: 插件 astrbot_plugin_meme_generator 已被禁用。
+[01:07:29.414] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_meme_manager ...
+插件目录: D:\Windbreak339\Toolbox\AstrBotLauncher-0.1.5.6\AstrBot\data\plugins\astrbot_plugin_meme_manager
+表情包目录: D:\Windbreak339\Toolbox\AstrBotLauncher-0.1.5.6\AstrBot\data\memes_data\memes
+[01:07:29.492] [Core] [INFO] [star.star_manager:634]: Plugin meme_manager (v3.13) by anka: anka - 表情包管理器 Astrbot表情包管理器3.0版本已发布! 提供便捷的 WebUI 管理界面(/表情管理 开启管理后台) , 所有 prompt 会根据修改的表情包文件夹目录自动维护，无需手动添加！可以控制每次发送的表情数量和频率(进入设置配置一次发送最大数量与发送概率) 更多信息与功能预览请前往仓库页面查看:https://github.com/anka-afk/astrbot_plugin_meme_manager                第一次使用请点击该卡片左下角配置按钮进行配置
+[01:07:29.493] [Core] [INFO] [star.star_manager:668]: 插件 meme_manager 已被禁用。
+[01:07:29.493] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_meme_manager_lite ...
+[01:07:29.499] [Core] [INFO] [star.star_manager:634]: Plugin astrbot_plugin_meme_manager_lite (v1.2) by ctrlkk: 允许LLM在回答中使用表情包 轻量级！
+[01:07:29.500] [Core] [INFO] [star.star_manager:668]: 插件 astrbot_plugin_meme_manager_lite 已被禁用。
+[01:07:29.500] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_music ...
+[01:07:29.527] [Core] [INFO] [star.star_manager:634]: Plugin astrbot_plugin_music (v1.0.2) by Zhalslar: 点歌插件，支持按钮点歌、ai点歌、音乐卡片播放、语音播放、热评、歌词、歌单、多音源、无需VIP
+[01:07:29.527] [Core] [INFO] [star.star_manager:668]: 插件 astrbot_plugin_music 已被禁用。
+[01:07:29.527] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_nbnhhsh ...
+[01:07:29.541] [Core] [INFO] [star.star_manager:634]: Plugin astrbot_plugin_nbnhhsh (v0.1.0) by 薄暝: 神奇海螺缩写查询，支持“XX是什么/是啥/是什么意思”提问，需先@机器人
+[01:07:29.542] [Core] [INFO] [star.star_manager:668]: 插件 astrbot_plugin_nbnhhsh 已被禁用。
+[01:07:29.543] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_pixiv_search ...
+[01:07:29.697] [Core] [INFO] [star.star_manager:634]: Plugin Pixiv 图片搜索 (1.2.8) by vmoranv: 通过标签在 Pixiv 上搜索插画。用法 /pixiv tag1,tag2,... 可在配置中设置认证信息、返回数量和 R18 过滤模式。
+[01:07:29.698] [Core] [INFO] [star.star_manager:668]: 插件 Pixiv 图片搜索 已被禁用。
+[01:07:29.699] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_qqadmin ...
+[01:07:29.753] [Core] [INFO] [star.star_manager:634]: Plugin astrbot_plugin_qqadmin (v3.1.7) by Zhalslar: [仅aiocqhttp]群管插件，功能包括：禁言、全体禁言、踢人、拉黑、改群昵称、改头衔、设管理员、设精华、撤回消息、改群头像、改群名、发群公告、整理群友信息等等
+[01:07:29.754] [Core] [INFO] [star.star_manager:668]: 插件 astrbot_plugin_qqadmin 已被禁用。
+[01:07:29.755] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_recall_cancel ...
+[01:07:29.763] [Core] [INFO] [star.star_manager:634]: Plugin astrbot_plugin_recall_cancel (v1.0.0) by 木有知: “你撤回了我就当你没发过”，当用户撤回触发LLM回应的消息时，如果LLM回复还未发送则取消发送。防止用户发错消息撤回后机器人仍然回复的情况，提升用户体验并避免资源浪费。
+[01:07:29.763] [Core] [INFO] [star.star_manager:668]: 插件 astrbot_plugin_recall_cancel 已被禁用。
+[01:07:29.764] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot_plugin_restrict_syscmd ...
+[01:07:29.774] [Core] [INFO] [star.star_manager:634]: Plugin astrbot_plugin_restrict_syscmd (0.2.0) by 木有知: 限制仅管理员可用某些指令（支持自定义），防止bot被测，防止被恶意new、reset等
+[01:07:29.774] [Core] [INFO] [star.star_manager:668]: 插件 astrbot_plugin_restrict_syscmd 已被禁用。
+[01:07:29.775] [Core] [INFO] [star.star_manager:555]: 正在载入插件 chishenme ...
+[01:07:29.784] [Core] [INFO] [star.star_manager:634]: Plugin AstrBot_chishenme (v1.0) by mingrixiangnai: 检测到聊天有“吃什么”时，随机回复文字。
+[01:07:29.785] [Core] [INFO] [star.star_manager:668]: 插件 AstrBot_chishenme 已被禁用。
+[01:07:29.785] [Core] [INFO] [star.star_manager:555]: 正在载入插件 astrbot ...
+[01:07:29.796] [Core] [INFO] [star.star_manager:634]: Plugin astrbot (4.1.0) by Soulter: AstrBot 自带插件，包含人格注入、思考内容注入、群聊上下文感知等功能的实现，禁用后将无法使用这些功能。
+[01:07:29.797] [Core] [INFO] [star.star_manager:555]: 正在载入插件 builtin_commands ...
+[01:07:29.835] [Core] [INFO] [star.star_manager:634]: Plugin builtin_commands (0.0.1) by Soulter: AstrBot 自带指令，提供常用的对话管理、工具使用、插件管理等功能。
+[01:07:29.835] [Core] [INFO] [star.star_manager:555]: 正在载入插件 session_controller ...
+[01:07:29.842] [Core] [INFO] [star.star_manager:634]: Plugin session_controller (v1.0.1) by Cvandia & Soulter: 为插件支持会话控制
+[01:07:29.843] [Core] [INFO] [star.star_manager:555]: 正在载入插件 web_searcher ...
+[01:07:29.909] [Core] [INFO] [provider.func_tool_manager:163]: 添加函数调用工具: web_search
+[01:07:29.917] [Core] [INFO] [provider.func_tool_manager:163]: 添加函数调用工具: fetch_url
+[01:07:29.927] [Core] [INFO] [provider.func_tool_manager:163]: 添加函数调用工具: web_search_tavily
+[01:07:29.935] [Core] [INFO] [provider.func_tool_manager:163]: 添加函数调用工具: tavily_extract_web_page
+[01:07:29.945] [Core] [INFO] [provider.func_tool_manager:163]: 添加函数调用工具: web_search_bocha
+[01:07:29.948] [Core] [INFO] [star.star_manager:634]: Plugin astrbot-web-searcher (1.14.514) by Soulter: 让 LLM 具有网页检索能力
+[01:07:29.957] [Core] [INFO] [provider.manager:460]: 载入 openai_chat_completion(neko) 服务提供商 ...
+[01:07:36.521] [Core] [INFO] [provider.manager:460]: 载入 openai_chat_completion(neko_source/gpt-3.5-turbo) 服务提供商 ...
+[01:07:42.326] [Core] [INFO] [t2i.network_strategy:56]: Successfully got 2 official T2I endpoints.
+[01:07:42.337] [Core] [INFO] [knowledge_base.kb_mgr:40]: 正在初始化知识库模块...
+[01:07:42.375] [Core] [INFO] [knowledge_base.kb_mgr:66]: KnowledgeBase database initialized: D:\Windbreak339\Toolbox\AstrBotLauncher-0.1.5.6\AstrBot\data\knowledge_base\kb.db
+[01:07:42.812] [Core] [INFO] [platform.manager:125]: 载入 aiocqhttp(neko) 平台适配器 ...
+[01:07:42.912] [Core] [INFO] [dashboard.server:304]: 正在启动 WebUI, 监听地址: http://0.0.0.0:6185
+[01:07:42.913] [Core] [INFO] [dashboard.server:306]: 提示: WebUI 将监听所有网络接口，请注意安全。（可在 data/cmd_config.json 中配置 dashboard.host 以修改 host）
+[01:07:44.943] [Core] [INFO] [dashboard.server:343]:
+ ✨✨✨
+  AstrBot v4.18.3 WebUI 已启动，可访问
+
+   ➜  本地: http://localhost:6185
+   ➜  网络: http://169.254.9.52:6185
+   ➜  网络: http://26.130.184.141:6185
+   ➜  网络: http://192.168.1.2:6185
+   ➜  网络: http://169.254.202.207:6185
+   ➜  网络: http://169.254.207.145:6185
+   ➜  网络: http://169.254.33.168:6185
+   ➜  网络: http://192.168.132.1:6185
+   ➜  网络: http://192.168.86.1:6185
+   ➜  网络: http://10.49.139.197:6185
+   ➜  网络: http://198.18.0.1:6185
+   ➜  网络: http://127.0.0.1:6185
+   ➜  默认用户名和密码: astrbot
+ ✨✨✨
+
+[01:07:44.944] [Core] [INFO] [core.core_lifecycle:297]: AstrBot 启动完成。
+[01:07:44.948] [Core] [INFO] [utils.temp_dir_cleaner:127]: TempDirCleaner started. interval=600s cleanup_ratio=0.3
+[2026-04-04 01:07:44 +0800] [42204] [INFO] Running on http://0.0.0.0:6199 (CTRL + C to quit)
+[2026-04-04 01:07:44 +0800] [42204] [INFO] Running on http://0.0.0.0:6185 (CTRL + C to quit)
+[01:07:45.958] [Core] [INFO] [utils.llm_metadata:63]: Successfully fetched metadata for 2280 LLMs.
+[01:08:02.005] [Core] [INFO] [routes.plugin:200]: 成功获取远程插件市场数据，包含 1149 个插件

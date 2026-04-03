@@ -1,0 +1,5 @@
+{
+  "description": "Built-in basic plugin configuration",
+  "version": "1.0.0",
+  "enabled": true
+}

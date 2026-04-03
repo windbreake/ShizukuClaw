@@ -286,6 +286,13 @@ static_dir = os.path.join(base_dir, 'static')
 app = Flask(__name__, static_folder=static_dir, static_url_path='')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
 
+# 注册系统API蓝图
+try:
+    from src.systems_api import systems_bp
+    app.register_blueprint(systems_bp)
+except ImportError as e:
+    print(f"Warning: Could not import systems_api: {e}")
+
 @app.route('/api/sandbox/execute', methods=['POST'])
 def api_sandbox_execute():
     try:
@@ -704,6 +711,137 @@ def run_web_server():
                 'plan': plan_content,
                 'memory_count': memory_count
             })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/plugins/status', methods=['GET'])
+    def api_plugins_status():
+        try:
+            status = chat_system.get_plugin_status()
+            return jsonify({'success': True, 'status': status})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/plugins/reload', methods=['POST'])
+    def api_plugins_reload():
+        try:
+            status = chat_system.reload_plugins()
+            return jsonify({'success': True, 'status': status, 'message': 'Plugin framework reloaded'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/plugins/policy', methods=['POST'])
+    def api_plugins_policy():
+        try:
+            data = request.get_json() or {}
+            plugin_name = (data.get('plugin_name') or '').strip()
+            policy = data.get('policy') or {}
+            if not plugin_name:
+                return jsonify({'success': False, 'error': 'plugin_name is required'}), 400
+
+            normalized = chat_system.update_plugin_policy(plugin_name, policy)
+            return jsonify({'success': True, 'plugin_name': plugin_name, 'policy': normalized})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/plugins/config', methods=['GET'])
+    def api_plugins_config_get():
+        try:
+            plugin_name = (request.args.get('plugin_name') or '').strip()
+            if not plugin_name:
+                return jsonify({'success': False, 'error': 'plugin_name is required'}), 400
+                        # 特殊处理内置插件 - 更加健壮的处理
+            if plugin_name.lower().strip() == "builtin.basic":
+                import os
+                import json
+                src_dir = os.path.dirname(__file__)
+                builtin_config_dir = os.path.join(src_dir, 'plugin_framework', 'builtin')
+                config_path = os.path.join(builtin_config_dir, 'config.json')
+                print(f"[DEBUG] Loading builtin config from: {config_path}")
+                
+                # 确保目录存在
+                if not os.path.exists(builtin_config_dir):
+                    os.makedirs(builtin_config_dir, exist_ok=True)
+                    
+                if os.path.exists(config_path):
+                    try:
+                        with open(config_path, 'r', encoding='utf-8') as f:
+                            cfg = json.load(f)
+                        print(f"[DEBUG] Loaded config: {cfg}")
+                        return jsonify({'success': True, 'plugin_name': plugin_name, 'config': cfg})
+                    except Exception as e:
+                        print(f"[DEBUG] Error reading config file: {e}")
+                        # 如果读取失败，返回默认配置
+                        default_config = {
+                            "description": "Built-in basic plugin configuration",
+                            "version": "1.0.0",
+                            "enabled": True
+                        }
+                        return jsonify({'success': True, 'plugin_name': plugin_name, 'config': default_config})
+                
+                print(f"[DEBUG] Config file not found, returning default config")
+                # 如果文件不存在，返回默认配置
+                default_config = {
+                    "description": "Built-in basic plugin configuration",
+                    "version": "1.0.0",
+                    "enabled": True
+                }
+                return jsonify({'success': True, 'plugin_name': plugin_name, 'config': default_config})
+            
+            cfg = chat_system.plugin_manager.get_plugin_runtime_config(plugin_name)
+            return jsonify({'success': True, 'plugin_name': plugin_name, 'config': cfg})
+        except Exception as e:
+            print(f"[API ERROR] GET config failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/plugins/config', methods=['POST'])
+    def api_plugins_config_set():
+        try:
+            data = request.get_json() or {}
+            plugin_name = (data.get('plugin_name') or '').strip()
+            config_data = data.get('config')
+            print(f"[API] POST /api/plugins/config - plugin_name: {plugin_name}, config_data: {config_data}")
+            if not plugin_name:
+                return jsonify({'success': False, 'error': 'plugin_name is required'}), 400
+            if not isinstance(config_data, dict):
+                return jsonify({'success': False, 'error': 'config must be json object'}), 400
+            
+            # 特殊处理内置插件 - 更加健壮的处理
+            if plugin_name.lower().strip() == "builtin.basic":
+                import os
+                import json
+                src_dir = os.path.dirname(__file__)
+                builtin_config_dir = os.path.join(src_dir, 'plugin_framework', 'builtin')
+                if not os.path.exists(builtin_config_dir):
+                    os.makedirs(builtin_config_dir, exist_ok=True)
+                    print(f"[DEBUG] Created config dir: {builtin_config_dir}")
+                config_path = os.path.join(builtin_config_dir, 'config.json')
+                print(f"[DEBUG] Saving builtin config to: {config_path}")
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    json.dump(config_data, f, ensure_ascii=False, indent=2)
+                print(f"[API] Config saved successfully for {plugin_name} to {config_path}")
+                return jsonify({'success': True, 'plugin_name': plugin_name, 'config': config_data})
+            
+            cfg = chat_system.plugin_manager.update_plugin_runtime_config(plugin_name, config_data)
+            print(f"[API] Config saved successfully for {plugin_name}")
+            return jsonify({'success': True, 'plugin_name': plugin_name, 'config': cfg})
+        except Exception as e:
+            print(f"[API ERROR] POST /api/plugins/config failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/plugins/framework_enabled', methods=['POST'])
+    def api_plugins_framework_enabled():
+        try:
+            data = request.get_json() or {}
+            enabled = bool(data.get('enabled', True))
+            chat_system.plugin_manager.set_framework_enabled(enabled, persist=True)
+            if enabled:
+                chat_system.reload_plugins()
+            return jsonify({'success': True, 'enabled': enabled})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 

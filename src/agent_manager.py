@@ -161,6 +161,43 @@ Use exec_python only when file deletion requires more complex logic that cannot 
                     return "Error: Chat system not initialized."
                 # Coder is allowed in entertainment mode as it returns text/code suggestion only
                 return self.ai_chat_system.coder_agent(args.get('task'), args.get('context', ''))
+
+            elif tool_name == 'plugin_list':
+                if not self.ai_chat_system:
+                    return "Error: Chat system not initialized."
+                return json.dumps(self.ai_chat_system.get_plugin_status(), ensure_ascii=False, indent=2)
+
+            elif tool_name == 'plugin_reload':
+                if not self.ai_chat_system:
+                    return "Error: Chat system not initialized."
+                return json.dumps(self.ai_chat_system.reload_plugins(), ensure_ascii=False, indent=2)
+
+            elif tool_name == 'plugin_toggle':
+                if not self.ai_chat_system:
+                    return "Error: Chat system not initialized."
+                plugin_name = args.get('plugin_name') or ''
+                enabled = bool(args.get('enabled', True))
+                policy = {'enabled': enabled}
+                return json.dumps(self.ai_chat_system.update_plugin_policy(plugin_name, policy), ensure_ascii=False, indent=2)
+
+            elif tool_name == 'plugin_get_config':
+                if not self.ai_chat_system:
+                    return "Error: Chat system not initialized."
+                plugin_name = args.get('plugin_name') or ''
+                return json.dumps(self.ai_chat_system.get_plugin_runtime_config(plugin_name), ensure_ascii=False, indent=2)
+
+            elif tool_name == 'plugin_set_config':
+                if not self.ai_chat_system:
+                    return "Error: Chat system not initialized."
+                plugin_name = args.get('plugin_name') or ''
+                config_data = args.get('config', {})
+                return json.dumps(self.ai_chat_system.update_plugin_runtime_config(plugin_name, config_data), ensure_ascii=False, indent=2)
+
+            elif tool_name == 'plugin_command':
+                if not self.ai_chat_system:
+                    return "Error: Chat system not initialized."
+                command_text = args.get('command_text') or ''
+                return json.dumps(self.ai_chat_system.run_plugin_command(command_text, is_admin=is_admin, frontend_source=frontend_source), ensure_ascii=False, indent=2)
             
             else:
                 return f"Error: Unknown tool '{tool_name}'"
@@ -310,7 +347,81 @@ Use exec_python only when file deletion requires more complex logic that cannot 
                             "required": ["task"]
                         }
                     }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "plugin_list",
+                        "description": "List installed plugins and their current status",
+                        "parameters": {"type": "object", "properties": {}}
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "plugin_reload",
+                        "description": "Reload all plugins from disk",
+                        "parameters": {"type": "object", "properties": {}}
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "plugin_toggle",
+                        "description": "Enable or disable a plugin",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "plugin_name": {"type": "string", "description": "Plugin name"},
+                                "enabled": {"type": "boolean", "description": "Whether the plugin is enabled"}
+                            },
+                            "required": ["plugin_name", "enabled"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "plugin_get_config",
+                        "description": "Read plugin runtime config JSON",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "plugin_name": {"type": "string", "description": "Plugin name"}
+                            },
+                            "required": ["plugin_name"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "plugin_set_config",
+                        "description": "Write plugin runtime config JSON",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "plugin_name": {"type": "string", "description": "Plugin name"},
+                                "config": {"type": "object", "description": "Full runtime config object"}
+                            },
+                            "required": ["plugin_name", "config"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "plugin_command",
+                        "description": "Invoke a plugin command string like /plugins, /echo hello, /kemono_crawl <url>",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "command_text": {"type": "string", "description": "Command text to run"}
+                            },
+                            "required": ["command_text"]
+                        }
+                    }
                 }
             ])
-            
+
         return tools

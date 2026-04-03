@@ -8,10 +8,14 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Toastr -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/2.1.4/toastr.min.css" rel="stylesheet">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Marked.js -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Toastr JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/2.1.4/toastr.min.js"></script>
     <!-- Custom CSS -->
     <link rel="stylesheet" href="static/css/style.css">
 </head>
@@ -33,6 +37,21 @@
         </a>
         <a class="nav-link" id="v-agent-tab" data-bs-toggle="pill" data-bs-target="#v-agent" type="button" role="tab" onclick="fetchAgentStatus()">
             <i class="fas fa-robot fa-fw"></i> Agent 状态
+        </a>
+        <a class="nav-link" id="v-tasks-tab" data-bs-toggle="pill" data-bs-target="#v-tasks" type="button" role="tab" onclick="loadTaskManager()">
+            <i class="fas fa-calendar-check fa-fw"></i> 定时任务
+        </a>
+        <a class="nav-link" id="v-mcp-tab" data-bs-toggle="pill" data-bs-target="#v-mcp" type="button" role="tab" onclick="loadMcpManager()">
+            <i class="fas fa-plug fa-fw"></i> MCP 系统
+        </a>
+        <a class="nav-link" id="v-knowledge-tab" data-bs-toggle="pill" data-bs-target="#v-knowledge" type="button" role="tab" onclick="loadKnowledgeManager()">
+            <i class="fas fa-book fa-fw"></i> 知识库
+        </a>
+        <a class="nav-link" id="v-instructions-tab" data-bs-toggle="pill" data-bs-target="#v-instructions" type="button" role="tab" onclick="loadInstructionManager()">
+            <i class="fas fa-pen-nib fa-fw"></i> 指令中心
+        </a>
+        <a class="nav-link" id="v-plugins-tab" data-bs-toggle="pill" data-bs-target="#v-plugins" type="button" role="tab" onclick="loadPluginStatus()">
+            <i class="fas fa-puzzle-piece fa-fw"></i> 插件管理
         </a>
         <a class="nav-link" id="v-env-tab" data-bs-toggle="pill" data-bs-target="#v-env-check" type="button" role="tab">
             <i class="fas fa-stethoscope fa-fw"></i> 运行环境检测
@@ -561,15 +580,290 @@
 
         <!-- Agent Tab -->
         <div class="tab-pane fade" id="v-agent" role="tabpanel">
-            <!-- (Content from previous file but ensuring icons) -->
-            <h3 class="mb-4">🤖 Agent 思维链</h3>
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h3 class="mb-1">🧭 系统中枢</h3>
+                    <p class="text-muted small mb-0">这里汇总 Agent 状态以及 MCP、知识库、任务和指令系统的入口，保持当前控制面板风格不变。</p>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadSystemCenterStatus()"><i class="fas fa-sync me-1"></i> 刷新</button>
+            </div>
+            <div class="row g-3 mb-4">
+                <div class="col-md-3"><div class="card h-100 shadow-sm border-0"><div class="card-body text-center"><div class="text-primary fw-semibold">定时任务</div><div class="display-6 fw-bold" id="sys-task-count">0</div><button class="btn btn-sm btn-outline-primary mt-2" onclick="document.getElementById('v-tasks-tab').click()">打开</button></div></div></div>
+                <div class="col-md-3"><div class="card h-100 shadow-sm border-0"><div class="card-body text-center"><div class="text-info fw-semibold">MCP 服务器</div><div class="display-6 fw-bold" id="sys-mcp-count">0</div><button class="btn btn-sm btn-outline-info mt-2" onclick="document.getElementById('v-mcp-tab').click()">打开</button></div></div></div>
+                <div class="col-md-3"><div class="card h-100 shadow-sm border-0"><div class="card-body text-center"><div class="text-success fw-semibold">知识条目</div><div class="display-6 fw-bold" id="sys-kb-count">0</div><button class="btn btn-sm btn-outline-success mt-2" onclick="document.getElementById('v-knowledge-tab').click()">打开</button></div></div></div>
+                <div class="col-md-3"><div class="card h-100 shadow-sm border-0"><div class="card-body text-center"><div class="text-warning fw-semibold">自定义指令</div><div class="display-6 fw-bold" id="sys-instr-count">0</div><button class="btn btn-sm btn-outline-warning mt-2" onclick="document.getElementById('v-instructions-tab').click()">打开</button></div></div></div>
+            </div>
             <div class="card h-100">
-                <div class="card-header d-flex justify-content-between">
-                     <span>Current Plan</span>
-                     <button class="btn btn-sm btn-light" onclick="fetchAgentStatus()"><i class="fas fa-sync"></i></button>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                     <span><i class="fas fa-robot me-2"></i>Agent 状态</span>
+                     <button class="btn btn-sm btn-light" onclick="loadSystemCenterStatus()"><i class="fas fa-sync"></i></button>
                 </div>
                 <div class="card-body bg-light">
-                    <div id="plan-viewer" class="bg-white p-3 border rounded" style="min-height: 400px; white-space: pre-wrap;"></div>
+                    <div id="plan-viewer" class="bg-white p-3 border rounded" style="min-height: 360px; white-space: pre-wrap;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tasks Tab -->
+        <div class="tab-pane fade" id="v-tasks" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h3 class="mb-1"><i class="fas fa-calendar-check me-2"></i>定时任务</h3>
+                    <p class="text-muted small mb-0">创建一次性提醒、Cron 计划和循环任务。</p>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadTaskManager()"><i class="fas fa-sync me-1"></i> 刷新</button>
+            </div>
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header bg-white"><i class="fas fa-plus-circle me-2 text-primary"></i>快速创建任务</div>
+                        <div class="card-body">
+                            <div class="mb-2"><input id="task-name" class="form-control form-control-sm" placeholder="任务名称"></div>
+                            <div class="mb-2"><input id="task-time" class="form-control form-control-sm" placeholder="2026-04-05T14:00:00"></div>
+                            <div class="mb-2"><textarea id="task-message" class="form-control form-control-sm" rows="3" placeholder="提醒内容或执行说明"></textarea></div>
+                            <button class="btn btn-primary btn-sm w-100" onclick="createQuickTask()"><i class="fas fa-bell me-1"></i> 创建提醒</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-8">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-list me-2 text-primary"></i>任务列表</span>
+                            <span class="badge bg-primary" id="task-count-badge">0</span>
+                        </div>
+                        <div class="card-body p-0 table-responsive">
+                            <table class="table table-hover mb-0 align-middle">
+                                <thead class="table-light"><tr><th>名称</th><th>类型</th><th>状态</th><th>下次执行</th><th>操作</th></tr></thead>
+                                <tbody id="tasks-body"><tr><td colspan="5" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MCP Tab -->
+        <div class="tab-pane fade" id="v-mcp" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h3 class="mb-1"><i class="fas fa-plug me-2"></i>MCP 系统</h3>
+                    <p class="text-muted small mb-0">管理 MCP 服务器、资源和工具定义。</p>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadMcpManager()"><i class="fas fa-sync me-1"></i> 刷新</button>
+            </div>
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header bg-white"><i class="fas fa-server me-2 text-info"></i>快速添加服务器</div>
+                        <div class="card-body">
+                            <div class="mb-2"><input id="mcp-name" class="form-control form-control-sm" placeholder="服务器名称"></div>
+                            <div class="mb-2"><input id="mcp-command" class="form-control form-control-sm" placeholder="命令或 URL"></div>
+                            <div class="mb-2"><input id="mcp-type" class="form-control form-control-sm" placeholder="stdio / http / sse"></div>
+                            <button class="btn btn-info btn-sm w-100 text-white" onclick="createQuickMcp()"><i class="fas fa-plus me-1"></i> 添加服务器</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-8">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-network-wired me-2 text-info"></i>服务器列表</span>
+                            <span class="badge bg-info" id="mcp-count-badge">0</span>
+                        </div>
+                        <div class="card-body p-0 table-responsive">
+                            <table class="table table-hover mb-0 align-middle">
+                                <thead class="table-light"><tr><th>名称</th><th>类型</th><th>状态</th><th>说明</th></tr></thead>
+                                <tbody id="mcp-body"><tr><td colspan="4" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Knowledge Tab -->
+        <div class="tab-pane fade" id="v-knowledge" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h3 class="mb-1"><i class="fas fa-book me-2"></i>知识库</h3>
+                    <p class="text-muted small mb-0">快速新增项目知识、词条和说明。</p>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadKnowledgeManager()"><i class="fas fa-sync me-1"></i> 刷新</button>
+            </div>
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header bg-white"><i class="fas fa-plus-circle me-2 text-success"></i>快速新增条目</div>
+                        <div class="card-body">
+                            <div class="mb-2"><input id="kb-title" class="form-control form-control-sm" placeholder="标题"></div>
+                            <div class="mb-2"><input id="kb-category" class="form-control form-control-sm" placeholder="分类"></div>
+                            <div class="mb-2"><textarea id="kb-content" class="form-control form-control-sm" rows="4" placeholder="内容"></textarea></div>
+                            <button class="btn btn-success btn-sm w-100" onclick="createQuickKnowledge()"><i class="fas fa-save me-1"></i> 保存条目</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-8">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-layer-group me-2 text-success"></i>知识条目</span>
+                            <span class="badge bg-success" id="kb-count-badge">0</span>
+                        </div>
+                        <div class="card-body p-0 table-responsive">
+                            <table class="table table-hover mb-0 align-middle">
+                                <thead class="table-light"><tr><th>标题</th><th>分类</th><th>类型</th><th>预览</th></tr></thead>
+                                <tbody id="kb-body"><tr><td colspan="4" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions Tab -->
+        <div class="tab-pane fade" id="v-instructions" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h3 class="mb-1"><i class="fas fa-pen-nib me-2"></i>指令中心</h3>
+                    <p class="text-muted small mb-0">配置系统指令、人格设定和行为规则。</p>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadInstructionManager()"><i class="fas fa-sync me-1"></i> 刷新</button>
+            </div>
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="card shadow-sm border-0 mb-3">
+                        <div class="card-header bg-white"><i class="fas fa-plus-circle me-2 text-warning"></i>快速新增系统指令</div>
+                        <div class="card-body">
+                            <div class="mb-2"><input id="instr-name" class="form-control form-control-sm" placeholder="指令名称"></div>
+                            <div class="mb-2"><textarea id="instr-content" class="form-control form-control-sm" rows="4" placeholder="指令内容"></textarea></div>
+                            <button class="btn btn-warning btn-sm w-100 text-white" onclick="createQuickInstruction()"><i class="fas fa-save me-1"></i> 保存指令</button>
+                        </div>
+                    </div>
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white"><i class="fas fa-user-astronaut me-2 text-primary"></i>快速人格</div>
+                        <div class="card-body">
+                            <div class="mb-2"><input id="personality-name" class="form-control form-control-sm" placeholder="人格名称"></div>
+                            <div class="mb-2"><textarea id="personality-desc" class="form-control form-control-sm" rows="3" placeholder="人格描述"></textarea></div>
+                            <button class="btn btn-primary btn-sm w-100" onclick="createQuickPersonality()"><i class="fas fa-heart me-1"></i> 保存人格</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-8">
+                    <div class="card shadow-sm border-0 mb-3">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-scroll me-2 text-warning"></i>系统指令</span>
+                            <span class="badge bg-warning text-dark" id="instr-count-badge">0</span>
+                        </div>
+                        <div class="card-body p-0 table-responsive">
+                            <table class="table table-hover mb-0 align-middle">
+                                <thead class="table-light"><tr><th>名称</th><th>类型</th><th>优先级</th><th>内容预览</th></tr></thead>
+                                <tbody id="instr-body"><tr><td colspan="4" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-user me-2 text-primary"></i>人格配置</span>
+                            <span class="badge bg-primary" id="persona-count-badge">0</span>
+                        </div>
+                        <div class="card-body p-0 table-responsive">
+                            <table class="table table-hover mb-0 align-middle">
+                                <thead class="table-light"><tr><th>名称</th><th>语气</th><th>风格</th><th>说明</th></tr></thead>
+                                <tbody id="persona-body"><tr><td colspan="4" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Plugins Tab -->
+        <div class="tab-pane fade" id="v-plugins" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h3 class="mb-1"><i class="fas fa-puzzle-piece me-2"></i> 插件管理</h3>
+                    <p class="text-muted small mb-0">查看插件元信息、生命周期、隔离策略，并进入单插件设置面板编辑 JSON 配置。</p>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    <div class="plugin-toolbar-search">
+                        <i class="fas fa-search"></i>
+                        <input id="plugins-search-input" type="text" class="form-control form-control-sm" placeholder="搜索插件...">
+                    </div>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="插件视图切换">
+                        <button type="button" class="btn btn-outline-secondary active" title="卡片视图"><i class="fas fa-th-large"></i></button>
+                        <button type="button" class="btn btn-outline-secondary" title="列表视图（预留）"><i class="fas fa-list"></i></button>
+                    </div>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="loadPluginStatus()"><i class="fas fa-sync me-1"></i>刷新</button>
+                    <button class="btn btn-primary btn-sm" onclick="reloadPluginsFromPanel()"><i class="fas fa-rotate me-1"></i>热重载</button>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-th-large me-2"></i>插件列表</span>
+                    <span id="plugins-framework-enabled-badge" class="badge bg-success">Enabled</span>
+                </div>
+                <div class="card-body">
+                    <div id="plugins-cards" class="row g-3">
+                        <div class="col-12 text-muted">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Plugin Settings Modal -->
+        <div class="modal fade" id="pluginSettingsModal" tabindex="-1" aria-labelledby="pluginSettingsLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="pluginSettingsLabel"><i class="fas fa-sliders-h me-2"></i>插件设置 - <span id="plugin-settings-current">未选择</span></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="plugin-settings-intro mb-4" id="plugin-settings-intro">
+                            <div class="fw-semibold mb-1">插件介绍</div>
+                            <div class="small text-muted">这里预留给插件说明、注意事项与使用建议。</div>
+                        </div>
+
+                        <div id="plugin-settings-form">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" role="switch" id="plugin-policy-enabled">
+                                <label class="form-check-label" for="plugin-policy-enabled">启用插件</label>
+                            </div>
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" role="switch" id="plugin-policy-network">
+                                <label class="form-check-label" for="plugin-policy-network">允许网络请求</label>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small">执行超时 (ms)</label>
+                                <input id="plugin-policy-timeout" type="number" class="form-control form-control-sm" value="10000" min="100">
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label small">快捷参数（数值/开关）</label>
+                                <div id="plugin-quick-fields" class="border rounded p-2 bg-light"></div>
+                            </div>
+
+                            <details class="mt-2">
+                                <summary class="small text-primary">高级：编辑完整 JSON 配置</summary>
+                                <div class="mt-2">
+                                    <textarea id="plugin-config-json" class="form-control font-monospace" rows="12" placeholder="{}"></textarea>
+                                </div>
+                            </details>
+
+                            <div class="mb-2 mt-3">
+                                <label class="form-label small">域名白名单 (JSON 数组)</label>
+                                <textarea id="plugin-policy-domains-json" class="form-control form-control-sm font-monospace" rows="2" placeholder='["kemono.su", "kemono.cr"]'></textarea>
+                            </div>
+                            <div class="mb-1">
+                                <label class="form-label small">命令白名单 (JSON 数组)</label>
+                                <textarea id="plugin-policy-commands-json" class="form-control form-control-sm font-monospace" rows="2" placeholder='["crawl", "kemono_crawl"]'></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button id="plugin-reload-btn" type="button" class="btn btn-outline-secondary" onclick="loadCurrentPluginConfig()"><i class="fas fa-sync me-1"></i>重新读取配置</button>
+                        <button id="plugin-save-btn" type="button" class="btn btn-success" onclick="saveCurrentPluginSettings(true)"><i class="fas fa-save me-1"></i>保存并关闭</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times me-1"></i>关闭</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2065,6 +2359,448 @@
         loadWorkModeStatus();
     }
 
+    // 2.5 Plugin Framework Logic
+    let pluginStatusCache = null;
+    let currentPluginName = '';
+
+    // 安全的 toastr 包装
+    if (typeof toastr === 'undefined') {
+        window.toastr = {
+            success: (msg) => console.log('✓ ' + msg),
+            error: (msg) => console.error('✗ ' + msg),
+            warning: (msg) => console.warn('! ' + msg),
+            info: (msg) => console.info('ℹ ' + msg)
+        };
+    }
+
+    function pluginApi(path) {
+        return path;
+    }
+
+    async function fetchJsonSafe(url, options = {}) {
+        const res = await fetch(url, options);
+        const text = await res.text();
+        let data = null;
+        try {
+            data = JSON.parse(text);
+        } catch {
+            const head = (text || '').slice(0, 120).replace(/\s+/g, ' ');
+            throw new Error(`接口返回非 JSON（${res.status}）: ${head}`);
+        }
+        if (res.status === 404 && String(url).includes('/api/plugins/')) {
+            throw new Error('插件接口未找到（404）。请重启控制面板后端：运行 main.py 5 或 start_control_panel.bat。');
+        }
+        if (!res.ok) {
+            throw new Error((data && data.error) ? data.error : `HTTP ${res.status}`);
+        }
+        return data;
+    }
+
+    function showPluginSettingsForm(show) {
+        return show;
+    }
+
+    function _pluginHooksText(hooks) {
+        if (!hooks) return '-';
+        const pairs = Object.entries(hooks)
+            .filter(([, v]) => Number(v) > 0)
+            .map(([k, v]) => `${k}:${v}`);
+        return pairs.length ? pairs.join(', ') : '-';
+    }
+
+    function _pluginPolicyText(policy) {
+        if (!policy) return '-';
+        return [
+            `enabled=${policy.enabled ? 'Y' : 'N'}`,
+            `net=${policy.allow_network ? 'Y' : 'N'}`,
+            `timeout=${policy.max_execution_ms || 0}ms`
+        ].join(' | ');
+    }
+
+    function renderPluginCards(plugins) {
+        const cards = document.getElementById('plugins-cards');
+        const keyword = (document.getElementById('plugins-search-input')?.value || '').trim().toLowerCase();
+        if (!cards) return;
+        cards.innerHTML = '';
+        const filtered = (plugins || []).filter(p => {
+            if (!keyword) return true;
+            const name = String(p.name || '').toLowerCase();
+            const desc = String(p.description || '').toLowerCase();
+            return name.includes(keyword) || desc.includes(keyword);
+        });
+
+        if (!filtered.length) {
+            cards.innerHTML = '<div class="col-12 text-muted">No plugin loaded</div>';
+            return;
+        }
+
+        filtered.forEach(p => {
+            const depsCount = (p.dependencies || []).length;
+            const hookCount = Object.values(p.hooks || {}).reduce((n, v) => n + Number(v || 0), 0);
+            const card = document.createElement('div');
+            card.className = 'col-xl-4 col-md-6';
+            card.innerHTML = `
+                <div class="card h-100 plugin-card plugin-entry-card ${currentPluginName === p.name ? 'is-selected' : ''}" data-plugin-name="${p.name}">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="d-flex align-items-start gap-2 flex-grow-1 plugin-title-wrap">
+                                <div class="plugin-icon"><i class="fas fa-star"></i></div>
+                                <div class="plugin-title-meta">
+                                    <h6 class="mb-1 plugin-name" title="${p.name}">${p.name}</h6>
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        <span class="badge text-bg-info plugin-mini-badge">v${p.version || '-'}</span>
+                                        <span class="badge text-bg-light plugin-mini-badge">${hookCount}个行为</span>
+                                        <span class="badge text-bg-light plugin-mini-badge">${depsCount}个依赖</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 ms-2">
+                                <span class="plugin-ban-icon" title="策略控制"><i class="far fa-ban"></i></span>
+                                <div class="form-check form-switch m-0">
+                                    <input class="form-check-input plugin-card-toggle" type="checkbox" role="switch" ${p.policy && p.policy.enabled ? 'checked' : ''} data-plugin-name="${p.name}" title="启用/禁用插件 ${p.name}">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="small text-muted mb-3 plugin-desc">${p.description || '无描述'}</div>
+                        <div class="small plugin-policy-line mt-auto">
+                            <span>${_pluginPolicyText(p.policy)}</span>
+                        </div>
+                        <div class="plugin-action-row mt-3">
+                            <button type="button" class="btn btn-sm plugin-settings-btn" data-plugin-name="${p.name}" title="打开插件设置" onclick="openPluginSettings('${p.name}')">
+                                <i class="fas fa-cog me-1"></i>设置
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            card.querySelector('.plugin-card').addEventListener('click', (ev) => {
+                if (ev.target.closest('.plugin-settings-btn') || ev.target.closest('.plugin-card-toggle')) {
+                    return;
+                }
+                currentPluginName = p.name;
+                renderPluginCards((pluginStatusCache && pluginStatusCache.plugins) ? pluginStatusCache.plugins : []);
+            });
+            const toggleEl = card.querySelector('.plugin-card-toggle');
+            if (toggleEl) {
+                toggleEl.addEventListener('click', (ev) => ev.stopPropagation());
+                toggleEl.addEventListener('change', (ev) => {
+                    const target = ev.target;
+                    togglePluginEnabled(p.name, !!target.checked);
+                });
+            }
+            cards.appendChild(card);
+        });
+    }
+
+    async function togglePluginEnabled(pluginName, enabled) {
+        try {
+            const data = await fetchJsonSafe(pluginApi('/api/plugins/policy'), {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({plugin_name: pluginName, policy: {enabled}})
+            });
+            if (!data.success) throw new Error(data.error || 'toggle failed');
+            toastr.success(`插件 ${pluginName} 已${enabled ? '启用' : '禁用'}`);
+            await loadPluginStatus();
+        } catch (e) {
+            toastr.error('插件开关失败: ' + e.message);
+        }
+    }
+
+    async function loadPluginStatus() {
+        const cards = document.getElementById('plugins-cards');
+        if (cards) cards.innerHTML = '<div class="col-12 text-muted">Loading...</div>';
+        try {
+            const data = await fetchJsonSafe(pluginApi('/api/plugins/status'));
+            if (!data.success) throw new Error(data.error || 'load failed');
+
+            pluginStatusCache = data.status;
+            const status = data.status || {};
+            const plugins = status.plugins || [];
+
+            const badge = document.getElementById('plugins-framework-enabled-badge');
+            if (badge) {
+                badge.textContent = status.enabled ? 'Enabled' : 'Disabled';
+                badge.className = `badge ${status.enabled ? 'bg-success' : 'bg-secondary'}`;
+            }
+
+            renderPluginCards(plugins);
+
+            if (!plugins.length) {
+                currentPluginName = '';
+                closePluginSettingsModal();
+                return;
+            }
+
+            if (!currentPluginName || !plugins.some(x => x.name === currentPluginName)) {
+                currentPluginName = '';
+                closePluginSettingsModal();
+                return;
+            }
+
+            renderPluginCards(plugins);
+        } catch (e) {
+            const cards = document.getElementById('plugins-cards');
+            if (cards) cards.innerHTML = `<div class="col-12 text-danger">${e.message}</div>`;
+        }
+    }
+
+    function renderQuickFields(configObj) {
+        const wrap = document.getElementById('plugin-quick-fields');
+        if (!wrap) return;
+        wrap.innerHTML = '';
+        const entries = Object.entries(configObj || {}).filter(([, val]) => {
+            const t = typeof val;
+            return t === 'number' || t === 'boolean' || t === 'string';
+        });
+        if (!entries.length) {
+            wrap.innerHTML = '<div class="small text-muted">当前插件没有可快捷编辑的基础参数，请使用 JSON 编辑。</div>';
+            return;
+        }
+
+        entries.forEach(([key, val]) => {
+            const row = document.createElement('div');
+            row.className = 'mb-2';
+            if (typeof val === 'boolean') {
+                row.innerHTML = `
+                    <div class="form-check form-switch">
+                        <input class="form-check-input plugin-quick-input" type="checkbox" role="switch" data-key="${key}" ${val ? 'checked' : ''}>
+                        <label class="form-check-label">${key}</label>
+                    </div>
+                `;
+            } else if (typeof val === 'number') {
+                row.innerHTML = `
+                    <label class="form-label small mb-1">${key}</label>
+                    <input type="number" class="form-control form-control-sm plugin-quick-input" data-key="${key}" value="${val}">
+                `;
+            } else {
+                row.innerHTML = `
+                    <label class="form-label small mb-1">${key}</label>
+                    <input type="text" class="form-control form-control-sm plugin-quick-input" data-key="${key}" value="${String(val).replace(/"/g, '&quot;')}">
+                `;
+            }
+            wrap.appendChild(row);
+        });
+
+        wrap.querySelectorAll('.plugin-quick-input').forEach(el => {
+            el.addEventListener('change', syncQuickFieldsToJson);
+        });
+    }
+
+    function syncQuickFieldsToJson() {
+        const textarea = document.getElementById('plugin-config-json');
+        if (!textarea) return;
+        let cfg = {};
+        try {
+            cfg = JSON.parse(textarea.value || '{}');
+        } catch {
+            cfg = {};
+        }
+        document.querySelectorAll('#plugin-quick-fields .plugin-quick-input').forEach(el => {
+            const key = el.getAttribute('data-key');
+            if (!key) return;
+            if (el.type === 'checkbox') {
+                cfg[key] = !!el.checked;
+            } else if (el.type === 'number') {
+                cfg[key] = Number(el.value || 0);
+            } else {
+                cfg[key] = el.value;
+            }
+        });
+        textarea.value = JSON.stringify(cfg, null, 2);
+    }
+
+    async function openPluginSettings(pluginName, refreshCards = false) {
+        currentPluginName = pluginName;
+        const status = pluginStatusCache || {};
+        const plugins = status.plugins || [];
+        const found = plugins.find(p => p.name === pluginName);
+        if (!found || !found.policy) {
+            toastr.error('插件信息未找到');
+            return;
+        }
+
+        // 先检查表单元素
+        const policyEnabled = document.getElementById('plugin-policy-enabled');
+        const policyNetwork = document.getElementById('plugin-policy-network');
+        const policyTimeout = document.getElementById('plugin-policy-timeout');
+        const policyDomains = document.getElementById('plugin-policy-domains-json');
+        const policyCommands = document.getElementById('plugin-policy-commands-json');
+        const configJson = document.getElementById('plugin-config-json');
+        const titleEl = document.getElementById('plugin-settings-current');
+        const introEl = document.getElementById('plugin-settings-intro');
+        
+        if (!policyEnabled || !policyNetwork || !policyTimeout || !policyDomains || !policyCommands || !configJson) {
+            toastr.error('表单元素初始化失败，请刷新页面');
+            return;
+        }
+
+        // 设置标题和介绍
+        if (titleEl) titleEl.textContent = pluginName;
+        if (introEl) {
+            const desc = found.description || '该插件暂未提供详细说明。';
+            introEl.innerHTML = `
+                <div class="fw-semibold mb-1">插件介绍</div>
+                <div class="small text-muted">${desc}</div>
+                <div class="small text-muted mt-1">版本：${found.version || '-'} | 依赖：${(found.dependencies || []).join(', ') || '无'}</div>
+            `;
+        }
+
+        // 初始化策略值
+        policyEnabled.checked = !!found.policy.enabled;
+        policyNetwork.checked = !!found.policy.allow_network;
+        policyTimeout.value = found.policy.max_execution_ms || 10000;
+        policyDomains.value = JSON.stringify(found.policy.allowed_domains || [], null, 2);
+        policyCommands.value = JSON.stringify(found.policy.allowed_commands || [], null, 2);
+
+        // 打开模态框
+        const modalEl = document.getElementById('pluginSettingsModal');
+        if (!modalEl) {
+            toastr.error('找不到模态框元素');
+            return;
+        }
+        
+        try {
+            if (window.bootstrap && bootstrap.Modal) {
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.show();
+            }
+        } catch (e) {
+            console.error('打开 Modal 失败:', e);
+        }
+
+        // 打开模态框后再异步加载配置
+        await loadCurrentPluginConfig();
+    }
+
+    function closePluginSettingsModal() {
+        const modalEl = document.getElementById('pluginSettingsModal');
+        if (!modalEl) return;
+        
+        try {
+            if (window.bootstrap && bootstrap.Modal) {
+                const inst = bootstrap.Modal.getInstance(modalEl);
+                if (inst) inst.hide();
+            }
+        } catch (e) {
+            console.error('关闭 Modal 出错:', e);
+        }
+    }
+
+    function _parseJsonArray(text, fallback) {
+        try {
+            const val = JSON.parse(text || '[]');
+            return Array.isArray(val) ? val : fallback;
+        } catch {
+            return fallback;
+        }
+    }
+
+    function setPluginActionBusy(busy, label = '', scope = 'both') {
+        const reloadBtn = document.getElementById('plugin-reload-btn');
+        const saveBtn = document.getElementById('plugin-save-btn');
+        if (reloadBtn) {
+            reloadBtn.disabled = !!busy;
+        }
+        if (saveBtn && scope !== 'load') {
+            saveBtn.disabled = !!busy;
+        }
+        if (busy && saveBtn && label && scope !== 'load') {
+            saveBtn.dataset.originalText = saveBtn.dataset.originalText || saveBtn.textContent;
+            saveBtn.textContent = label;
+        } else if (!busy && saveBtn && saveBtn.dataset.originalText && scope !== 'load') {
+            saveBtn.textContent = saveBtn.dataset.originalText;
+        }
+    }
+
+    async function saveCurrentPluginSettings(closeAfterSave = false) {
+        const pluginName = currentPluginName;
+        if (!pluginName) {
+            toastr.warning('请先选择插件');
+            return;
+        }
+
+        const policy = {
+            enabled: document.getElementById('plugin-policy-enabled').checked,
+            allow_network: document.getElementById('plugin-policy-network').checked,
+            max_execution_ms: Number(document.getElementById('plugin-policy-timeout').value || 10000),
+            allowed_domains: _parseJsonArray(document.getElementById('plugin-policy-domains-json').value, []),
+            allowed_commands: _parseJsonArray(document.getElementById('plugin-policy-commands-json').value, [])
+        };
+
+        try {
+            setPluginActionBusy(true, '保存中...');
+            
+            // 保存策略
+            const policyData = await fetchJsonSafe(pluginApi('/api/plugins/policy'), {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({plugin_name: pluginName, policy})
+            });
+            if (!policyData.success) throw new Error(policyData.error || '保存策略失败');
+
+            // 保存配置
+            let runtimeConfig = {};
+            try {
+                runtimeConfig = JSON.parse(document.getElementById('plugin-config-json').value || '{}');
+            } catch {
+                throw new Error('配置 JSON 格式错误');
+            }
+
+            const cfgData = await fetchJsonSafe(pluginApi('/api/plugins/config'), {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({plugin_name: pluginName, config: runtimeConfig})
+            });
+            if (!cfgData.success) throw new Error(cfgData.error || '保存配置失败');
+
+            toastr.success('插件设置已保存');
+            
+            // 关闭模态框（如果需要）
+            if (closeAfterSave) {
+                closePluginSettingsModal();
+            }
+        } catch (e) {
+            console.error('[saveCurrentPluginSettings] 错误:', e);
+            toastr.error('保存失败：' + e.message);
+        } finally {
+            setPluginActionBusy(false);
+        }
+    }
+
+    async function loadCurrentPluginConfig() {
+        const pluginName = currentPluginName;
+        if (!pluginName) return;
+        const textarea = document.getElementById('plugin-config-json');
+        try {
+            setPluginActionBusy(true, '读取中...', 'load');
+            toastr.info('正在重新读取插件配置');
+            const data = await fetchJsonSafe(`${pluginApi('/api/plugins/config')}?plugin_name=${encodeURIComponent(pluginName)}`);
+            if (!data.success) throw new Error(data.error || 'load config failed');
+            const cfgObj = data.config || {};
+            textarea.value = JSON.stringify(cfgObj, null, 2);
+            renderQuickFields(cfgObj);
+            toastr.success('插件配置已重新读取');
+        } catch (e) {
+            textarea.value = '{}';
+            renderQuickFields({});
+            toastr.error('读取插件 JSON 配置失败: ' + e.message);
+        } finally {
+            setPluginActionBusy(false, '', 'load');
+        }
+    }
+
+    async function reloadPluginsFromPanel() {
+        try {
+            const data = await fetchJsonSafe(pluginApi('/api/plugins/reload'), {method: 'POST'});
+            if (!data.success) throw new Error(data.error || 'reload failed');
+            toastr.success('插件热重载完成');
+            await loadPluginStatus();
+        } catch (e) {
+            toastr.error('热重载失败: ' + e.message);
+        }
+    }
+
 
 
     // 3. Monitoring & Charts
@@ -2151,6 +2887,14 @@
             refreshRecords();
             loadConfig(); // Load config on startup as well
             loadWorkModeStatus();
+            const pluginSearch = document.getElementById('plugins-search-input');
+            if (pluginSearch) {
+                pluginSearch.addEventListener('input', () => {
+                    const plugins = (pluginStatusCache && pluginStatusCache.plugins) ? pluginStatusCache.plugins : [];
+                    renderPluginCards(plugins);
+                });
+            }
+            loadPluginStatus();
         } catch (e) {
             console.error("Initialization Error:", e);
         }
@@ -2320,15 +3064,329 @@
         }, 2000);
     }
     
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     // 4. Other Utils (Agent, Logs, DB)
     async function fetchAgentStatus() {
+        return loadSystemCenterStatus();
+    }
+
+    async function loadSystemCenterStatus() {
         try {
-            const res = await fetch('/api/agent/status');
+            const res = await fetch('/api/systems/system-status');
             const data = await res.json();
-            if(data.success) {
-                document.getElementById('plan-viewer').innerHTML = marked.parse(data.plan || '*No plan*');
+            if(data.code === 0 && data.data) {
+                const stats = data.data;
+                const taskCount = Number(stats.task_scheduler?.total_tasks || 0);
+                const mcpCount = Number(stats.mcp?.servers || 0);
+                const kbCount = Number(stats.knowledge_base?.entries || 0);
+                const instrCount = Number(stats.instructions?.instructions || 0);
+
+                const taskEl = document.getElementById('sys-task-count');
+                const mcpEl = document.getElementById('sys-mcp-count');
+                const kbEl = document.getElementById('sys-kb-count');
+                const instrEl = document.getElementById('sys-instr-count');
+                if (taskEl) taskEl.textContent = taskCount;
+                if (mcpEl) mcpEl.textContent = mcpCount;
+                if (kbEl) kbEl.textContent = kbCount;
+                if (instrEl) instrEl.textContent = instrCount;
+
+                const planViewer = document.getElementById('plan-viewer');
+                if (planViewer) {
+                    planViewer.innerHTML = `
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="border rounded p-3 bg-white h-100">
+                                    <div class="fw-semibold mb-2">系统概览</div>
+                                    <div class="small text-muted">日志条目：${stats.logging?.log_entries || 0}</div>
+                                    <div class="small text-muted">定时任务：${taskCount}</div>
+                                    <div class="small text-muted">MCP 服务器：${mcpCount}</div>
+                                    <div class="small text-muted">知识条目：${kbCount}</div>
+                                    <div class="small text-muted">自定义指令：${instrCount}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="border rounded p-3 bg-white h-100">
+                                    <div class="fw-semibold mb-2">快捷入口</div>
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('v-tasks-tab').click()">打开定时任务</button>
+                                        <button class="btn btn-sm btn-outline-info" onclick="document.getElementById('v-mcp-tab').click()">打开 MCP 系统</button>
+                                        <button class="btn btn-sm btn-outline-success" onclick="document.getElementById('v-knowledge-tab').click()">打开知识库</button>
+                                        <button class="btn btn-sm btn-outline-warning" onclick="document.getElementById('v-instructions-tab').click()">打开指令中心</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return stats;
             }
         } catch(e) {}
+    }
+
+    async function loadTaskManager() {
+        try {
+            const res = await fetch('/api/systems/tasks');
+            const data = await res.json();
+            const tasks = (data.code === 0 && Array.isArray(data.data)) ? data.data : [];
+            const body = document.getElementById('tasks-body');
+            const badge = document.getElementById('task-count-badge');
+            if (badge) badge.textContent = tasks.length;
+            if (!body) return;
+            if (!tasks.length) {
+                body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">暂无任务</td></tr>';
+                return;
+            }
+            body.innerHTML = tasks.map(task => `
+                <tr>
+                    <td>${escapeHtml(task.name || '')}</td>
+                    <td><span class="badge bg-light text-dark border">${escapeHtml(task.task_type || '')}</span></td>
+                    <td><span class="badge ${task.status === 'completed' ? 'bg-success' : task.status === 'failed' ? 'bg-danger' : 'bg-secondary'}">${escapeHtml(task.status || '')}</span></td>
+                    <td class="small text-muted">${escapeHtml(task.next_run_time || task.scheduled_time || '-')}</td>
+                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteTaskById('${escapeHtml(task.id)}')"><i class="fas fa-trash"></i></button></td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            toastr.error('加载任务失败: ' + e.message);
+        }
+    }
+
+    async function createQuickTask() {
+        const name = document.getElementById('task-name')?.value.trim();
+        const scheduledTime = document.getElementById('task-time')?.value.trim();
+        const message = document.getElementById('task-message')?.value.trim();
+        if (!name || !scheduledTime) {
+            toastr.warning('请填写任务名称和执行时间');
+            return;
+        }
+        try {
+            const res = await fetch('/api/systems/tasks', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    name,
+                    description: message,
+                    task_type: 'one_time',
+                    scheduled_time: scheduledTime,
+                    command: 'reminder',
+                    args: { message },
+                    enabled: true,
+                    notify_on_complete: true
+                })
+            });
+            const data = await res.json();
+            if (data.code !== 0) throw new Error(data.message || '创建失败');
+            toastr.success('任务已创建');
+            await loadTaskManager();
+        } catch (e) {
+            toastr.error('创建任务失败: ' + e.message);
+        }
+    }
+
+    async function deleteTaskById(taskId) {
+        try {
+            await fetch(`/api/systems/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' });
+            await loadTaskManager();
+        } catch (e) {
+            toastr.error('删除任务失败: ' + e.message);
+        }
+    }
+
+    async function loadMcpManager() {
+        try {
+            const res = await fetch('/api/systems/mcp/servers');
+            const data = await res.json();
+            const servers = (data.code === 0 && Array.isArray(data.data)) ? data.data : [];
+            const body = document.getElementById('mcp-body');
+            const badge = document.getElementById('mcp-count-badge');
+            if (badge) badge.textContent = servers.length;
+            if (!body) return;
+            if (!servers.length) {
+                body.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">暂无 MCP 服务器</td></tr>';
+                return;
+            }
+            body.innerHTML = servers.map(server => `
+                <tr>
+                    <td>${escapeHtml(server.name || '')}</td>
+                    <td><span class="badge bg-light text-dark border">${escapeHtml(server.type || '')}</span></td>
+                    <td><span class="badge ${server.status === 'connected' ? 'bg-success' : server.status === 'error' ? 'bg-danger' : 'bg-secondary'}">${escapeHtml(server.status || '')}</span></td>
+                    <td class="small text-muted">${escapeHtml(server.description || server.command || server.url || '-')}</td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            toastr.error('加载 MCP 失败: ' + e.message);
+        }
+    }
+
+    async function createQuickMcp() {
+        const name = document.getElementById('mcp-name')?.value.trim();
+        const type = document.getElementById('mcp-type')?.value.trim() || 'stdio';
+        const command = document.getElementById('mcp-command')?.value.trim();
+        if (!name || !command) {
+            toastr.warning('请填写服务器名称和命令/URL');
+            return;
+        }
+        try {
+            const payload = type === 'http' || type === 'sse'
+                ? { name, type, url: command, description: command }
+                : { name, type, command, description: command, args: [] };
+            const res = await fetch('/api/systems/mcp/servers', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.code !== 0) throw new Error(data.message || '创建失败');
+            toastr.success('MCP 服务器已创建');
+            await loadMcpManager();
+        } catch (e) {
+            toastr.error('创建 MCP 失败: ' + e.message);
+        }
+    }
+
+    async function loadKnowledgeManager() {
+        try {
+            const res = await fetch('/api/systems/knowledge/entries?limit=50');
+            const data = await res.json();
+            const entries = (data.code === 0 && Array.isArray(data.data)) ? data.data : [];
+            const body = document.getElementById('kb-body');
+            const badge = document.getElementById('kb-count-badge');
+            if (badge) badge.textContent = entries.length;
+            if (!body) return;
+            if (!entries.length) {
+                body.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">暂无知识条目</td></tr>';
+                return;
+            }
+            body.innerHTML = entries.map(entry => `
+                <tr>
+                    <td>${escapeHtml(entry.title || '')}</td>
+                    <td><span class="badge bg-light text-dark border">${escapeHtml(entry.category || '-')}</span></td>
+                    <td><span class="badge bg-success">${escapeHtml(entry.entry_type || entry.type || '')}</span></td>
+                    <td class="small text-muted">${escapeHtml(String(entry.content || '').slice(0, 60))}${String(entry.content || '').length > 60 ? '...' : ''}</td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            toastr.error('加载知识库失败: ' + e.message);
+        }
+    }
+
+    async function createQuickKnowledge() {
+        const title = document.getElementById('kb-title')?.value.trim();
+        const category = document.getElementById('kb-category')?.value.trim();
+        const content = document.getElementById('kb-content')?.value.trim();
+        if (!title || !content) {
+            toastr.warning('请填写标题和内容');
+            return;
+        }
+        try {
+            const res = await fetch('/api/systems/knowledge/entries', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ title, category, content, type: 'knowledge', tags: [], keywords: [] })
+            });
+            const data = await res.json();
+            if (data.code !== 0) throw new Error(data.message || '创建失败');
+            toastr.success('知识条目已保存');
+            await loadKnowledgeManager();
+        } catch (e) {
+            toastr.error('创建知识条目失败: ' + e.message);
+        }
+    }
+
+    async function loadInstructionManager() {
+        try {
+            const [instrRes, personaRes] = await Promise.all([
+                fetch('/api/systems/instructions'),
+                fetch('/api/systems/personalities')
+            ]);
+            const instrData = await instrRes.json();
+            const personaData = await personaRes.json();
+            const instructions = (instrData.code === 0 && Array.isArray(instrData.data)) ? instrData.data : [];
+            const personalities = (personaData.code === 0 && Array.isArray(personaData.data)) ? personaData.data : [];
+
+            const instrBody = document.getElementById('instr-body');
+            const personaBody = document.getElementById('persona-body');
+            const instrBadge = document.getElementById('instr-count-badge');
+            const personaBadge = document.getElementById('persona-count-badge');
+            if (instrBadge) instrBadge.textContent = instructions.length;
+            if (personaBadge) personaBadge.textContent = personalities.length;
+
+            if (instrBody) {
+                instrBody.innerHTML = instructions.length ? instructions.map(item => `
+                    <tr>
+                        <td>${escapeHtml(item.name || '')}</td>
+                        <td><span class="badge bg-light text-dark border">${escapeHtml(item.instruction_type || '')}</span></td>
+                        <td>${escapeHtml(item.priority ?? 0)}</td>
+                        <td class="small text-muted">${escapeHtml(String(item.content || '').slice(0, 60))}${String(item.content || '').length > 60 ? '...' : ''}</td>
+                    </tr>
+                `).join('') : '<tr><td colspan="4" class="text-center text-muted py-4">暂无指令</td></tr>';
+            }
+
+            if (personaBody) {
+                personaBody.innerHTML = personalities.length ? personalities.map(item => `
+                    <tr>
+                        <td>${escapeHtml(item.name || '')}</td>
+                        <td>${escapeHtml(item.tone || '-')}</td>
+                        <td>${escapeHtml(item.speaking_style || '-')}</td>
+                        <td class="small text-muted">${escapeHtml(String(item.description || '').slice(0, 60))}${String(item.description || '').length > 60 ? '...' : ''}</td>
+                    </tr>
+                `).join('') : '<tr><td colspan="4" class="text-center text-muted py-4">暂无人格配置</td></tr>';
+            }
+        } catch (e) {
+            toastr.error('加载指令中心失败: ' + e.message);
+        }
+    }
+
+    async function createQuickInstruction() {
+        const name = document.getElementById('instr-name')?.value.trim();
+        const content = document.getElementById('instr-content')?.value.trim();
+        if (!name || !content) {
+            toastr.warning('请填写指令名称和内容');
+            return;
+        }
+        try {
+            const res = await fetch('/api/systems/instructions', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, content, type: 'system_prompt', priority: 10, enabled: true })
+            });
+            const data = await res.json();
+            if (data.code !== 0) throw new Error(data.message || '创建失败');
+            toastr.success('系统指令已保存');
+            await loadInstructionManager();
+        } catch (e) {
+            toastr.error('创建指令失败: ' + e.message);
+        }
+    }
+
+    async function createQuickPersonality() {
+        const name = document.getElementById('personality-name')?.value.trim();
+        const description = document.getElementById('personality-desc')?.value.trim();
+        if (!name) {
+            toastr.warning('请填写人格名称');
+            return;
+        }
+        try {
+            const res = await fetch('/api/systems/personalities', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, description, tone: 'neutral', speaking_style: '', traits: {}, response_length: 'medium', emoji_usage: true })
+            });
+            const data = await res.json();
+            if (data.code !== 0) throw new Error(data.message || '创建失败');
+            toastr.success('人格配置已保存');
+            await loadInstructionManager();
+        } catch (e) {
+            toastr.error('创建人格失败: ' + e.message);
+        }
     }
 
     async function refreshRecords() {
