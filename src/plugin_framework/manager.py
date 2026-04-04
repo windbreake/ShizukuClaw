@@ -441,6 +441,111 @@ class PluginManager:
             except Exception as e:
                 self.logger.error(f"Error executing shutdown handler for {plugin_name}: {e}")
 
+    def _dispatch_error_handlers(self, context: PluginContext, exc: Exception) -> None:
+        for handler, plugin_name in self.registry.error_handlers:
+            if not self._is_plugin_enabled(plugin_name):
+                continue
+            try:
+                handler(context, exc)
+            except Exception as hook_exc:
+                self.logger.error("Error in on_error hook (%s): %s", plugin_name, hook_exc)
+
+    def process_input(self, context: PluginContext) -> PluginResult:
+        """Process incoming user input through command, regex and message hooks."""
+        if context is None:
+            return PluginResult()
+
+        if not self._framework_enabled:
+            return PluginResult()
+
+        user_input = (context.user_input or "").strip()
+        if not user_input:
+            return PluginResult()
+
+        # 1) Command dispatch: /command arg1 arg2
+        if user_input.startswith("/"):
+            body = user_input[1:].strip()
+            if body:
+                cmd, _, arg = body.partition(" ")
+                command = cmd.strip().lower()
+                handler_item = self.registry.command_handlers.get(command)
+                if handler_item:
+                    handler, plugin_name = handler_item
+                    if not self._is_plugin_enabled(plugin_name):
+                        return PluginResult()
+                    if not self._is_command_allowed(plugin_name, command):
+                        return PluginResult(handled=True, response=f"命令 /{command} 已被策略禁用")
+                    try:
+                        result = self._run_with_policy(plugin_name, lambda: handler(context, arg.strip()))
+                        return result if isinstance(result, PluginResult) else PluginResult()
+                    except Exception as exc:
+                        self.logger.error("Plugin command failed (%s): %s", plugin_name, exc)
+                        self._dispatch_error_handlers(context, exc)
+                        return PluginResult(handled=True, response=f"插件命令执行失败: {exc}")
+
+        # 2) Regex rules
+        for rule in self.registry.regex_rules:
+            plugin_name = rule.plugin_name
+            if not self._is_plugin_enabled(plugin_name):
+                continue
+            try:
+                match = rule.pattern.search(user_input)
+                if not match:
+                    continue
+                result = self._run_with_policy(plugin_name, lambda: rule.handler(context, match))
+                if isinstance(result, PluginResult):
+                    return result
+            except Exception as exc:
+                self.logger.error("Plugin regex rule failed (%s): %s", plugin_name, exc)
+                self._dispatch_error_handlers(context, exc)
+
+        # 3) Message handlers (allow chained rewrite/handle)
+        merged_result = PluginResult(handled=False)
+        for handler, plugin_name, _priority in self.registry.message_handlers:
+            if not self._is_plugin_enabled(plugin_name):
+                continue
+            try:
+                result = self._run_with_policy(plugin_name, lambda: handler(context))
+                if not isinstance(result, PluginResult):
+                    continue
+
+                if result.metadata:
+                    merged_result.metadata.update(result.metadata)
+
+                if result.rewritten_input:
+                    context.user_input = result.rewritten_input
+                    merged_result.rewritten_input = result.rewritten_input
+
+                if result.handled:
+                    merged_result.handled = True
+                    if result.response is not None:
+                        merged_result.response = result.response
+                    return merged_result
+            except Exception as exc:
+                self.logger.error("Plugin message hook failed (%s): %s", plugin_name, exc)
+                self._dispatch_error_handlers(context, exc)
+
+        return merged_result
+
+    def process_response(self, context: PluginContext, response_text: str) -> str:
+        """Run response hooks to transform final text before sending to user."""
+        if not self._framework_enabled:
+            return response_text
+
+        text = response_text
+        for handler, plugin_name in self.registry.response_handlers:
+            if not self._is_plugin_enabled(plugin_name):
+                continue
+            try:
+                transformed = self._run_with_policy(plugin_name, lambda: handler(context, text))
+                if isinstance(transformed, str):
+                    text = transformed
+            except Exception as exc:
+                self.logger.error("Plugin response hook failed (%s): %s", plugin_name, exc)
+                self._dispatch_error_handlers(context, exc)
+
+        return text
+
     def get_plugin_runtime_config(self, plugin_name: str) -> dict:
         print(f"[DEBUG] get_plugin_runtime_config called for: {plugin_name}")
         # 特殊处理内置插件
