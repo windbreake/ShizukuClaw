@@ -442,7 +442,8 @@ def run_web_server():
                 data.get('image'), 
                 is_admin=True, 
                 attachments=data.get('attachments'),
-                frontend_source=frontend_source
+                frontend_source=frontend_source,
+                persona_filename=data.get('persona_filename')
             )
             return jsonify({'success': True, 'reply': response})
         except Exception as e:
@@ -911,7 +912,8 @@ def run_web_server():
         try:
             # 减少默认查询数量，提高响应速度
             limit = min(int(request.args.get('limit', 50)), 100)  # 限制最大100条记录
-            rows = db_manager.get_chat_history(limit=limit)
+            persona_filename = (request.args.get('persona_filename') or '').strip()
+            rows = db_manager.get_chat_history(limit=limit, persona_filename=persona_filename or None)
             return jsonify(rows)
         except Exception as e:
             app.logger.error(f"获取聊天记录时出错: {str(e)}")

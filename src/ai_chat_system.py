@@ -21,7 +21,7 @@ from mysql.connector import Error
 from PIL import Image
 from openai import OpenAI, APITimeoutError
 
-from src.config import CONFIG
+from src.config import CONFIG, generate_system_prompt
 from src.database import get_connection, DatabaseManager
 from src.shared_utils import count_tokens, estimate_tokens
 from src.plugin_framework import PluginContext, PluginManager
@@ -337,14 +337,62 @@ class AIChatSystem:
         filtered.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         return filtered[:max_count]
 
-    def _pick_persona_state(self):
+    @staticmethod
+    def _normalize_persona_runtime(persona_data: dict) -> dict:
+        persona_data = persona_data or {}
+        return {
+            'reply_style': persona_data.get('reply_style', ''),
+            'states': persona_data.get('states', []),
+            'state_probability': persona_data.get('state_probability', 0.3),
+            'plan_style': persona_data.get('plan_style', ''),
+            'plan_style_private': persona_data.get('plan_style_private', ''),
+            'plan_style_group': persona_data.get('plan_style_group', ''),
+            'state_weights': persona_data.get('state_weights', []),
+            'enable_expression_learning': persona_data.get('enable_expression_learning', True),
+            'behavior_rules': persona_data.get('behavior_rules', [])
+        }
+
+    @staticmethod
+    def _resolve_persona_override(persona_filename: str):
+        filename = (persona_filename or '').strip()
+        if not filename:
+            return None
+        if not filename.endswith('.json'):
+            filename += '.json'
+        if '/' in filename or '\\' in filename or '..' in filename:
+            raise ValueError('invalid persona filename')
+
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        persona_path = os.path.join(project_root, 'data', 'personas', filename)
+        if not os.path.exists(persona_path):
+            raise FileNotFoundError(f'persona not found: {filename}')
+
+        with open(persona_path, 'r', encoding='utf-8') as f:
+            persona_data = json.load(f)
+
+        character = persona_data.get('character', {})
+        template = persona_data.get('system_prompt', {}).get('template', '')
+        system_prompt = generate_system_prompt(character, template)
+        runtime = AIChatSystem._normalize_persona_runtime(persona_data)
+        meta = persona_data.get('meta', {})
+
+        return {
+            'filename': filename,
+            'meta': meta,
+            'system_prompt': system_prompt,
+            'persona_runtime': runtime,
+            'raw': persona_data
+        }
+
+    def _pick_persona_state(self, persona_runtime=None):
         """按概率切换 persona 状态，模拟更自然的人格波动。"""
-        states = self.persona_runtime.get('states') or []
+        runtime = persona_runtime if persona_runtime is not None else self.persona_runtime
+        states = runtime.get('states') or []
         if not states:
             return None
 
         def choose_state_with_weight():
-            raw_weights = self.persona_runtime.get('state_weights')
+            raw_weights = runtime.get('state_weights')
             weights = None
 
             if isinstance(raw_weights, dict):
@@ -370,7 +418,7 @@ class AIChatSystem:
             return random.choices(states, weights=weights, k=1)[0]
 
         try:
-            probability = float(self.persona_runtime.get('state_probability', 0.3))
+            probability = float(runtime.get('state_probability', 0.3))
         except Exception:
             probability = 0.3
         probability = max(0.0, min(1.0, probability))
@@ -423,21 +471,23 @@ class AIChatSystem:
 
         return '；'.join(style_bits)
 
-    def _build_dynamic_persona_prompt(self, user_input, recent_messages, frontend_source='control_panel'):
+    def _build_dynamic_persona_prompt(self, user_input, recent_messages, frontend_source='control_panel', system_prompt=None, persona_runtime=None):
         """构建动态人格提示：基础人格 + 状态 + 行为规划 + 表达学习。"""
-        parts = [self.system_prompt]
+        runtime = persona_runtime if persona_runtime is not None else self.persona_runtime
+        base_prompt = system_prompt if system_prompt is not None else self.system_prompt
+        parts = [base_prompt]
 
-        active_state = self._pick_persona_state()
+        active_state = self._pick_persona_state(runtime)
         if active_state:
             parts.append(f"[当前状态]\n{active_state}")
 
-        reply_style = (self.persona_runtime.get('reply_style') or '').strip()
+        reply_style = (runtime.get('reply_style') or '').strip()
         if reply_style:
             parts.append(f"[回复风格]\n{reply_style}")
 
-        default_plan_style = (self.persona_runtime.get('plan_style') or '').strip()
-        plan_style_private = (self.persona_runtime.get('plan_style_private') or '').strip()
-        plan_style_group = (self.persona_runtime.get('plan_style_group') or '').strip()
+        default_plan_style = (runtime.get('plan_style') or '').strip()
+        plan_style_private = (runtime.get('plan_style_private') or '').strip()
+        plan_style_group = (runtime.get('plan_style_group') or '').strip()
 
         if frontend_source == 'sandbox':
             plan_style = plan_style_group or default_plan_style
@@ -447,13 +497,13 @@ class AIChatSystem:
         if plan_style:
             parts.append(f"[行为规划]\n{plan_style}")
 
-        behavior_rules = self.persona_runtime.get('behavior_rules') or []
+        behavior_rules = runtime.get('behavior_rules') or []
         if behavior_rules:
             rules_text = '\n'.join([f"- {r}" for r in behavior_rules if str(r).strip()])
             if rules_text:
                 parts.append(f"[行为规则]\n{rules_text}")
 
-        expression_learning_enabled = self.persona_runtime.get('enable_expression_learning', True)
+        expression_learning_enabled = runtime.get('enable_expression_learning', True)
         if isinstance(expression_learning_enabled, str):
             expression_learning_enabled = expression_learning_enabled.lower() not in ['0', 'false', 'off', 'no']
 
@@ -817,7 +867,7 @@ class AIChatSystem:
 
         return content, prompt_tokens, completion_tokens
 
-    def build_chat_context(self, user_input, max_tokens=2500, frontend_source='control_panel'):
+    def build_chat_context(self, user_input, max_tokens=2500, frontend_source='control_panel', system_prompt=None, persona_runtime=None, persona_filename=None):
         """
         构建智能上下文：
         1. 系统提示词
@@ -826,17 +876,23 @@ class AIChatSystem:
         4. 当前用户输入
         """
         # 1. 读取最近短期记忆（后续用于动态人格构建）
-        recent_messages = self.db.get_recent_chat_history(limit=10)
+        recent_messages = self.db.get_recent_chat_history(limit=10, persona_filename=persona_filename)
 
         # 2. 动态系统提示词（人格状态 + 行为规划 + 表达学习）
-        dynamic_system_prompt = self._build_dynamic_persona_prompt(user_input, recent_messages, frontend_source=frontend_source)
+        dynamic_system_prompt = self._build_dynamic_persona_prompt(
+            user_input,
+            recent_messages,
+            frontend_source=frontend_source,
+            system_prompt=system_prompt,
+            persona_runtime=persona_runtime
+        )
         context_messages = [{"role": "system", "content": dynamic_system_prompt}]
         
         # 3. 回忆技能：如果用户输入较长，尝试搜索相关的深层历史
         if user_input and len(user_input) > 4:
             # 简单的关键词提取（取前10个字符作为搜索索引，可优化）
             search_keyword = user_input[:10]
-            relevant_history = self.db.search_chat_history(search_keyword, limit=3)
+            relevant_history = self.db.search_chat_history(search_keyword, limit=3, persona_filename=persona_filename)
             
             if relevant_history:
                 memory_text = "【相关历史记忆】\n"
@@ -956,7 +1012,7 @@ If the request involves modifying existing code, output the full modified file c
         except Exception as e:
             return f"Coder Agent Exception: {str(e)}"
 
-    def chat(self, user_input, image=None, is_admin=False, attachments=None, frontend_source='control_panel'):
+    def chat(self, user_input, image=None, is_admin=False, attachments=None, frontend_source='control_panel', persona_filename=None):
         """处理聊天请求，支持文本、图片及其他附件（无状态优化版）
         
         Args:
@@ -973,16 +1029,23 @@ If the request involves modifying existing code, output the full modified file c
         except:
             agent_context = ""
 
-        # 将Agent上下文注入到系统提示词中（临时）
-        original_system_prompt = self.system_prompt
-        self.system_prompt = f"{original_system_prompt}\n\n{agent_context}"
+        persona_override = None
+        if persona_filename:
+            try:
+                persona_override = self._resolve_persona_override(persona_filename)
+            except Exception as e:
+                return f"角色卡加载失败: {str(e)}"
         
         # === 核心变更2：每次动态构建上下文 ===
-        messages = self.build_chat_context(user_input, frontend_source=frontend_source)
-        
-        # 恢复系统提示词（避免污染全局状态，虽然这是单例...）
-        # 更好的做法是 build_chat_context 接受额外的 system_suffix
-        self.system_prompt = original_system_prompt
+        effective_persona_filename = (persona_override or {}).get('filename')
+
+        messages = self.build_chat_context(
+            user_input,
+            frontend_source=frontend_source,
+            system_prompt=(persona_override or {}).get('system_prompt'),
+            persona_runtime=(persona_override or {}).get('persona_runtime'),
+            persona_filename=effective_persona_filename
+        )
         
         # 手动将 agent_context 添加到 messages 的第一个系统消息中
         if messages and messages[0]['role'] == 'system':
@@ -1038,7 +1101,10 @@ If the request involves modifying existing code, output the full modified file c
                 is_admin=is_admin,
                 frontend_source=frontend_source,
                 attachments=attachments,
-                metadata={"image_present": bool(image)},
+                metadata={
+                    "image_present": bool(image),
+                    "persona_filename": (persona_override or {}).get('filename')
+                },
                 chat_system=self
             )
 
@@ -1046,7 +1112,7 @@ If the request involves modifying existing code, output the full modified file c
             if plugin_result.handled and plugin_result.response is not None:
                 plugin_response = self.clean_dsml_markup(plugin_result.response)
                 plugin_response = self.plugin_manager.process_response(plugin_context, plugin_response)
-                self.db.save_chat(user_input, plugin_response, image_description)
+                self.db.save_chat(user_input, plugin_response, image_description, persona_filename=effective_persona_filename)
                 return plugin_response
 
             if plugin_result.rewritten_input:
@@ -1204,7 +1270,7 @@ If the request involves modifying existing code, output the full modified file c
             ai_response = self.plugin_manager.process_response(response_context, ai_response)
             
             # 保存对话记录（包括图片描述）
-            self.db.save_chat(user_input or "[图片]", ai_response, image_description)
+            self.db.save_chat(user_input or "[图片]", ai_response, image_description, persona_filename=effective_persona_filename)
 
             return ai_response
 

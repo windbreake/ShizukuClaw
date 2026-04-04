@@ -132,15 +132,20 @@ def generate_system_prompt(character, template):
     catchphrases = character.get('catchphrases', '喵') or '喵'
     phrases_list = [phrase.strip() for phrase in catchphrases.split(',') if phrase.strip()]
 
-    # 格式化模板
-    system_prompt = template.format(
-        name=character.get('name', '小雫'),
-        personality=character.get('personality', '可爱猫娘'),
-        brother_qqid=character.get('brother_qqid', '暂无'),
-        catchphrases=catchphrases,
-        first_catchphrase=phrases_list[0] if phrases_list else '喵~',
-        second_catchphrase=phrases_list[1] if len(phrases_list) > 1 else '哒！'
-    )
+    class _SafeDict(dict):
+        def __missing__(self, key):
+            return ''
+
+    # 格式化模板，允许角色卡使用可选占位符而不直接报错
+    system_prompt = template.format_map(_SafeDict({
+        'name': character.get('name', '小雫'),
+        'personality': character.get('personality', '可爱猫娘'),
+        'type': character.get('type', ''),
+        'brother_qqid': character.get('brother_qqid', '暂无'),
+        'catchphrases': catchphrases,
+        'first_catchphrase': phrases_list[0] if phrases_list else '喵~',
+        'second_catchphrase': phrases_list[1] if len(phrases_list) > 1 else '哒！'
+    }))
 
     return system_prompt
 

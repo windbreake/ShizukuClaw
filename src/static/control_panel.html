@@ -238,6 +238,33 @@
                 </div>
                 <button id="sandbox-workmode-toggle-btn" class="btn btn-sm btn-outline-danger" onclick="onSandboxWorkModeClick()">开启沙箱工作模式</button>
             </div>
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body py-2">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-6">
+                            <label class="form-label small mb-1">当前角色卡</label>
+                            <select id="sandbox-persona-select" class="form-select form-select-sm" onchange="onSandboxPersonaChange()">
+                                <option value="">加载中...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">对话界面风格</label>
+                            <div id="sandbox-persona-theme" class="small text-muted">默认</div>
+                        </div>
+                        <div class="col-md-2 d-grid">
+                            <button class="btn btn-outline-secondary btn-sm mt-md-4" onclick="loadSandboxPersonas()"><i class="fas fa-sync me-1"></i> 刷新</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white py-2"><i class="fas fa-id-card me-2 text-primary"></i>角色卡预览</div>
+                <div class="card-body py-2">
+                    <div class="row g-2" id="sandbox-persona-cards">
+                        <div class="col-12 text-muted small">加载中...</div>
+                    </div>
+                </div>
+            </div>
             <div class="card h-100 shadow-sm border-0 d-flex flex-column" style="min-height: 600px;">
                 <div id="chat-box" class="card-body bg-light overflow-auto p-4" style="flex: 1; min-height: 400px; border-radius: 0.5rem;">
                     <div class="chat-row bot-row" data-message-id="msg-initial-bot">
@@ -571,6 +598,15 @@
                             <div class="col-12">
                                 <label class="form-label">回复风格 (reply_style)</label>
                                 <textarea class="form-control" name="reply_style" id="reply_style" rows="2" placeholder="例如：更像真实网友，减少模板感"></textarea>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">聊天界面风格 (ui_theme)</label>
+                                <select class="form-select" name="chat_ui_theme" id="chat_ui_theme">
+                                    <option value="default">默认</option>
+                                    <option value="cute">可爱粉系</option>
+                                    <option value="cool">冷调蓝系</option>
+                                    <option value="terminal">终端风</option>
+                                </select>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">状态切换概率 (state_probability)</label>
@@ -1357,7 +1393,9 @@
 
         // UI Update
         const pendingMessageId = appendMessage(msg, true, { status: '发送中' });
+        if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
         input.value = '';
+        updateTypingIndicatorName(sandboxPersonaDisplayName);
         document.getElementById('typing-indicator').style.display = 'block';
         document.getElementById('emoji-picker').classList.add('d-none');
 
@@ -1397,6 +1435,299 @@
         });
     }
 
+    let sandboxPersonaFilename = '';
+    let sandboxPersonaDisplayName = '小雫';
+    const sandboxPersonaChatStore = {};
+    const sandboxPersonaThemeClassMap = {
+        default: '',
+        cute: 'chat-theme-cute',
+        cool: 'chat-theme-cool',
+        terminal: 'chat-theme-terminal'
+    };
+
+    function normalizePersonaDisplayName(rawName) {
+        const text = String(rawName || '').trim();
+        if (!text) return '小雫';
+        return text.split(',')[0].trim() || text;
+    }
+
+    function updateTypingIndicatorName(name) {
+        const el = document.getElementById('typing-indicator');
+        if (!el) return;
+        const display = normalizePersonaDisplayName(name || sandboxPersonaDisplayName);
+        sandboxPersonaDisplayName = display;
+        el.innerHTML = `<i class="fas fa-pen-nib fa-spin me-1 text-primary"></i> ${display}正在输入...`;
+    }
+
+    function applySandboxTheme(theme) {
+        const chatBox = document.getElementById('chat-box');
+        if (!chatBox) return;
+        Object.values(sandboxPersonaThemeClassMap).forEach(cls => {
+            if (cls) chatBox.classList.remove(cls);
+        });
+        const cls = sandboxPersonaThemeClassMap[theme] || '';
+        if (cls) chatBox.classList.add(cls);
+        const label = document.getElementById('sandbox-persona-theme');
+        if (label) label.textContent = theme || 'default';
+    }
+
+    function getPersonaThemeBadgeClass(theme) {
+        const t = (theme || 'default').toLowerCase();
+        if (t === 'cute') return 'bg-danger-subtle text-danger';
+        if (t === 'cool') return 'bg-primary-subtle text-primary';
+        if (t === 'terminal') return 'bg-dark text-light';
+        return 'bg-secondary-subtle text-secondary';
+    }
+
+    function renderSandboxPersonaCards(personas) {
+        const container = document.getElementById('sandbox-persona-cards');
+        if (!container) return;
+
+        if (!personas.length) {
+            container.innerHTML = '<div class="col-12 text-muted small">暂无角色卡</div>';
+            return;
+        }
+
+        container.innerHTML = personas.map(p => {
+            const theme = (p.ui_theme || 'default').toLowerCase();
+            const isActive = p.filename === sandboxPersonaFilename;
+            const name = p.name || p.filename;
+            const avatar = p.avatar || (name ? name.slice(0, 1) : '角');
+            const summary = p.summary || p.description || '';
+            const badgeClass = getPersonaThemeBadgeClass(theme);
+            return `
+                <div class="col-md-6 col-xl-4">
+                    <div class="sandbox-persona-card ${isActive ? 'is-active' : ''}" data-filename="${escapeForAttr(p.filename)}" onclick="quickSwitchSandboxPersona('${escapeForAttr(p.filename)}')">
+                        <div class="sandbox-persona-avatar">${escapeHtml(avatar)}</div>
+                        <div class="sandbox-persona-main">
+                            <div class="sandbox-persona-title-row">
+                                <div class="sandbox-persona-name">${escapeHtml(name)}</div>
+                                <span class="badge ${badgeClass}">${escapeHtml(theme)}</span>
+                            </div>
+                            <div class="sandbox-persona-file">${escapeHtml(p.filename)}</div>
+                            <div class="sandbox-persona-summary">${escapeHtml(summary || '暂无摘要')}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function setSandboxPersonaCardActive(filename) {
+        const cards = document.querySelectorAll('#sandbox-persona-cards .sandbox-persona-card');
+        cards.forEach(card => {
+            const cardFilename = card.getAttribute('data-filename') || '';
+            if (cardFilename === filename) card.classList.add('is-active');
+            else card.classList.remove('is-active');
+        });
+    }
+
+    function getSandboxChatBox() {
+        return document.getElementById('chat-box');
+    }
+
+    function getDefaultPersonaWelcome(name) {
+        const personaName = normalizePersonaDisplayName(name || sandboxPersonaDisplayName || '小雫');
+        return `
+            <div class="chat-row bot-row" data-message-id="msg-initial-bot-${Date.now()}">
+                <div class="message bot-message">你好，我是${escapeHtml(personaName)}。我们开始聊聊吧。</div>
+                <div class="message-meta">
+                    <span class="message-author">${escapeHtml(personaName)}</span>
+                    <span class="message-time">刚刚</span>
+                </div>
+            </div>
+        `;
+    }
+
+    function snapshotSandboxChatForPersona(personaFilename) {
+        if (!personaFilename) return;
+        const box = getSandboxChatBox();
+        if (!box) return;
+        sandboxPersonaChatStore[personaFilename] = box.innerHTML;
+    }
+
+    function restoreSandboxChatForPersona(personaFilename) {
+        if (!personaFilename) return false;
+        const box = getSandboxChatBox();
+        if (!box) return false;
+        const html = sandboxPersonaChatStore[personaFilename];
+        if (!html) return false;
+        box.innerHTML = html;
+        box.scrollTop = box.scrollHeight;
+        return true;
+    }
+
+    function renderSandboxHistoryFromRecords(records, personaName) {
+        const box = getSandboxChatBox();
+        if (!box) return;
+        if (!Array.isArray(records) || !records.length) {
+            box.innerHTML = getDefaultPersonaWelcome(personaName);
+            return;
+        }
+
+        const ordered = [...records].reverse();
+        const chunks = [];
+        ordered.forEach((row, idx) => {
+            let userText = '';
+            let aiText = '';
+            let createdAt = '';
+            if (Array.isArray(row)) {
+                userText = row[1] || '';
+                aiText = row[2] || '';
+                createdAt = row[4] || '';
+            } else if (row && typeof row === 'object') {
+                userText = row.user_input || row.message || '';
+                aiText = row.ai_response || row.response || '';
+                createdAt = row.created_at || '';
+            }
+
+            const timeText = createdAt ? String(createdAt).slice(11, 16) : '刚刚';
+            if (userText) {
+                chunks.push(`
+                    <div class="chat-row user-row" data-message-id="hist-user-${idx}">
+                        <div class="message user-message">${escapeHtml(userText)}</div>
+                        <div class="message-meta">
+                            <span class="message-time">${escapeHtml(timeText)}</span>
+                            <span class="message-status is-read">已读</span>
+                        </div>
+                    </div>
+                `);
+            }
+            if (aiText) {
+                chunks.push(`
+                    <div class="chat-row bot-row" data-message-id="hist-bot-${idx}">
+                        <div class="message bot-message">${escapeHtml(aiText)}</div>
+                        <div class="message-meta">
+                            <span class="message-author">${escapeHtml(normalizePersonaDisplayName(personaName))}</span>
+                            <span class="message-time">${escapeHtml(timeText)}</span>
+                        </div>
+                    </div>
+                `);
+            }
+        });
+
+        box.innerHTML = chunks.join('') || getDefaultPersonaWelcome(personaName);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    async function loadSandboxPersonaHistory(personaFilename, personaName) {
+        if (!personaFilename) return;
+        const box = getSandboxChatBox();
+        if (box) {
+            box.innerHTML = '<div class="text-muted small">正在加载该角色卡的独立聊天历史...</div>';
+        }
+        try {
+            const res = await fetch(`/api/records?limit=50&persona_filename=${encodeURIComponent(personaFilename)}`);
+            const rows = await res.json();
+            renderSandboxHistoryFromRecords(rows, personaName);
+            snapshotSandboxChatForPersona(personaFilename);
+        } catch (e) {
+            if (box) {
+                box.innerHTML = getDefaultPersonaWelcome(personaName);
+            }
+        }
+    }
+
+    async function quickSwitchSandboxPersona(filename) {
+        const select = document.getElementById('sandbox-persona-select');
+        if (!select) return;
+        select.value = filename;
+        await onSandboxPersonaChange();
+        setSandboxPersonaCardActive(filename);
+        toastr.success(`已切换到角色卡: ${filename}`);
+    }
+
+    async function loadSandboxPersonas() {
+        try {
+            const res = await fetch('/api/personas');
+            const data = await res.json();
+            const personas = Array.isArray(data.personas) ? data.personas : [];
+            const select = document.getElementById('sandbox-persona-select');
+            if (!select) return;
+
+            select.innerHTML = '';
+            const personaDetails = [];
+            for (const p of personas) {
+                let detail = {
+                    filename: p.filename,
+                    name: p.name || p.filename,
+                    description: p.description || '',
+                    ui_theme: 'default',
+                    avatar: '',
+                    summary: ''
+                };
+                try {
+                    const dRes = await fetch(`/api/personas/${encodeURIComponent(p.filename)}`);
+                    if (dRes.ok) {
+                        const dData = await dRes.json();
+                        detail.ui_theme = ((dData.meta && dData.meta.ui_theme) || 'default').toLowerCase();
+                        detail.avatar = (dData.meta && dData.meta.avatar) || '';
+                        detail.summary = (dData.meta && dData.meta.summary) || (dData.character && dData.character.personality) || p.description || '';
+                        detail.name = (dData.meta && dData.meta.name) || p.name || p.filename;
+                    }
+                } catch {}
+                personaDetails.push(detail);
+
+                const opt = document.createElement('option');
+                opt.value = p.filename;
+                opt.textContent = `${p.name || p.filename} (${p.filename})`;
+                select.appendChild(opt);
+            }
+
+            renderSandboxPersonaCards(personaDetails);
+
+            const active = data.active || (personas[0] && personas[0].filename) || '';
+            const preferred = sandboxPersonaFilename || select.value || data.active || '';
+            const available = new Set(personas.map(x => x.filename));
+            const chosen = available.has(preferred) ? preferred : (data.active || (personas[0] && personas[0].filename) || '');
+            if (chosen) {
+                select.value = chosen;
+                sandboxPersonaFilename = chosen;
+                await onSandboxPersonaChange();
+            } else {
+                sandboxPersonaFilename = '';
+                updateTypingIndicatorName('小雫');
+                applySandboxTheme('default');
+            }
+        } catch (e) {
+            console.warn('loadSandboxPersonas failed', e);
+        }
+    }
+
+    async function onSandboxPersonaChange() {
+        const select = document.getElementById('sandbox-persona-select');
+        if (!select) return;
+        const previousPersona = sandboxPersonaFilename;
+        const nextPersona = select.value || '';
+
+        if (previousPersona && previousPersona !== nextPersona) {
+            snapshotSandboxChatForPersona(previousPersona);
+        }
+
+        sandboxPersonaFilename = nextPersona;
+        setSandboxPersonaCardActive(sandboxPersonaFilename);
+        if (!sandboxPersonaFilename) {
+            applySandboxTheme('default');
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/personas/${encodeURIComponent(sandboxPersonaFilename)}`);
+            const data = await res.json();
+            const personaName = (data.meta && data.meta.name) || (data.character && data.character.name) || sandboxPersonaFilename;
+            updateTypingIndicatorName(personaName);
+            const theme = (data.meta && data.meta.ui_theme) ? String(data.meta.ui_theme).trim().toLowerCase() : 'default';
+            applySandboxTheme(theme || 'default');
+            const restored = restoreSandboxChatForPersona(sandboxPersonaFilename);
+            if (!restored) {
+                await loadSandboxPersonaHistory(sandboxPersonaFilename, personaName);
+            }
+        } catch {
+            updateTypingIndicatorName(sandboxPersonaFilename);
+            applySandboxTheme('default');
+        }
+    }
+
     async function postChat(msg, attachments, pendingMessageId = null) {
         try {
             // Adapt to backend API which expects 'image' for single image or we need to update backend
@@ -1406,6 +1737,9 @@
             // BUT we will update backend. So let's send new payload structure.
             
             let payload = { message: msg };
+            if (sandboxPersonaFilename) {
+                payload.persona_filename = sandboxPersonaFilename;
+            }
             if(attachments && attachments.length > 0) {
                 // If backend only supports 1 image in 'image' field:
                 // We'll prioritize the first image found
@@ -1431,14 +1765,17 @@
                 if (pendingMessageId) updateMessageStatus(pendingMessageId, '已送达');
                 appendMessage(data.reply, false);
                 if (pendingMessageId) updateMessageStatus(pendingMessageId, '已读');
+                if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
             } else {
                 if (pendingMessageId) updateMessageStatus(pendingMessageId, '发送失败');
                 appendMessage("Error: " + data.error, false);
+                if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
             }
         } catch(e) {
             document.getElementById('typing-indicator').style.display = 'none';
             if (pendingMessageId) updateMessageStatus(pendingMessageId, '发送失败');
             appendMessage("Network Error: " + e, false);
+            if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
         }
     }
 
@@ -1518,7 +1855,10 @@
     });
     
     function clearChat() {
-        document.getElementById('chat-box').innerHTML = '';
+        const box = document.getElementById('chat-box');
+        if (!box) return;
+        box.innerHTML = getDefaultPersonaWelcome(sandboxPersonaDisplayName);
+        if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
     }
 
     // 2. Config Logic
@@ -1804,6 +2144,7 @@
             
             // Load details of selected
             loadSelectedPersona();
+            loadSandboxPersonas();
             
         } catch(e) {
             select.innerHTML = '<option disabled>Error loading list</option>';
@@ -1833,6 +2174,7 @@
             form.elements['char_catchphrases'].value = char.catchphrases || '';
             form.elements['system_prompt_template'].value = sys.template || '';
             form.elements['reply_style'].value = data.reply_style || '';
+            form.elements['chat_ui_theme'].value = (data.meta && data.meta.ui_theme) ? data.meta.ui_theme : 'default';
             form.elements['state_probability'].value = (data.state_probability ?? 0.3);
             form.elements['states_text'].value = Array.isArray(data.states) ? data.states.join('\n') : '';
             form.elements['plan_style'].value = data.plan_style || '';
@@ -1870,6 +2212,7 @@
         base.meta.description = base.meta.description || 'Created via Control Panel';
         base.meta.version = base.meta.version || '1.0';
         base.meta.author = base.meta.author || 'User';
+        base.meta.ui_theme = form.elements['chat_ui_theme'].value || 'default';
 
         base.character = {
             name: form.elements['char_name'].value,
@@ -1965,7 +2308,8 @@
                     name: '',
                     description: 'Created via Control Panel',
                     version: '1.0',
-                    author: 'User'
+                    author: 'User',
+                    ui_theme: 'default'
                 },
                 character: {},
                 system_prompt: { template: '' },
@@ -3165,6 +3509,7 @@
             loadConfig(); // Load config on startup as well
             loadWorkModeStatus();
             loadRealtimeSearchPanel();
+            loadSandboxPersonas();
             const pluginSearch = document.getElementById('plugins-search-input');
             if (pluginSearch) {
                 pluginSearch.addEventListener('input', () => {

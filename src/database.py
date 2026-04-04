@@ -72,6 +72,26 @@ class DatabaseManager:
             print(Fore.RED + f"数据库连接错误: {e}")
             raise
 
+        self._ensure_chat_history_persona_column()
+
+    def _ensure_chat_history_persona_column(self):
+        """确保 chat_history 存在 persona_filename 列，用于多角色卡隔离历史。"""
+        cursor = None
+        try:
+            cursor = self.connection.cursor()
+            if not table_exists(cursor, 'chat_history'):
+                return
+            cursor.execute("SHOW COLUMNS FROM chat_history LIKE 'persona_filename'")
+            exists = cursor.fetchone() is not None
+            if not exists:
+                cursor.execute("ALTER TABLE chat_history ADD COLUMN persona_filename VARCHAR(120) NULL DEFAULT NULL")
+                self.connection.commit()
+        except Error as e:
+            print(f"确保 persona_filename 列时出错: {e}")
+        finally:
+            if cursor:
+                cursor.close()
+
     def get_character_info(self):
         """获取角色信息
         
@@ -97,7 +117,7 @@ class DatabaseManager:
             if 'cursor' in locals():
                 cursor.close()
 
-    def save_chat(self, user_input, ai_response, image_description=None):
+    def save_chat(self, user_input, ai_response, image_description=None, persona_filename=None):
         """保存对话记录，包括图片描述
 
         Args:
@@ -112,10 +132,10 @@ class DatabaseManager:
             if table_exists(cursor, 'chat_history'):
                 query = """
                 INSERT INTO chat_history 
-                (user_input, ai_response, image_description) 
-                VALUES (%s, %s, %s)
+                (user_input, ai_response, image_description, persona_filename) 
+                VALUES (%s, %s, %s, %s)
                 """
-                cursor.execute(query, (user_input, ai_response, image_description))
+                cursor.execute(query, (user_input, ai_response, image_description, persona_filename))
                 self.connection.commit()
                 print(f"聊天记录已成功保存！ID: {cursor.lastrowid}")
         except Error as e:
@@ -126,7 +146,7 @@ class DatabaseManager:
             if cursor:
                 cursor.close()
 
-    def get_chat_history(self, limit=50):
+    def get_chat_history(self, limit=50, persona_filename=None):
         """获取聊天历史记录
         
         Args:
@@ -139,8 +159,14 @@ class DatabaseManager:
         try:
             cursor = self.connection.cursor()
             if table_exists(cursor, 'chat_history'):
-                # 改为降序，优先显示最新记录
-                cursor.execute("SELECT * FROM chat_history ORDER BY id DESC LIMIT %s", (limit,))
+                if persona_filename:
+                    cursor.execute(
+                        "SELECT * FROM chat_history WHERE persona_filename = %s ORDER BY id DESC LIMIT %s",
+                        (persona_filename, limit)
+                    )
+                else:
+                    # 改为降序，优先显示最新记录
+                    cursor.execute("SELECT * FROM chat_history ORDER BY id DESC LIMIT %s", (limit,))
                 return cursor.fetchall()
             return []
         except Error as e:
@@ -150,7 +176,7 @@ class DatabaseManager:
             if cursor:
                 cursor.close()
 
-    def search_chat_history(self, keyword, limit=5):
+    def search_chat_history(self, keyword, limit=5, persona_filename=None):
         """搜索包含关键词的聊天记录
         
         Args:
@@ -166,12 +192,20 @@ class DatabaseManager:
             if table_exists(cursor, 'chat_history'):
                 # 使用LIKE进行简单的模糊查询
                 search_query = f"%{keyword}%"
-                query = """
-                SELECT user_input, ai_response FROM chat_history 
-                WHERE user_input LIKE %s OR ai_response LIKE %s 
-                ORDER BY id DESC LIMIT %s
-                """
-                cursor.execute(query, (search_query, search_query, limit))
+                if persona_filename:
+                    query = """
+                    SELECT user_input, ai_response FROM chat_history 
+                    WHERE persona_filename = %s AND (user_input LIKE %s OR ai_response LIKE %s)
+                    ORDER BY id DESC LIMIT %s
+                    """
+                    cursor.execute(query, (persona_filename, search_query, search_query, limit))
+                else:
+                    query = """
+                    SELECT user_input, ai_response FROM chat_history 
+                    WHERE user_input LIKE %s OR ai_response LIKE %s 
+                    ORDER BY id DESC LIMIT %s
+                    """
+                    cursor.execute(query, (search_query, search_query, limit))
                 return cursor.fetchall()
             return []
         except Error as e:
@@ -181,7 +215,7 @@ class DatabaseManager:
             if cursor:
                 cursor.close()
 
-    def get_recent_chat_history(self, limit=10):
+    def get_recent_chat_history(self, limit=10, persona_filename=None):
         """获取最近的聊天记录，并格式化为消息列表
         
         Args:
@@ -192,7 +226,7 @@ class DatabaseManager:
         """
         # 复用 get_chat_history 获取原始数据
         # get_chat_history 返回的是 (id, user_input, ai_response, image_description, created_at)
-        raw_history = self.get_chat_history(limit)
+        raw_history = self.get_chat_history(limit, persona_filename=persona_filename)
         messages = []
         
         # 数据库返回是倒序（最新的在前），我们需要将其反转为正序（按时间发展顺序）
