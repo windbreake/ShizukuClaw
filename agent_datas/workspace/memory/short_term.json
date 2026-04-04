@@ -328,5 +328,35 @@
     "role": "system",
     "content": "Result: 2的10次幂 = ",
     "timestamp": 1775134372.433145
+  },
+  {
+    "role": "assistant",
+    "content": "Called exec_python",
+    "timestamp": 1775289260.5738323
+  },
+  {
+    "role": "system",
+    "content": "Result: Error: System is in Entertainment Mode. Write operations and code execution are disabled for safety. Please switch to Work Mode to perform these actions.",
+    "timestamp": 1775289260.582258
+  },
+  {
+    "role": "assistant",
+    "content": "Called list_dir",
+    "timestamp": 1775289410.847491
+  },
+  {
+    "role": "system",
+    "content": "Result: ['calculate_check.txt', 'memory', 'script.py', 'snake_game.py']",
+    "timestamp": 1775289410.85268
+  },
+  {
+    "role": "assistant",
+    "content": "Called exec_python",
+    "timestamp": 1775289952.1010852
+  },
+  {
+    "role": "system",
+    "content": "Result: Error: System is in Entertainment Mode. Write operations and code execution are disabled for safety. Please switch to Work Mode to perform these actions.",
+    "timestamp": 1775289952.1063755
   }
 ]

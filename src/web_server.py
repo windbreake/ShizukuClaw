@@ -448,6 +448,64 @@ def run_web_server():
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
+    @app.route('/api/realtime_search/query', methods=['POST'])
+    def api_realtime_search_query():
+        try:
+            data = request.get_json() or {}
+            query = (data.get('query') or '').strip()
+            if not query:
+                return jsonify({'success': False, 'error': 'query 不能为空'}), 400
+
+            result = chat_system.realtime_search(query)
+            return jsonify({'success': bool(result.get('success')), 'data': result})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/realtime_search/subscriptions', methods=['GET'])
+    def api_realtime_search_list_subscriptions():
+        try:
+            subscriptions = chat_system.list_realtime_subscriptions()
+            return jsonify({'success': True, 'data': subscriptions, 'count': len(subscriptions)})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/realtime_search/subscriptions', methods=['POST'])
+    def api_realtime_search_create_subscription():
+        try:
+            data = request.get_json() or {}
+            query = (data.get('query') or '').strip()
+            interval_seconds = data.get('interval_seconds', 300)
+
+            if not query:
+                return jsonify({'success': False, 'error': 'query 不能为空'}), 400
+
+            subscription = chat_system.create_realtime_subscription(query, interval_seconds)
+            return jsonify({'success': True, 'data': subscription}), 201
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/realtime_search/subscriptions/<subscription_id>', methods=['DELETE'])
+    def api_realtime_search_delete_subscription(subscription_id):
+        try:
+            ok = chat_system.delete_realtime_subscription(subscription_id)
+            if not ok:
+                return jsonify({'success': False, 'error': 'subscription not found'}), 404
+            return jsonify({'success': True, 'id': subscription_id})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/realtime_search/updates', methods=['GET'])
+    def api_realtime_search_updates():
+        try:
+            subscription_id = (request.args.get('subscription_id') or '').strip()
+            since = (request.args.get('since') or '').strip()
+            limit = request.args.get('limit', 20, type=int)
+
+            updates = chat_system.poll_realtime_updates(subscription_id=subscription_id, since=since, limit=limit)
+            return jsonify({'success': True, 'data': updates, 'count': len(updates)})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     @app.route('/api/work_mode/status', methods=['GET'])
     def api_work_mode_status():
         try:

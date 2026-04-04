@@ -45,6 +45,9 @@
                 <a class="nav-link nav-sub-link" id="v-tasks-tab" data-bs-toggle="pill" data-bs-target="#v-tasks" type="button" role="tab" onclick="loadTaskManager()">
                     <i class="fas fa-calendar-check fa-fw"></i> 定时任务
                 </a>
+                <a class="nav-link nav-sub-link" id="v-realtime-tab" data-bs-toggle="pill" data-bs-target="#v-realtime" type="button" role="tab" onclick="loadRealtimeSearchPanel()">
+                    <i class="fas fa-broadcast-tower fa-fw"></i> 实时搜索
+                </a>
                 <a class="nav-link nav-sub-link" id="v-mcp-tab" data-bs-toggle="pill" data-bs-target="#v-mcp" type="button" role="tab" onclick="loadMcpManager()">
                     <i class="fas fa-plug fa-fw"></i> MCP 系统
                 </a>
@@ -673,6 +676,75 @@
                                 <thead class="table-light"><tr><th>名称</th><th>类型</th><th>状态</th><th>下次执行</th><th>操作</th></tr></thead>
                                 <tbody id="tasks-body"><tr><td colspan="5" class="text-center text-muted py-4">Loading...</td></tr></tbody>
                             </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Realtime Search Tab -->
+        <div class="tab-pane fade" id="v-realtime" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h3 class="mb-1"><i class="fas fa-broadcast-tower me-2"></i>实时搜索订阅</h3>
+                    <p class="text-muted small mb-0">创建查询订阅并自动拉取最新结果，变化会以消息流形式展示。</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="loadRealtimeSearchPanel()"><i class="fas fa-sync me-1"></i> 刷新</button>
+                    <button id="realtime-auto-btn" class="btn btn-sm btn-success" onclick="toggleRealtimeAutoRefresh()"><i class="fas fa-play me-1"></i> 启动自动刷新</button>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="card shadow-sm border-0 mb-3">
+                        <div class="card-header bg-white"><i class="fas fa-plus-circle me-2 text-primary"></i>创建订阅</div>
+                        <div class="card-body">
+                            <div class="mb-2">
+                                <label class="form-label small">查询内容</label>
+                                <textarea id="realtime-query" class="form-control form-control-sm" rows="3" placeholder="例如：上海 最近 漫展 时间 地点 门票"></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small">刷新间隔（秒，最小 30）</label>
+                                <input id="realtime-interval" class="form-control form-control-sm" type="number" min="30" value="120">
+                            </div>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-primary btn-sm" onclick="createRealtimeSubscription()"><i class="fas fa-bell me-1"></i> 创建订阅</button>
+                                <button class="btn btn-outline-info btn-sm" onclick="runRealtimeQueryNow()"><i class="fas fa-bolt me-1"></i> 单次实时查询</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-list me-2 text-primary"></i>订阅列表</span>
+                            <span class="badge bg-primary" id="realtime-sub-count">0</span>
+                        </div>
+                        <div class="card-body p-0 table-responsive">
+                            <table class="table table-hover mb-0 align-middle">
+                                <thead class="table-light"><tr><th>查询</th><th>间隔</th><th>操作</th></tr></thead>
+                                <tbody id="realtime-sub-body"><tr><td colspan="3" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-stream me-2 text-success"></i>更新消息流
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <label class="small text-muted mb-0">当前订阅</label>
+                                <select id="realtime-sub-select" class="form-select form-select-sm" style="min-width: 240px;" onchange="onRealtimeSubscriptionSelected()">
+                                    <option value="">全部订阅</option>
+                                </select>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="pollRealtimeUpdates(true)"><i class="fas fa-download me-1"></i> 拉取</button>
+                            </div>
+                        </div>
+                        <div class="card-body bg-light" style="min-height: 460px; max-height: 650px; overflow: auto;" id="realtime-stream-box">
+                            <div class="text-muted small">暂无更新，创建订阅后会自动显示最新变化。</div>
                         </div>
                     </div>
                 </div>
@@ -3092,6 +3164,7 @@
             refreshRecords();
             loadConfig(); // Load config on startup as well
             loadWorkModeStatus();
+            loadRealtimeSearchPanel();
             const pluginSearch = document.getElementById('plugins-search-input');
             if (pluginSearch) {
                 pluginSearch.addEventListener('input', () => {
@@ -3403,6 +3476,216 @@
         } catch (e) {
             toastr.error('删除任务失败: ' + e.message);
         }
+    }
+
+    let realtimeAutoTimer = null;
+    let realtimeLastSince = '';
+
+    function escapeForAttr(value) {
+        return String(value ?? '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    }
+
+    function appendRealtimeStreamItem(item, title = '') {
+        const box = document.getElementById('realtime-stream-box');
+        if (!box) return;
+
+        const isEmptyHint = box.querySelector('.text-muted.small');
+        if (isEmptyHint) {
+            box.innerHTML = '';
+        }
+
+        const createdAt = item.created_at || item.fetched_at || new Date().toISOString();
+        const query = item.query || '';
+        const result = item.result || '';
+        const source = item.source || 'moonshot_web_search';
+
+        const card = document.createElement('div');
+        card.className = 'card border-0 shadow-sm mb-2';
+        card.innerHTML = `
+            <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="small fw-semibold text-dark">${escapeHtml(title || query || '实时更新')}</div>
+                    <span class="badge bg-light text-dark border">${escapeHtml(source)}</span>
+                </div>
+                <div class="small text-muted mb-2">${escapeHtml(createdAt)}</div>
+                <div class="small" style="white-space: pre-wrap;">${escapeHtml(result)}</div>
+            </div>
+        `;
+
+        box.prepend(card);
+        while (box.children.length > 80) {
+            box.removeChild(box.lastChild);
+        }
+    }
+
+    async function loadRealtimeSearchPanel() {
+        try {
+            const res = await fetch('/api/realtime_search/subscriptions');
+            const data = await res.json();
+            const subs = (data.success && Array.isArray(data.data)) ? data.data : [];
+
+            const body = document.getElementById('realtime-sub-body');
+            const badge = document.getElementById('realtime-sub-count');
+            const select = document.getElementById('realtime-sub-select');
+            if (badge) badge.textContent = subs.length;
+
+            if (body) {
+                if (!subs.length) {
+                    body.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">暂无订阅</td></tr>';
+                } else {
+                    body.innerHTML = subs.map(sub => `
+                        <tr>
+                            <td>
+                                <div class="small fw-semibold">${escapeHtml(String(sub.query || '').slice(0, 42))}${String(sub.query || '').length > 42 ? '...' : ''}</div>
+                                <div class="small text-muted">上次: ${escapeHtml(sub.last_run_at || '-')}</div>
+                            </td>
+                            <td><span class="badge bg-light text-dark border">${escapeHtml(sub.interval_seconds || 0)}s</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary me-1" onclick="selectRealtimeSubscription('${escapeForAttr(sub.id)}')"><i class="fas fa-eye"></i></button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteRealtimeSubscription('${escapeForAttr(sub.id)}')"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            }
+
+            if (select) {
+                const current = select.value;
+                select.innerHTML = '<option value="">全部订阅</option>';
+                subs.forEach(sub => {
+                    const opt = document.createElement('option');
+                    opt.value = sub.id;
+                    opt.textContent = `${sub.id} | ${sub.query}`;
+                    select.appendChild(opt);
+                });
+                if (current && [...select.options].some(o => o.value === current)) {
+                    select.value = current;
+                }
+            }
+        } catch (e) {
+            toastr.error('加载实时订阅失败: ' + e.message);
+        }
+    }
+
+    async function createRealtimeSubscription() {
+        const query = document.getElementById('realtime-query')?.value.trim();
+        const intervalRaw = document.getElementById('realtime-interval')?.value || '120';
+        const interval = Number(intervalRaw);
+        if (!query) {
+            toastr.warning('请先填写查询内容');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/realtime_search/subscriptions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, interval_seconds: Number.isFinite(interval) ? interval : 120 })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || '创建订阅失败');
+            toastr.success('实时订阅创建成功');
+            await loadRealtimeSearchPanel();
+            await pollRealtimeUpdates(true);
+        } catch (e) {
+            toastr.error('创建订阅失败: ' + e.message);
+        }
+    }
+
+    async function runRealtimeQueryNow() {
+        const query = document.getElementById('realtime-query')?.value.trim();
+        if (!query) {
+            toastr.warning('请先填写查询内容');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/realtime_search/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query })
+            });
+            const data = await res.json();
+            if (!data.data) throw new Error(data.error || '查询失败');
+            appendRealtimeStreamItem(data.data, '单次查询结果');
+        } catch (e) {
+            toastr.error('单次查询失败: ' + e.message);
+        }
+    }
+
+    async function deleteRealtimeSubscription(subscriptionId) {
+        try {
+            const res = await fetch(`/api/realtime_search/subscriptions/${encodeURIComponent(subscriptionId)}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || '删除失败');
+            toastr.success('订阅已删除');
+            await loadRealtimeSearchPanel();
+        } catch (e) {
+            toastr.error('删除订阅失败: ' + e.message);
+        }
+    }
+
+    function selectRealtimeSubscription(subscriptionId) {
+        const select = document.getElementById('realtime-sub-select');
+        if (select) select.value = subscriptionId;
+        onRealtimeSubscriptionSelected();
+    }
+
+    function onRealtimeSubscriptionSelected() {
+        realtimeLastSince = '';
+        const box = document.getElementById('realtime-stream-box');
+        if (box) box.innerHTML = '<div class="text-muted small">已切换订阅，点击“拉取”或等待自动刷新。</div>';
+    }
+
+    async function pollRealtimeUpdates(force = false) {
+        try {
+            const select = document.getElementById('realtime-sub-select');
+            const subscriptionId = select ? select.value : '';
+
+            const params = new URLSearchParams();
+            if (subscriptionId) params.set('subscription_id', subscriptionId);
+            if (realtimeLastSince) params.set('since', realtimeLastSince);
+            params.set('limit', force ? '50' : '20');
+
+            const res = await fetch(`/api/realtime_search/updates?${params.toString()}`);
+            const data = await res.json();
+            if (!data.success || !Array.isArray(data.data)) return;
+
+            const updates = [...data.data].reverse();
+            updates.forEach(item => {
+                appendRealtimeStreamItem(item, '订阅更新');
+                const ts = item.created_at || '';
+                if (ts && (!realtimeLastSince || ts > realtimeLastSince)) {
+                    realtimeLastSince = ts;
+                }
+            });
+        } catch (e) {
+            console.warn('pollRealtimeUpdates failed', e);
+        }
+    }
+
+    function toggleRealtimeAutoRefresh() {
+        const btn = document.getElementById('realtime-auto-btn');
+        if (realtimeAutoTimer) {
+            clearInterval(realtimeAutoTimer);
+            realtimeAutoTimer = null;
+            if (btn) {
+                btn.className = 'btn btn-sm btn-success';
+                btn.innerHTML = '<i class="fas fa-play me-1"></i> 启动自动刷新';
+            }
+            return;
+        }
+
+        realtimeAutoTimer = setInterval(() => {
+            pollRealtimeUpdates(false);
+        }, 8000);
+
+        if (btn) {
+            btn.className = 'btn btn-sm btn-warning';
+            btn.innerHTML = '<i class="fas fa-pause me-1"></i> 暂停自动刷新';
+        }
+
+        pollRealtimeUpdates(true);
     }
 
     async function loadMcpManager() {

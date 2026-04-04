@@ -9,9 +9,11 @@ import threading
 import base64
 import re
 import random
+import uuid
+import hashlib
 from collections import Counter
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from io import BytesIO
 
 import requests
@@ -23,6 +25,7 @@ from src.config import CONFIG
 from src.database import get_connection, DatabaseManager
 from src.shared_utils import count_tokens, estimate_tokens
 from src.plugin_framework import PluginContext, PluginManager
+from src.agent_task_scheduler import get_task_scheduler, AgentTask, TaskType
 
 # 全局变量用于跟踪Token使用（需要在web_server.py中更新这些值）
 try:
@@ -85,6 +88,15 @@ class AIChatSystem:
         self.persona_runtime = persona_runtime
         self.current_persona_state = None
 
+        # 实时搜索订阅存储
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        data_dir = os.path.join(project_root, 'data')
+        os.makedirs(data_dir, exist_ok=True)
+        self.realtime_subscriptions_path = os.path.join(data_dir, 'realtime_subscriptions.json')
+        self.realtime_updates_path = os.path.join(data_dir, 'realtime_updates.json')
+        self._realtime_lock = threading.Lock()
+        self._ensure_realtime_storage_files()
+
     def reload_plugins(self):
         """Reload plugin framework and return latest status."""
         self.plugin_manager.reload_all()
@@ -132,6 +144,198 @@ class AIChatSystem:
             "response": response_text,
             "metadata": result.metadata,
         }
+
+    def _ensure_realtime_storage_files(self):
+        if not os.path.exists(self.realtime_subscriptions_path):
+            with open(self.realtime_subscriptions_path, 'w', encoding='utf-8') as f:
+                json.dump([], f, ensure_ascii=False, indent=2)
+        if not os.path.exists(self.realtime_updates_path):
+            with open(self.realtime_updates_path, 'w', encoding='utf-8') as f:
+                json.dump([], f, ensure_ascii=False, indent=2)
+
+    @staticmethod
+    def _load_json_file(path, default_value):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return default_value
+
+    @staticmethod
+    def _save_json_file(path, data):
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    def realtime_search(self, query: str) -> dict:
+        q = (query or '').strip()
+        if not q:
+            return {
+                'success': False,
+                'query': q,
+                'source': 'moonshot_web_search',
+                'fetched_at': datetime.now().isoformat(timespec='seconds'),
+                'result': '搜索失败: query 不能为空'
+            }
+
+        result_text = AIChatSystem.search_with_ai_search(q)
+        is_ok = not ("搜索API错误" in result_text or "搜索失败" in result_text)
+        return {
+            'success': is_ok,
+            'query': q,
+            'source': 'moonshot_web_search',
+            'fetched_at': datetime.now().isoformat(timespec='seconds'),
+            'result': result_text
+        }
+
+    def _execute_realtime_subscription(self, subscription_id: str):
+        with self._realtime_lock:
+            subscriptions = self._load_json_file(self.realtime_subscriptions_path, [])
+            updates = self._load_json_file(self.realtime_updates_path, [])
+
+            target = None
+            for sub in subscriptions:
+                if sub.get('id') == subscription_id:
+                    target = sub
+                    break
+
+            if not target or not target.get('enabled', True):
+                return {'skipped': True, 'reason': 'subscription_not_found_or_disabled'}
+
+            payload = self.realtime_search(target.get('query', ''))
+            result_text = payload.get('result', '')
+            result_hash = hashlib.sha1(result_text.encode('utf-8')).hexdigest() if result_text else ''
+            now_iso = datetime.now().isoformat(timespec='seconds')
+
+            target['last_run_at'] = now_iso
+            target['updated_at'] = now_iso
+
+            if payload.get('success'):
+                if result_hash and result_hash != target.get('last_result_hash'):
+                    target['last_result_hash'] = result_hash
+                    target['last_result_preview'] = result_text[:280]
+                    updates.append({
+                        'id': str(uuid.uuid4())[:8],
+                        'subscription_id': subscription_id,
+                        'query': target.get('query', ''),
+                        'created_at': now_iso,
+                        'source': payload.get('source', 'moonshot_web_search'),
+                        'result': result_text
+                    })
+                    updates = updates[-200:]
+            else:
+                target['last_error'] = result_text
+
+            self._save_json_file(self.realtime_subscriptions_path, subscriptions)
+            self._save_json_file(self.realtime_updates_path, updates)
+
+        return payload
+
+    def create_realtime_subscription(self, query: str, interval_seconds: int = 300) -> dict:
+        q = (query or '').strip()
+        if not q:
+            raise ValueError('query 不能为空')
+
+        try:
+            interval = int(interval_seconds)
+        except Exception:
+            interval = 300
+        interval = max(30, interval)
+
+        sub_id = str(uuid.uuid4())[:8]
+        now_iso = datetime.now().isoformat(timespec='seconds')
+
+        task = AgentTask(
+            name=f'realtime_search:{sub_id}',
+            description=f'订阅实时搜索: {q[:40]}',
+            task_type=TaskType.RECURRING.value,
+            command='realtime_search_subscription',
+            args={},
+            interval_seconds=interval,
+            max_retries=2,
+            enabled=True,
+            notify_on_complete=False
+        )
+
+        scheduler = get_task_scheduler()
+        task_id = scheduler.add_task(task, callback=lambda: self._execute_realtime_subscription(sub_id))
+
+        subscription = {
+            'id': sub_id,
+            'query': q,
+            'interval_seconds': interval,
+            'enabled': True,
+            'task_id': task_id,
+            'created_at': now_iso,
+            'updated_at': now_iso,
+            'last_run_at': None,
+            'last_result_hash': '',
+            'last_result_preview': '',
+            'last_error': ''
+        }
+
+        with self._realtime_lock:
+            subscriptions = self._load_json_file(self.realtime_subscriptions_path, [])
+            subscriptions.append(subscription)
+            self._save_json_file(self.realtime_subscriptions_path, subscriptions)
+
+        return subscription
+
+    def list_realtime_subscriptions(self) -> List[dict]:
+        with self._realtime_lock:
+            subscriptions = self._load_json_file(self.realtime_subscriptions_path, [])
+        return sorted(subscriptions, key=lambda x: x.get('created_at', ''), reverse=True)
+
+    def delete_realtime_subscription(self, subscription_id: str) -> bool:
+        sid = (subscription_id or '').strip()
+        if not sid:
+            return False
+
+        deleted = False
+        task_id_to_remove = None
+
+        with self._realtime_lock:
+            subscriptions = self._load_json_file(self.realtime_subscriptions_path, [])
+            kept = []
+            for sub in subscriptions:
+                if sub.get('id') == sid:
+                    deleted = True
+                    task_id_to_remove = sub.get('task_id')
+                    continue
+                kept.append(sub)
+
+            if deleted:
+                self._save_json_file(self.realtime_subscriptions_path, kept)
+
+        if deleted and task_id_to_remove:
+            try:
+                get_task_scheduler().delete_task(task_id_to_remove)
+            except Exception:
+                pass
+
+        return deleted
+
+    def poll_realtime_updates(self, subscription_id: str = '', since: str = '', limit: int = 20) -> List[dict]:
+        sid = (subscription_id or '').strip()
+        since_ts = (since or '').strip()
+        try:
+            max_count = int(limit)
+        except Exception:
+            max_count = 20
+        max_count = max(1, min(max_count, 200))
+
+        with self._realtime_lock:
+            updates = self._load_json_file(self.realtime_updates_path, [])
+
+        filtered = []
+        for item in updates:
+            if sid and item.get('subscription_id') != sid:
+                continue
+            if since_ts and item.get('created_at', '') <= since_ts:
+                continue
+            filtered.append(item)
+
+        filtered.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        return filtered[:max_count]
 
     def _pick_persona_state(self):
         """按概率切换 persona 状态，模拟更自然的人格波动。"""
@@ -291,10 +495,23 @@ class AIChatSystem:
         return False
 
     @staticmethod
-    def _make_api_request(url, headers, payload):
-        """发送API请求的通用方法"""
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        return response
+    def _make_api_request(url, headers, payload, timeout=30, retries=0, retry_delay=1.0):
+        """发送API请求的通用方法，支持简单重试。"""
+        last_exc = None
+        for attempt in range(retries + 1):
+            try:
+                return requests.post(url, headers=headers, json=payload, timeout=timeout)
+            except requests.exceptions.Timeout as exc:
+                last_exc = exc
+                if attempt < retries:
+                    time.sleep(retry_delay)
+                    continue
+                raise
+
+        if last_exc:
+            raise last_exc
+
+        return requests.post(url, headers=headers, json=payload, timeout=timeout)
 
     @staticmethod
     def _handle_tool_call(tool_call):
@@ -482,7 +699,10 @@ class AIChatSystem:
             response = AIChatSystem._make_api_request(
                 f"{CONFIG['search_api']['base_url']}/chat/completions",
                 headers,
-                kimi_payload
+                kimi_payload,
+                timeout=45,
+                retries=1,
+                retry_delay=1.0
             )
 
             if response.status_code != 200:
@@ -517,7 +737,10 @@ class AIChatSystem:
                             final_response = AIChatSystem._make_api_request(
                                 f"{CONFIG['search_api']['base_url']}/chat/completions",
                                 headers,
-                                kimi_payload
+                                kimi_payload,
+                                timeout=45,
+                                retries=1,
+                                retry_delay=1.0
                             )
 
                             if final_response.status_code == 200:
@@ -529,6 +752,10 @@ class AIChatSystem:
 
             return "未找到相关搜索结果"
 
+        except requests.exceptions.Timeout:
+            error_msg = "搜索失败: 搜索服务响应超时，请稍后重试"
+            print(f"Search Error: {error_msg}")
+            return error_msg
         except Exception as e:
             error_msg = f"搜索失败: {str(e)}"
             print(f"Search Error: {error_msg}")
