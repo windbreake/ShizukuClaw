@@ -1,14 +1,15 @@
 @echo off
-set PORT=8888
-set URL=http://localhost:%PORT%/logs_page
+setlocal
+chcp 65001 > nul
 
-REM 启动Web服务器
 cd /d "%~dp0"
-REM 使用模式5启动Web服务器，并设置默认页面
-start "LogsServer" cmd /c "set DEFAULT_PAGE=/logs_page&& python main.py 5"
+set PYTHON_EXE=python
 
-REM 等待服务器启动
-timeout /t 5 /nobreak >nul
+echo Starting logs page via unified launcher...
+echo Running startup self-check based on launcher settings.
+echo.
 
-REM 打开日志页面
-start "" %URL%
+set DEFAULT_PAGE=/logs_page
+%PYTHON_EXE% src\launcher_boot.py
+
+endlocal

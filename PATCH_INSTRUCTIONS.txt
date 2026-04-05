@@ -1,0 +1,30 @@
+# 在 adapter_service.py 的导入部分后面添加这一行：
+from .onebot_reverse_ws_server import run_server as run_onebot_reverse_ws
+
+# 然后在 2.5 Reverse WebSocket Server 部分替换为：
+
+    # 2.5 Reverse WebSocket Server (接收 NapCat 的反向连接)
+    rws_recv_host = onebot_cfg.get('host', '0.0.0.0')
+    rws_recv_port = 8000  # NapCat 期望反向 WS 服务端在 8000 端口
+    rws_recv_token = str(onebot_cfg.get('access_token', '') or '').strip()
+    
+    if rws_recv_port:
+        print(Fore.YELLOW + f"► OneBot Reverse WS Server: ws://{rws_recv_host}:{rws_recv_port}/ws (Starting...)")
+        
+        # 使用独立的反向 WS 服务器
+        bind_host = '127.0.0.1' if rws_recv_host == '0.0.0.0' else rws_recv_host
+        
+        def start_reverse_ws():
+            try:
+                run_onebot_reverse_ws(
+                    host=bind_host,
+                    port=rws_recv_port,
+                    token=rws_recv_token,
+                    chat_system=chat_system
+                )
+            except Exception as e:
+                logger.error(f"OneBot Reverse WS Server 启动失败: {e}")
+        
+        t_rws = threading.Thread(target=start_reverse_ws, daemon=True, name="OneBot-ReverseWS")
+        t_rws.start()
+        logger.info("OneBot Reverse WS Server 线程已启动")

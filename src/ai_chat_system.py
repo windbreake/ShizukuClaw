@@ -96,6 +96,9 @@ class AIChatSystem:
         self.realtime_updates_path = os.path.join(data_dir, 'realtime_updates.json')
         self._realtime_lock = threading.Lock()
         self._ensure_realtime_storage_files()
+        self._bothub_pending = {}
+        self._bothub_pending_lock = threading.Lock()
+        self._bothub_pending_ttl_seconds = 120.0
 
     @classmethod
     def rebind_database(cls):
@@ -363,8 +366,164 @@ class AIChatSystem:
             'plan_style_group': persona_data.get('plan_style_group', ''),
             'state_weights': persona_data.get('state_weights', []),
             'enable_expression_learning': persona_data.get('enable_expression_learning', True),
-            'behavior_rules': persona_data.get('behavior_rules', [])
+            'behavior_rules': persona_data.get('behavior_rules', []),
+            'command_responses': persona_data.get('command_responses', {})
         }
+
+    @staticmethod
+    def _extract_bothub_selection(command_text: str) -> Optional[int]:
+        command = str(command_text or '').strip().lower()
+        if not command:
+            return None
+
+        match = re.search(r'(^|\s)/bothub(?:\s+(\d+))?(?=\s|$)', command)
+        if not match:
+            return None
+
+        if not match.group(2):
+            return 0
+
+        try:
+            return max(1, int(match.group(2)))
+        except Exception:
+            return None
+
+    @staticmethod
+    def _contains_invalid_bothub_variant(command_text: str) -> bool:
+        command = str(command_text or '').strip().lower()
+        if not command:
+            return False
+        return re.search(r'(^|\s)/bothub\S+', command) is not None
+
+    @staticmethod
+    def _is_numeric_only(command_text: str) -> bool:
+        return re.fullmatch(r'\d+', str(command_text or '').strip()) is not None
+
+    def _set_bothub_pending(self, conversation_key: str) -> None:
+        key = str(conversation_key or '').strip()
+        if not key:
+            return
+        deadline = time.monotonic() + self._bothub_pending_ttl_seconds
+        with self._bothub_pending_lock:
+            self._bothub_pending[key] = deadline
+
+    def _is_bothub_pending(self, conversation_key: str) -> bool:
+        key = str(conversation_key or '').strip()
+        if not key:
+            return False
+        now = time.monotonic()
+        with self._bothub_pending_lock:
+            deadline = float(self._bothub_pending.get(key, 0.0) or 0.0)
+            if deadline <= now:
+                self._bothub_pending.pop(key, None)
+                return False
+            return True
+
+    def _clear_bothub_pending(self, conversation_key: str) -> None:
+        key = str(conversation_key or '').strip()
+        if not key:
+            return
+        with self._bothub_pending_lock:
+            self._bothub_pending.pop(key, None)
+
+    def _list_persona_records(self):
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        personas_dir = os.path.join(project_root, 'data', 'personas')
+        active = str(CONFIG.get('active_persona', 'shizuku.json') or 'shizuku.json').strip()
+
+        records = []
+        if not os.path.exists(personas_dir):
+            return records
+
+        for filename in sorted([item for item in os.listdir(personas_dir) if item.endswith('.json')]):
+            persona_path = os.path.join(personas_dir, filename)
+            try:
+                with open(persona_path, 'r', encoding='utf-8') as f:
+                    persona_data = json.load(f)
+                meta = persona_data.get('meta', {}) if isinstance(persona_data, dict) else {}
+                character = persona_data.get('character', {}) if isinstance(persona_data, dict) else {}
+                display_name = str(meta.get('name') or character.get('name') or filename).strip()
+                records.append({
+                    'filename': filename,
+                    'name': display_name,
+                    'active': filename == active
+                })
+            except Exception:
+                continue
+
+        return records
+
+    def _format_bothub_menu(self) -> str:
+        records = self._list_persona_records()
+        lines = ['bot hub界面', '请选择你要使用的设置：']
+        if not records:
+            lines.append('当前没有可用的人格')
+            return '\n'.join(lines)
+
+        lines.append('角色卡列表')
+        for idx, record in enumerate(records, start=1):
+            suffix = '（当前）' if record.get('active') else ''
+            lines.append(f'{idx}.{record.get("name", "未命名")}{suffix}')
+        return '\n'.join(lines)
+
+    def _activate_persona_by_index(self, selection_index: int) -> str:
+        records = self._list_persona_records()
+        if not records:
+            return '当前没有可用的人格'
+
+        if selection_index < 1 or selection_index > len(records):
+            return f'人格编号无效，请输入 1-{len(records)} 之间的数字'
+
+        selected = records[selection_index - 1]
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config_path = os.path.join(project_root, 'data', 'config.json')
+
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+        except Exception:
+            cfg = {}
+
+        cfg['active_persona'] = selected['filename']
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+
+        from src.config import load_config
+        new_conf = load_config()
+        CONFIG.update(new_conf)
+        self.system_prompt = CONFIG.get('system_prompt', self.system_prompt)
+        self.persona_runtime = CONFIG.get('persona_runtime', self.persona_runtime)
+
+        return f'人格{selection_index}.“{selected["name"]}”成功加载'
+
+    def _resolve_command_response(self, command_text: str, onebot_meta: Optional[dict] = None) -> Optional[str]:
+        meta = onebot_meta or {}
+        conversation_key = str(meta.get('conversation_key', '') or '').strip()
+
+        if self._contains_invalid_bothub_variant(command_text):
+            return 'bothub 指令格式错误，请使用 /bothub 或 /bothub <序号>'
+
+        selection = self._extract_bothub_selection(command_text)
+        if selection is not None:
+            if selection == 0:
+                if conversation_key:
+                    self._set_bothub_pending(conversation_key)
+                menu = self._format_bothub_menu()
+                return f'{menu}\n请输入序号（例如 1 或 /bothub 1）'
+
+            result = self._activate_persona_by_index(selection)
+            if '成功加载' in result and conversation_key:
+                self._clear_bothub_pending(conversation_key)
+            return result
+
+        if self._is_numeric_only(command_text) and conversation_key and self._is_bothub_pending(conversation_key):
+            selection = int(str(command_text).strip())
+            result = self._activate_persona_by_index(selection)
+            if '成功加载' in result:
+                self._clear_bothub_pending(conversation_key)
+            return result
+
+        return None
 
     @staticmethod
     def _resolve_persona_override(persona_filename: str):
@@ -881,6 +1040,87 @@ class AIChatSystem:
 
         return content, prompt_tokens, completion_tokens
 
+    @staticmethod
+    def _is_retryable_chat_error(exc: Exception) -> bool:
+        """判断是否属于可重试的上游临时错误。"""
+        text = f"{type(exc).__name__}: {str(exc)}".lower()
+        retryable_keywords = (
+            '502',
+            '503',
+            '504',
+            'internalservererror',
+            'badgateway',
+            'serviceunavailable',
+            'gateway',
+            'temporarily unavailable',
+            'timeout',
+            'connection reset',
+            'connection aborted',
+        )
+        return any(k in text for k in retryable_keywords)
+
+    def _get_chat_model_candidates(self, preferred_model: Optional[str] = None) -> List[str]:
+        """返回聊天模型候选列表（主模型 + 可选回退模型）。"""
+        api_cfg = CONFIG.get('api', {}) or {}
+
+        candidates = []
+        if preferred_model:
+            candidates.append(str(preferred_model).strip())
+
+        primary_model = str(api_cfg.get('model') or 'deepseek-chat').strip()
+        if primary_model:
+            candidates.append(primary_model)
+
+        fallback_models = api_cfg.get('fallback_models', [])
+        if isinstance(fallback_models, str):
+            fallback_models = [m.strip() for m in fallback_models.split(',') if m.strip()]
+        elif not isinstance(fallback_models, list):
+            fallback_models = []
+
+        for model in fallback_models:
+            m = str(model).strip()
+            if m:
+                candidates.append(m)
+
+        # 去重并保序
+        dedup = []
+        seen = set()
+        for item in candidates:
+            if item and item not in seen:
+                dedup.append(item)
+                seen.add(item)
+
+        if not dedup:
+            dedup = ['deepseek-chat']
+        return dedup
+
+    def _create_chat_completion_with_retry(self, api_kwargs: dict, preferred_model: Optional[str] = None):
+        """带重试与模型回退的聊天调用，缓解上游 502 等瞬时故障。"""
+        model_candidates = self._get_chat_model_candidates(preferred_model)
+        max_retries = 3
+        last_error = None
+        errors = []
+
+        for model in model_candidates:
+            kwargs = dict(api_kwargs)
+            kwargs['model'] = model
+
+            for attempt in range(1, max_retries + 1):
+                try:
+                    response = self.client.chat.completions.create(**kwargs)
+                    return response, model
+                except Exception as exc:
+                    last_error = exc
+                    errors.append(f"{model}#{attempt}: {type(exc).__name__}: {str(exc)[:180]}")
+
+                    if attempt < max_retries and self._is_retryable_chat_error(exc):
+                        time.sleep(min(1.0 * (2 ** (attempt - 1)), 4.0))
+                        continue
+                    break
+
+        summary = ' | '.join(errors[-6:]) if errors else 'unknown error'
+        raise RuntimeError(f"All chat models failed: {summary}") from last_error
+
     def build_chat_context(self, user_input, max_tokens=2500, frontend_source='control_panel', system_prompt=None, persona_runtime=None, persona_filename=None):
         """
         构建智能上下文：
@@ -1026,7 +1266,7 @@ If the request involves modifying existing code, output the full modified file c
         except Exception as e:
             return f"Coder Agent Exception: {str(e)}"
 
-    def chat(self, user_input, image=None, is_admin=False, attachments=None, frontend_source='control_panel', persona_filename=None):
+    def chat(self, user_input, image=None, is_admin=False, attachments=None, frontend_source='control_panel', persona_filename=None, onebot_meta=None):
         """处理聊天请求，支持文本、图片及其他附件（无状态优化版）
         
         Args:
@@ -1043,16 +1283,27 @@ If the request involves modifying existing code, output the full modified file c
         except:
             agent_context = ""
 
+        active_persona_filename = str(CONFIG.get('active_persona', 'shizuku.json') or 'shizuku.json').strip() or 'shizuku.json'
+        if not persona_filename:
+            persona_filename = active_persona_filename
+
         persona_override = None
         if persona_filename:
             try:
                 persona_override = self._resolve_persona_override(persona_filename)
             except Exception as e:
                 return f"角色卡加载失败: {str(e)}"
+
+        effective_persona_filename = (persona_override or {}).get('filename') or active_persona_filename
+
+        normalized_input = str(user_input or '').strip()
+        if frontend_source == 'onebot' and normalized_input:
+            command_response = self._resolve_command_response(normalized_input, onebot_meta=onebot_meta)
+            if command_response:
+                self.db.save_chat(user_input, command_response, None, persona_filename=effective_persona_filename)
+                return command_response
         
         # === 核心变更2：每次动态构建上下文 ===
-        effective_persona_filename = (persona_override or {}).get('filename')
-
         messages = self.build_chat_context(
             user_input,
             frontend_source=frontend_source,
@@ -1173,7 +1424,6 @@ If the request involves modifying existing code, output the full modified file c
                 pass
 
             api_kwargs = {
-                "model": "deepseek-chat",
                 "messages": messages,
                 "temperature": 0.7,
                 # "max_tokens": 200, # 移除硬限制，由 Agent 自行决定
@@ -1184,7 +1434,7 @@ If the request involves modifying existing code, output the full modified file c
                 api_kwargs["tools"] = tools
                 # api_kwargs["tool_choice"] = "auto" 
 
-            response = self.client.chat.completions.create(**api_kwargs)
+            response, selected_model = self._create_chat_completion_with_retry(api_kwargs)
             
             choice = response.choices[0]
             message = choice.message
@@ -1235,11 +1485,13 @@ If the request involves modifying existing code, output the full modified file c
                 # 再次调用 LLM 获取最终回复
                 # 注意：这里可能会产生递归，目前只支持一轮工具调用
                 try:
-                    second_response = self.client.chat.completions.create(
-                        model="deepseek-chat",
-                        messages=messages,
-                        temperature=0.7,
-                        timeout=60
+                    second_response, _ = self._create_chat_completion_with_retry(
+                        {
+                            "messages": messages,
+                            "temperature": 0.7,
+                            "timeout": 60,
+                        },
+                        preferred_model=selected_model
                     )
                     ai_response = self.clean_dsml_markup(second_response.choices[0].message.content)
                     

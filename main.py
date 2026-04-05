@@ -29,17 +29,30 @@ init(autoreset=True)
 
 def check_ports():
     """检查常用端口状态"""
-    ports_to_check = [
-        (8888, "Web服务器"),
-        (8081, "控制面板"),
-        (8082, "数据库管理"),
-        (8083, "日志服务"),
-        (5000, "适配器主端口"),
-        (5001, "适配器备用端口")
-    ]
+    try:
+        from src.config import CONFIG, SYSTEM_CONFIG_DATA
+        ports_to_check = [
+            (int(CONFIG.get('server', {}).get('port', 8888) or 8888), "Web服务器"),
+            (int(CONFIG.get('unified_api', {}).get('port', 8000) or 8000), "统一API"),
+            (int(CONFIG.get('onebot', {}).get('port', 8000) or 8000), "OneBot"),
+        ]
+
+        extra_ports = SYSTEM_CONFIG_DATA.get('service_ports', {})
+        if isinstance(extra_ports, dict):
+            for key, value in extra_ports.items():
+                try:
+                    ports_to_check.append((int(value), f"{key}服务"))
+                except (TypeError, ValueError):
+                    continue
+    except Exception:
+        ports_to_check = [(8888, "Web服务器")]
 
     print(Fore.CYAN + "端口检查:")
+    checked = set()
     for port, name in ports_to_check:
+        if port in checked:
+            continue
+        checked.add(port)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             if s.connect_ex(('localhost', port)) == 0:
                 print(Fore.RED + f"  - {name} ({port}): {Fore.YELLOW}占用中")
@@ -105,9 +118,11 @@ def full_diagnosis():
     print(Fore.CYAN + "=" * 50)
     print(Fore.YELLOW + "🐱 服务诊断工具")
     print(Fore.CYAN + "=" * 50)
-    check_ports()
-    test_local_api()
-    test_deepseek_api()
+    try:
+        from src.config import check_service_status
+        print(check_service_status())
+    except Exception as e:
+        print(Fore.RED + f"诊断执行失败: {str(e)}")
     print(Fore.CYAN + "\n诊断完成!")
 
 
@@ -123,13 +138,13 @@ def run_mode(mode):
         elif mode == 2:
             # 沙箱模式 - 启动Web服务器并默认打开沙箱页面
             from src.web_server import run_web_server
-            os.environ['DEFAULT_PAGE'] = '/sandbox'
+            os.environ.setdefault('DEFAULT_PAGE', '/sandbox')
             exit_code = run_web_server()
             sys.exit(exit_code)
         elif mode == 5:
             # 控制面板模式 - 启动Web服务器并默认打开控制面板
             from src.web_server import run_web_server
-            os.environ['DEFAULT_PAGE'] = '/control_panel'
+            os.environ.setdefault('DEFAULT_PAGE', '/control_panel')
             exit_code = run_web_server()
             sys.exit(exit_code)
         else:
@@ -148,18 +163,6 @@ if __name__ == "__main__":
     print(f"标准输出编码: {sys.stdout.encoding}")
     print(f"标准错误编码: {sys.stderr.encoding}")
     print(f"文件系统编码: {sys.getfilesystemencoding()}")
-    
-    # 检查数据库连接
-    try:
-        from src.reset_database import get_connection
-        conn = get_connection()
-        if conn:
-            print("数据库连接成功")
-            conn.close()
-        else:
-            print("数据库连接失败")
-    except Exception as e:
-        print(f"数据库连接检查出错: {e}")
 
     if len(sys.argv) == 1:
         print(Fore.CYAN + "=" * 50)

@@ -18,6 +18,20 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/2.1.4/toastr.min.js"></script>
     <!-- Custom CSS -->
     <link rel="stylesheet" href="static/css/style.css">
+    <style>
+        .launcher-diagnostics-box {
+            min-height: 220px;
+            font-family: 'Consolas', monospace;
+        }
+
+        .gateway-diagnostics-box {
+            min-height: 96px;
+        }
+
+        .gateway-console-card {
+            height: 560px;
+        }
+    </style>
 </head>
 <body>
 
@@ -90,9 +104,6 @@
                 <a class="nav-link nav-sub-link" id="v-config-tab" data-bs-toggle="pill" data-bs-target="#v-config" type="button" role="tab" onclick="loadConfig()">
                     <i class="fas fa-sliders-h fa-fw"></i> 系统配置
                 </a>
-                <a class="nav-link nav-sub-link" id="v-env-tab" data-bs-toggle="pill" data-bs-target="#v-env-check" type="button" role="tab">
-                    <i class="fas fa-stethoscope fa-fw"></i> 运行环境检测
-                </a>
                 <a class="nav-link nav-sub-link" id="v-system-tab" data-bs-toggle="pill" data-bs-target="#v-system" type="button" role="tab">
                     <i class="fas fa-server fa-fw"></i> 系统监控
                 </a>
@@ -130,11 +141,11 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card text-center h-100 py-3 pointer" onclick="document.getElementById('v-env-tab').click()">
+                    <div class="card text-center h-100 py-3 pointer" onclick="document.getElementById('v-config-tab').click(); setTimeout(() => switchConfigSection('launcher'), 0)">
                          <div class="card-body">
                             <i class="fas fa-microchip fa-3x text-success mb-3"></i>
-                            <h5 class="card-title text-dark">运行环境检测</h5>
-                            <p class="card-text text-muted small">运行自检程序</p>
+                            <h5 class="card-title text-dark">启动器与杂项</h5>
+                            <p class="card-text text-muted small">自检、启动页与启动行为</p>
                          </div>
                     </div>
                 </div>
@@ -340,6 +351,9 @@
                     <button class="list-group-item list-group-item-action" type="button" data-config-section="workmode">
                         <i class="fas fa-user-shield me-2"></i> 工作模式
                     </button>
+                    <button class="list-group-item list-group-item-action" type="button" data-config-section="launcher">
+                        <i class="fas fa-rocket me-2"></i> 启动器 &amp; 杂项
+                    </button>
                     <button class="list-group-item list-group-item-action" type="button" data-config-section="database">
                         <i class="fas fa-database me-2"></i> 数据库
                     </button>
@@ -371,9 +385,15 @@
                                         <div id="api-keys-container">
                                             <!-- Dynamic API Key Slots -->
                                         </div>
-                                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addApiKeySlot()">
-                                            <i class="fas fa-plus"></i> 添加服务密钥
-                                        </button>
+                                        <div class="d-flex gap-2 flex-wrap mt-2">
+                                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addApiKeySlot()">
+                                                <i class="fas fa-plus"></i> 添加服务密钥
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="runDiagnosis()">
+                                                <i class="fas fa-wave-square me-1"></i> 检查服务可用性
+                                            </button>
+                                        </div>
+                                        <div class="mt-3 small text-muted" id="api-health-summary">点击上方按钮后会检查数据库和已配置服务商的连通性。</div>
                                     </div>
 
                                 </form>
@@ -433,11 +453,105 @@
                                     <button type="button" class="btn btn-success btn-sm" onclick="saveWorkModeOptions()">保存工作模式选项</button>
                                 </div>
 
+                                <div class="p-3 border rounded bg-light mb-3">
+                                    <h6 class="mb-2">回复触发规则</h6>
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label small">群聊触发方式</label>
+                                            <select id="wm-reply-group-mode" class="form-select form-select-sm">
+                                                <option value="mention_or_keyword">@ 或关键词</option>
+                                                <option value="mention_only">仅 @</option>
+                                                <option value="keyword_only">仅关键词</option>
+                                                <option value="always">所有群消息</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small">私聊触发方式</label>
+                                            <select id="wm-reply-private-mode" class="form-select form-select-sm">
+                                                <option value="always">总是回复</option>
+                                                <option value="keyword_only">仅关键词</option>
+                                                <option value="mention_only">仅 @</option>
+                                                <option value="never">不自动回复</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small">同一会话冷却时间（秒）</label>
+                                            <input type="number" min="0" step="1" id="wm-reply-cooldown" class="form-control form-control-sm" placeholder="例如 10">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small">机器人 QQ（可选）</label>
+                                            <input type="text" id="wm-bot-qq" class="form-control form-control-sm" placeholder="用于精确识别 @ 目标">
+                                            <div class="form-text">如果不填写，@ 触发会自动关闭，只保留关键词触发。</div>
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label small">自定义关键词</label>
+                                            <textarea id="wm-reply-keywords" class="form-control form-control-sm" rows="3" placeholder="一行一个关键词，或用中文/英文逗号分隔"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="alert alert-secondary mb-0 py-2">
                                     忘记密码？
                                     <button type="button" class="btn btn-sm btn-outline-dark ms-2" onclick="resetWorkModePasswordByTerminal()">启动重置终端</button>
                                     <span class="small text-muted ms-2">将打开一个终端执行重置脚本，类似服务器面板的找回流程。</span>
                                 </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="config-section" data-section="launcher">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3"><i class="fas fa-rocket me-2"></i>启动器与杂项</h5>
+                                <p class="text-muted small">这些选项控制启动脚本行为、默认打开的页面和是否在启动时执行自检。</p>
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label small">Web 端口</label>
+                                        <input type="number" class="form-control form-control-sm" id="server_port" min="1" max="65535">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small">启动页面</label>
+                                        <input type="text" class="form-control form-control-sm" id="launcher_startup_page" placeholder="/control_panel">
+                                    </div>
+                                    <div class="col-md-4 d-flex align-items-end">
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="launcher_open_browser">
+                                            <label class="form-check-label" for="launcher_open_browser">启动后自动打开浏览器</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-8">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="launcher_self_check">
+                                            <label class="form-check-label" for="launcher_self_check">启动时执行自检</label>
+                                        </div>
+                                        <div class="small text-muted mt-1">关闭后，start.bat 仍会直接启动前端，不会因为数据库或插件状态失败而中断。</div>
+                                    </div>
+                                    <div class="col-md-4 text-md-end">
+                                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="runDiagnosis()">
+                                            <i class="fas fa-wave-square me-1"></i> 运行自检
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="card border-light bg-light mb-3">
+                                    <div class="card-body py-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="mb-0">自检结果</h6>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('diag-result').innerHTML='等待运行...'">清空</button>
+                                        </div>
+                                        <div class="bg-dark rounded p-3 text-light launcher-diagnostics-box">
+                                            <div id="diag-result">等待运行...</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="button" class="btn btn-success btn-sm" onclick="saveAllConfig()">
+                                    <i class="fas fa-save me-1"></i> 保存启动器设置
+                                </button>
                             </div>
                         </div>
                     </section>
@@ -508,7 +622,7 @@
                                         <label class="form-label">核心协议 (Protocol)</label>
                                         <select class="form-select" id="comm_protocol">
                                             <option value="unified">Unified API Gateway (Standard)</option>
-                                            <option value="onebot">OneBot V11 (Reverse WebSocket)</option>
+                                            <option value="onebot">WebSocket模式 (NapCat / Client)</option>
                                         </select>
                                     </div>
                                     <div class="row g-3">
@@ -525,8 +639,13 @@
                                             <input type="password" class="form-control" id="comm_token" placeholder="Optional">
                                         </div>
                                     </div>
-                                    <div class="mt-3 text-end">
-                                        <button type="button" class="btn btn-success" onclick="saveCommConfigOnly()">保存通信配置</button>
+                                    <div class="mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                        <div class="small text-muted" id="onebot-mode-hint">当前可在 WebSocket模式 与 AstrBot 反向 WS 之间切换。</div>
+                                        <div class="d-flex gap-2 flex-wrap">
+                                            <button type="button" class="btn btn-outline-primary" onclick="applyWebsocketModeAndSave()">WebSocket模式</button>
+                                            <button type="button" class="btn btn-outline-warning" onclick="applyReverseWsModeAndSave()">反向模式</button>
+                                            <button type="button" class="btn btn-success" onclick="saveCommConfigOnly()">保存通信配置</button>
+                                        </div>
                                     </div>
                                 </form>
                             </div>
@@ -1027,29 +1146,6 @@
             </div>
         </div>
 
-        <!-- Runtime Environment Check Tab -->
-        <div class="tab-pane fade" id="v-env-check" role="tabpanel">
-            <h3 class="mb-4">🔍 运行环境检测</h3>
-            <div class="card mb-4 border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                         <div>
-                            <h5 class="card-title">系统诊断工具</h5>
-                            <p class="card-text text-muted">检查依赖库安装状态、系统环境及配置完整性。</p>
-                         </div>
-                         <div>
-                            <button class="btn btn-primary px-4" onclick="runDiagnosis()"><i class="fas fa-play me-2"></i> 开始检测</button>
-                            <button class="btn btn-secondary ms-2" onclick="document.getElementById('diag-result').innerHTML=''"><i class="fas fa-trash me-2"></i> 清空</button>
-                         </div>
-                    </div>
-                    <div class="bg-dark rounded p-3 text-light" style="min-height: 400px; font-family: 'Consolas', monospace;">
-                        <div id="diag-result">等待运行...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-
         <!-- System Tab -->
         <div class="tab-pane fade" id="v-system" role="tabpanel">
             <h3 class="mb-4">📊 系统详细监控</h3>
@@ -1158,7 +1254,7 @@
                             <p class="mb-2">基础地址：<span id="adapter-base-url">http://localhost:5000/v1</span></p>
                             <p class="mb-2">文档：<a id="adapter-docs-link" href="http://localhost:5000/docs" target="_blank">/docs</a></p>
                             <p class="mb-2">聊天接口：<code>/v1/chat/completions</code> (POST)</p>
-                            <p class="text-muted small mb-0">支持 OpenAI Chat Completion 兼容参数，可被 ASTR/NoneBot/Napcat 等前端直连。</p>
+                            <p class="text-muted small mb-0">支持 OpenAI Chat Completion 兼容参数，可被 NapCat / AstrBot / NoneBot 等前端直连。</p>
                         </div>
                     </div>
                 </div>
@@ -1166,17 +1262,35 @@
                     <div class="card h-100 border-0 shadow-sm">
                         <div class="card-body d-flex flex-column">
                             <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h5 class="card-title mb-0">HTTP & WebSocket 连接</h5>
-                                <span class="badge bg-secondary">保留 OneBot 接口</span>
+                                <h5 class="card-title mb-0">NapCat / AstrBot 连接</h5>
+                                <span class="badge bg-secondary">OneBot V11 兼容</span>
                             </div>
-                            <p class="mb-2"><i class="fas fa-globe me-1"></i> HTTP: <span id="onebot-http-url">未配置</span></p>
-                            <p class="mb-2"><i class="fas fa-wave-square me-1"></i> WebSocket: <span id="onebot-ws-url">未配置</span></p>
-                            <p class="mb-0 text-muted"><i class="fas fa-undo me-1"></i> 反向 WebSocket：<span id="onebot-reverse-url">未配置</span></p>
+                            <p class="mb-2"><i class="fas fa-globe me-1"></i> HTTP: <span id="onebot-http-url">未配置</span>
+                                <button class="btn btn-sm btn-link ms-2" onclick="copyToClipboard('onebot-http-url')" title="复制HTTP地址"><i class="fas fa-copy"></i> 复制</button></p>
+                            <p class="mb-2"><i class="fas fa-wave-square me-1"></i> WebSocket: <span id="onebot-ws-url" style="font-weight: 500; color: #0d6efd;">未配置</span>
+                                <button class="btn btn-sm btn-link ms-2" onclick="copyToClipboard('onebot-ws-url')" title="复制WebSocket地址"><i class="fas fa-copy"></i> 复制</button></p>
+                            <p class="mb-0 text-muted"><i class="fas fa-undo me-1"></i> 反向 WebSocket：<span id="onebot-reverse-url">未配置</span>
+                                <button class="btn btn-sm btn-link ms-2" onclick="copyToClipboard('onebot-reverse-url')" title="复制反向WS地址"><i class="fas fa-copy"></i> 复制</button></p>
+                            <div class="small text-muted mt-2 p-2 bg-light rounded">
+                                <i class="fas fa-info-circle me-1"></i> <strong>提示：</strong>NapCat 的 WebSocket URL 应使用完整格式 <code>ws://host:port/ws</code>，Token 填写 <code>114514</code>（或自定义的 access_token）。
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="card border-0 shadow-sm" style="height: 560px;">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-heart-pulse me-2 text-success"></i>连接诊断</span>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="runGatewayDiagnostics()">
+                        <i class="fas fa-wave-square me-1"></i>立即检测
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="small text-muted mb-2">检测前端目标 ping、Adapter/Unified API 健康状态、NapCat/AstrBot 相关 OneBot 端口可达性。</div>
+                    <div id="gateway-diagnostics" class="bg-light rounded p-2 small gateway-diagnostics-box">尚未执行检测</div>
+                </div>
+            </div>
+            <div class="card border-0 shadow-sm gateway-console-card">
                 <div class="card-body p-0 overflow-hidden rounded">
                     <iframe src="/adapter_console" class="w-100 h-100 border-0" title="Gateway Console"></iframe>
                 </div>
@@ -1234,6 +1348,7 @@
     // --- Unified Logic ---
     let workModeAction = null;
     let unifiedActionModalResolver = null;
+    let currentOnebotConfig = null;
 
     function showUnifiedActionModal(options = {}) {
         const {
@@ -1278,6 +1393,7 @@
         if (inputWrapEl) inputWrapEl.classList.toggle('d-none', !hasInput);
         if (inputEl) {
             inputEl.value = hasInput ? (input.value || '') : '';
+            inputEl.type = hasInput ? (input.type || 'text') : 'text';
             inputEl.placeholder = hasInput ? (input.placeholder || '请输入...') : '请输入...';
             inputEl.classList.remove('is-invalid');
         }
@@ -1317,6 +1433,10 @@
             };
 
             modalEl.addEventListener('hidden.bs.modal', onHidden);
+
+            if (hasInput && inputEl) {
+                setTimeout(() => inputEl.focus(), 0);
+            }
 
             if (confirmBtn) {
                 confirmBtn.onclick = () => {
@@ -1956,6 +2076,24 @@
                 }
             }
 
+            const launcherConfig = data.launcher || {};
+            const serverPortEl = document.getElementById('server_port');
+            if (serverPortEl) {
+                serverPortEl.value = (data.server && data.server.port) || 8888;
+            }
+            const launcherStartupPageEl = document.getElementById('launcher_startup_page');
+            if (launcherStartupPageEl) {
+                launcherStartupPageEl.value = launcherConfig.startup_page || '/control_panel';
+            }
+            const launcherSelfCheckEl = document.getElementById('launcher_self_check');
+            if (launcherSelfCheckEl) {
+                launcherSelfCheckEl.checked = launcherConfig.startup_self_check !== false;
+            }
+            const launcherOpenBrowserEl = document.getElementById('launcher_open_browser');
+            if (launcherOpenBrowserEl) {
+                launcherOpenBrowserEl.checked = launcherConfig.open_browser !== false;
+            }
+
             // General API Keys
             const container = document.getElementById('api-keys-container');
             container.innerHTML = '';
@@ -1985,18 +2123,43 @@
             });
 
             // Communication Form
-            // Assuming config has 'unified_api' or 'onebot'
-            if(data.unified_api) {
-                document.getElementById('comm_protocol').value = 'unified';
-                document.getElementById('comm_host').value = data.unified_api.host || '127.0.0.1';
-                document.getElementById('comm_port').value = data.unified_api.port || 8000;
-                document.getElementById('comm_token').value = data.unified_api.access_token || '';
-            } else if (data.onebot) {
+            const savedProtoRaw = String(data.comm_protocol || '').toLowerCase();
+            const savedProto = (savedProtoRaw === 'onebot' || savedProtoRaw === 'unified') ? savedProtoRaw : '';
+            const obForMode = data.onebot || {};
+            const wsForMode = obForMode.ws || {};
+            const httpForMode = obForMode.http || {};
+            const reverseForMode = obForMode.ws_reverse || {};
+            const inferredProto = (wsForMode.enable || reverseForMode.enable || httpForMode.enable) ? 'onebot' : 'unified';
+            const effectiveProto = savedProto || inferredProto;
+
+            if (effectiveProto === 'onebot' && data.onebot) {
                 document.getElementById('comm_protocol').value = 'onebot';
-                document.getElementById('comm_host').value = data.onebot.host || '127.0.0.1';
-                document.getElementById('comm_port').value = data.onebot.port || 3000;
-                document.getElementById('comm_token').value = data.onebot.access_token || '';
+                const ob = data.onebot || {};
+                const obHttp = ob.http || {};
+                const obWs = ob.ws || {};
+                const obReverse = ob.ws_reverse || {};
+                let commHost = obWs.enable ? (obWs.host || ob.host || '127.0.0.1') : (obHttp.enable ? (obHttp.host || ob.host || '127.0.0.1') : (ob.host || '127.0.0.1'));
+                let commPort = obWs.enable ? (obWs.port || 3001) : (obHttp.enable ? (obHttp.port || ob.port || 3000) : (ob.port || 3000));
+                if (!obWs.enable && !obHttp.enable && obReverse.enable && obReverse.url) {
+                    try {
+                        const reverseUrl = new URL(obReverse.url);
+                        commHost = reverseUrl.hostname || commHost;
+                        commPort = Number.parseInt(reverseUrl.port || '', 10) || commPort;
+                    } catch (e) {
+                        // keep fallback values
+                    }
+                }
+                document.getElementById('comm_host').value = commHost;
+                document.getElementById('comm_port').value = commPort;
+                document.getElementById('comm_token').value = ob.access_token || '';
+            } else {
+                document.getElementById('comm_protocol').value = 'unified';
+                document.getElementById('comm_host').value = data.unified_api?.host || '127.0.0.1';
+                document.getElementById('comm_port').value = data.unified_api?.port || 8000;
+                document.getElementById('comm_token').value = data.unified_api?.access_token || '';
             }
+
+            currentOnebotConfig = data.onebot || null;
 
                     const adapterBaseEl = document.getElementById('adapter-base-url');
                     const adapterDocsLink = document.getElementById('adapter-docs-link');
@@ -2013,14 +2176,37 @@
                     const onebotHttp = data.onebot?.http;
                     const onebotWs = data.onebot?.ws;
                     const onebotReverse = data.onebot?.ws_reverse;
+                    const toConnectHost = (host) => {
+                        const normalized = String(host || '').trim();
+                        if (!normalized || normalized === '0.0.0.0' || normalized === '::' || normalized === '[::]') {
+                            return '127.0.0.1';
+                        }
+                        return normalized;
+                    };
+
                     const setSpan = (id, value, fallback = '未配置') => {
                         const el = document.getElementById(id);
                         if(el) el.textContent = value || fallback;
                     };
 
-                    setSpan('onebot-http-url', onebotHttp?.enable ? `http://${onebotHttp.host}:${onebotHttp.port}` : '', '未启用');
-                    setSpan('onebot-ws-url', onebotWs?.enable ? `ws://${onebotWs.host}:${onebotWs.port}` : '', '未启用');
+                    setSpan('onebot-http-url', onebotHttp?.enable ? `http://${toConnectHost(onebotHttp.host)}:${onebotHttp.port}` : '', '未启用');
+                    setSpan('onebot-ws-url', onebotWs?.enable ? `ws://${toConnectHost(onebotWs.host)}:${onebotWs.port}` : '', '未启用');
                     setSpan('onebot-reverse-url', onebotReverse?.enable ? (onebotReverse.url || '') : '', '未启用');
+
+                    const onebotModeHint = document.getElementById('onebot-mode-hint');
+                    if (onebotModeHint) {
+                        const wsEnabled = !!onebotWs?.enable;
+                        const reverseEnabled = !!onebotReverse?.enable;
+                        if (wsEnabled && !reverseEnabled) {
+                            onebotModeHint.textContent = `当前为 WebSocket模式：ws://${toConnectHost(onebotWs?.host)}:${onebotWs?.port || 3001}/ws，适用于 NapCat / NoneBot 等 WebSocket Client。`;
+                        } else if (reverseEnabled) {
+                            onebotModeHint.textContent = `当前为反向 WebSocket：${onebotReverse?.url || '未配置'}，适用于 AstrBot 等服务端反连场景。`;
+                        } else {
+                            onebotModeHint.textContent = '当前可在 WebSocket模式 与 AstrBot 反向 WS 之间切换。';
+                        }
+                    }
+
+                    runGatewayDiagnostics();
 
             // 2. Load Personas List
             refreshPersonas();
@@ -2453,6 +2639,141 @@
         saveAllConfig(); 
     }
 
+    function copyToClipboard(elementId) {
+        const el = document.getElementById(elementId);
+        if (!el || !el.textContent || el.textContent === '未配置' || el.textContent === '未启用') {
+            alert('该地址尚未配置');
+            return;
+        }
+        const text = el.textContent.trim();
+        navigator.clipboard.writeText(text).then(() => {
+            const origText = el.innerText;
+            el.setAttribute('data-original-text', origText);
+            const parent = el.closest('p');
+            if (parent) {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-success ms-2';
+                badge.textContent = '已复制';
+                parent.appendChild(badge);
+                setTimeout(() => badge.remove(), 2000);
+            }
+        }).catch(() => {
+            alert('复制失败，请手动复制');
+        });
+    }
+
+    function applyWebsocketModeAndSave() {
+        const existing = (currentOnebotConfig && typeof currentOnebotConfig === 'object')
+            ? JSON.parse(JSON.stringify(currentOnebotConfig))
+            : {};
+
+        const hostInput = document.getElementById('comm_host');
+        const portInput = document.getElementById('comm_port');
+        const tokenInput = document.getElementById('comm_token');
+        const protocolInput = document.getElementById('comm_protocol');
+
+        const host = (hostInput && hostInput.value.trim()) || existing.ws?.host || existing.host || '0.0.0.0';
+        const currentPort = Number.parseInt(portInput ? portInput.value : '', 10);
+        const port = Number.isFinite(currentPort)
+            ? currentPort
+            : (Number.parseInt(existing.ws?.port, 10) || 3001);
+        const token = tokenInput ? tokenInput.value : (existing.access_token || '');
+
+        const websocketConfig = {
+            ...existing,
+            access_token: token,
+            host,
+            port: Number.parseInt(existing.port, 10) || 3000,
+            http: {
+                ...(existing.http || {}),
+                enable: false,
+                host,
+                port: Number.parseInt(existing.http?.port, 10) || 3000
+            },
+            ws: {
+                ...(existing.ws || {}),
+                enable: true,
+                host,
+                port
+            },
+            ws_reverse: {
+                ...(existing.ws_reverse || {}),
+                enable: false,
+                url: existing.ws_reverse?.url || ''
+            }
+        };
+
+        currentOnebotConfig = websocketConfig;
+
+        if (protocolInput) {
+            protocolInput.value = 'onebot';
+        }
+        if (hostInput) hostInput.value = host;
+        if (portInput) portInput.value = port;
+        if (tokenInput) tokenInput.value = token;
+
+        const hint = document.getElementById('onebot-mode-hint');
+        if (hint) {
+            const displayHost = (!host || host === '0.0.0.0' || host === '::' || host === '[::]') ? '127.0.0.1' : host;
+            hint.textContent = `已切换到 WebSocket模式：ws://${displayHost}:${port}/ws，适用于 NapCat / NoneBot 等 WebSocket Client。`;
+        }
+
+        saveCommConfigOnly();
+    }
+
+    function applyReverseWsModeAndSave() {
+        const existing = (currentOnebotConfig && typeof currentOnebotConfig === 'object')
+            ? JSON.parse(JSON.stringify(currentOnebotConfig))
+            : {};
+
+        const hostInput = document.getElementById('comm_host');
+        const tokenInput = document.getElementById('comm_token');
+        const protocolInput = document.getElementById('comm_protocol');
+
+        const host = (hostInput && hostInput.value.trim()) || existing.host || existing.http?.host || existing.ws?.host || '0.0.0.0';
+        const token = tokenInput ? tokenInput.value : (existing.access_token || '');
+        const reverseUrl = existing.ws_reverse?.url || 'ws://127.0.0.1:6199/ws';
+
+        const reverseConfig = {
+            ...existing,
+            access_token: token,
+            host,
+            port: Number.parseInt(existing.port, 10) || 3000,
+            http: {
+                ...(existing.http || {}),
+                enable: false,
+                host,
+                port: Number.parseInt(existing.http?.port, 10) || 3000
+            },
+            ws: {
+                ...(existing.ws || {}),
+                enable: false,
+                host,
+                port: Number.parseInt(existing.ws?.port, 10) || 3001
+            },
+            ws_reverse: {
+                ...(existing.ws_reverse || {}),
+                enable: true,
+                url: reverseUrl
+            }
+        };
+
+        currentOnebotConfig = reverseConfig;
+
+        if (protocolInput) {
+            protocolInput.value = 'onebot';
+        }
+        if (hostInput) hostInput.value = host;
+        if (tokenInput) tokenInput.value = token;
+
+        const hint = document.getElementById('onebot-mode-hint');
+        if (hint) {
+            hint.textContent = `已切换到反向模式：${reverseUrl}，适用于 AstrBot 等服务端反连场景。`;
+        }
+
+        saveCommConfigOnly();
+    }
+
     async function testDbConnection() {
         // Implement a simple check via query
         runSqlQuery('SELECT 1');
@@ -2518,6 +2839,14 @@
                 port: parseInt(document.getElementById('comm_port').value),
                 access_token: document.getElementById('comm_token').value
             };
+
+            const serverPortInput = document.getElementById('server_port');
+            const serverPort = Number.parseInt(serverPortInput ? serverPortInput.value : '', 10);
+            const launcherPayload = {
+                startup_self_check: !!document.getElementById('launcher_self_check')?.checked,
+                open_browser: !!document.getElementById('launcher_open_browser')?.checked,
+                startup_page: (document.getElementById('launcher_startup_page')?.value || '/control_panel').trim() || '/control_panel'
+            };
             
             // 3. API Keys
             const apiKeys = {};
@@ -2562,13 +2891,47 @@
             const payload = {
                 database: dbPayload,
                 api_keys: apiKeys,
-                coder_api: coderApiConfig
+                coder_api: coderApiConfig,
+                comm_protocol: proto === 'onebot' ? 'onebot' : 'unified',
+                server: {
+                    port: Number.isFinite(serverPort) ? serverPort : 8888
+                },
+                launcher: launcherPayload
             };
             
             if(proto === 'unified') {
                 payload.unified_api = commPayload;
             } else {
-                payload.onebot = commPayload;
+                const host = commPayload.host || '0.0.0.0';
+                const basePort = Number.isFinite(commPayload.port) ? commPayload.port : 3000;
+                const existing = (currentOnebotConfig && typeof currentOnebotConfig === 'object')
+                    ? JSON.parse(JSON.stringify(currentOnebotConfig))
+                    : {};
+
+                const onebotPayload = {
+                    ...existing,
+                    access_token: commPayload.access_token || existing.access_token || '',
+                    host,
+                    port: basePort,
+                    http: {
+                        ...(existing.http || {}),
+                        enable: (existing.http && typeof existing.http.enable === 'boolean') ? existing.http.enable : true,
+                        host,
+                        port: basePort
+                    },
+                    ws: {
+                        ...(existing.ws || {}),
+                        enable: !!(existing.ws && existing.ws.enable),
+                        host,
+                        port: (existing.ws && Number.isFinite(Number(existing.ws.port))) ? Number(existing.ws.port) : (basePort + 1)
+                    },
+                    ws_reverse: {
+                        ...(existing.ws_reverse || {}),
+                        enable: !!(existing.ws_reverse && existing.ws_reverse.enable),
+                        url: (existing.ws_reverse && existing.ws_reverse.url) ? existing.ws_reverse.url : ''
+                    }
+                };
+                payload.onebot = onebotPayload;
             }
 
             const res = await fetch('/api/config', {
@@ -2579,8 +2942,17 @@
             const result = await res.json();
             
             if(res.ok) {
-                 document.getElementById('cfg-status-msg').innerText = '✅ Global Config Saved';
+                  let statusText = '✅ Global Config Saved';
+                  const dbt = result.database_test;
+                  if (dbt) {
+                    const pingOk = !!(dbt.ping && dbt.ping.ok);
+                    const tcpOk = !!(dbt.tcp && dbt.tcp.ok);
+                    const loginOk = !!(dbt.db_login && dbt.db_login.ok);
+                    statusText += ` | DB Ping:${pingOk ? 'OK' : 'FAIL'} TCP:${tcpOk ? 'OK' : 'FAIL'} Login:${loginOk ? 'OK' : 'FAIL'}`;
+                  }
+                  document.getElementById('cfg-status-msg').innerText = statusText;
                  setTimeout(() => document.getElementById('cfg-status-msg').innerText = '', 3000);
+                  runGatewayDiagnostics();
             } else {
                  document.getElementById('cfg-status-msg').innerText = '❌ Error: ' + (result.error || 'Unknown');
             }
@@ -2649,6 +3021,18 @@
                 setChecked('wm-feature-plan-update', data.features.allow_plan_update);
                 setChecked('wm-feature-coder-tool', data.features.allow_coder_tool);
             }
+
+            if (data.reply_policy) {
+                const setValue = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (el && value !== undefined && value !== null) el.value = value;
+                };
+                setValue('wm-reply-group-mode', data.reply_policy.group_mode || 'mention_or_keyword');
+                setValue('wm-reply-private-mode', data.reply_policy.private_mode || 'always');
+                setValue('wm-reply-cooldown', data.reply_policy.cooldown_seconds ?? 10);
+                setValue('wm-bot-qq', data.reply_policy.bot_qq || '');
+                setValue('wm-reply-keywords', Array.isArray(data.reply_policy.keywords) ? data.reply_policy.keywords.join('\n') : '');
+            }
         } catch (e) {
             console.warn('loadWorkModeStatus failed', e);
         }
@@ -2684,32 +3068,7 @@
             openWorkModeModal('global_on');
             return;
         }
-
-        const password = document.getElementById('global-workmode-password')?.value || '';
-        if (!password) {
-            await showUnifiedActionModal({
-                title: '需要安全密码',
-                message: '请输入安全密码后再关闭全局工作模式。',
-                level: 'warning'
-            });
-            return;
-        }
-
-        const res = await fetch('/api/work_mode/toggle', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({scope: 'global', enable: false, password})
-        });
-        const data = await res.json();
-        if (!data.success) {
-            await showUnifiedActionModal({
-                title: '操作失败',
-                message: data.error || '关闭失败',
-                level: 'danger'
-            });
-            return;
-        }
-        loadWorkModeStatus();
+        openWorkModeModal('global_off');
     }
 
     function openWorkModeModal(action) {
@@ -2734,6 +3093,24 @@
 
     function getPasswordCharLength(password) {
         return Array.from(password || '').length;
+    }
+
+    async function requestWorkModePassword(actionLabel) {
+        const password = await showUnifiedActionModal({
+            title: '请输入安全密码',
+            message: `请先输入安全密码以${actionLabel}。`,
+            level: 'warning',
+            confirmText: '确认',
+            cancelText: '取消',
+            confirmClass: 'btn-warning',
+            input: {
+                type: 'password',
+                placeholder: '请输入安全密码',
+                errorText: '安全密码不能为空'
+            },
+            inputRequired: true
+        });
+        return password || null;
     }
 
     async function setWorkModePassword() {
@@ -2783,13 +3160,22 @@
     }
 
     async function saveWorkModeOptions() {
+        const keywordValue = (document.getElementById('wm-reply-keywords')?.value || '').trim();
+        const replyPolicy = {
+            group_mode: document.getElementById('wm-reply-group-mode')?.value || 'mention_or_keyword',
+            private_mode: document.getElementById('wm-reply-private-mode')?.value || 'always',
+            cooldown_seconds: Math.max(0, parseInt(document.getElementById('wm-reply-cooldown')?.value || '0', 10) || 0),
+            bot_qq: (document.getElementById('wm-bot-qq')?.value || '').trim(),
+            keywords: keywordValue ? keywordValue.split(/[\n,，;；]+/).map(item => item.trim()).filter(Boolean) : []
+        };
         const payload = {
             features: {
                 allow_file_write: !!document.getElementById('wm-feature-file-write')?.checked,
                 allow_code_exec: !!document.getElementById('wm-feature-code-exec')?.checked,
                 allow_plan_update: !!document.getElementById('wm-feature-plan-update')?.checked,
                 allow_coder_tool: !!document.getElementById('wm-feature-coder-tool')?.checked
-            }
+            },
+            reply_policy: replyPolicy
         };
         const res = await fetch('/api/work_mode/options', {
             method: 'POST',
@@ -2852,35 +3238,12 @@
             const current = document.getElementById('sandbox-workmode-badge')?.innerText === '开启';
             payload = {scope: 'sandbox', enable: !current};
         } else if (workModeAction === 'global_on') {
-            const password = document.getElementById('global-workmode-password')?.value || '';
-            const pwdLen = getPasswordCharLength(password);
-            if (!password) {
-                await showUnifiedActionModal({
-                    title: '需要安全密码',
-                    message: '请先输入安全密码。',
-                    level: 'warning'
-                });
-                return;
-            }
-            if (pwdLen < 6) {
-                await showUnifiedActionModal({
-                    title: '密码长度不足',
-                    message: `新安全密码至少 6 位，你当前输入的是 ${pwdLen} 位。`,
-                    level: 'warning'
-                });
-                return;
-            }
+            const password = await requestWorkModePassword('开启全局工作模式');
+            if (password === null) return;
             payload = {scope: 'global', enable: true, password};
         } else if (workModeAction === 'global_off') {
-            const password = document.getElementById('global-workmode-password')?.value || '';
-            if (!password) {
-                await showUnifiedActionModal({
-                    title: '需要安全密码',
-                    message: '关闭全局模式也需要安全密码。',
-                    level: 'warning'
-                });
-                return;
-            }
+            const password = await requestWorkModePassword('关闭全局工作模式');
+            if (password === null) return;
             payload = {scope: 'global', enable: false, password};
         }
 
@@ -3350,7 +3713,7 @@
 
     const AGENT_SUB_TAB_IDS = ['v-tasks-tab', 'v-mcp-tab', 'v-knowledge-tab', 'v-instructions-tab'];
     const EXTENSIONS_SUB_TAB_IDS = ['v-plugins-tab', 'v-persona-tab'];
-    const OPS_SUB_TAB_IDS = ['v-config-tab', 'v-env-tab', 'v-system-tab', 'v-database-tab', 'v-logs-tab', 'v-terminal-tab', 'v-gateway-tab'];
+    const OPS_SUB_TAB_IDS = ['v-config-tab', 'v-system-tab', 'v-database-tab', 'v-logs-tab', 'v-terminal-tab', 'v-gateway-tab'];
     let agentSubmenuCollapse = null;
     let extensionsSubmenuCollapse = null;
     let opsSubmenuCollapse = null;
@@ -3538,6 +3901,9 @@
                         if (mainChart) mainChart.resize();
                         if (diskChart) diskChart.resize();
                     }
+                    if (event.target.id === 'v-gateway-tab') {
+                        runGatewayDiagnostics();
+                    }
                 });
             });
 
@@ -3620,6 +3986,61 @@
             .catch(err => {
                 resultEl.innerHTML = '<span class="text-danger">Error: ' + err + '</span>';
             });
+    }
+
+    function _diagBadge(ok) {
+        return ok ? '<span class="badge bg-success">OK</span>' : '<span class="badge bg-danger">FAIL</span>';
+    }
+
+    function _diagLine(label, item) {
+        const ok = !!(item && item.ok);
+        const detail = (item && item.detail) ? String(item.detail) : '';
+        return `<div class="d-flex justify-content-between align-items-start border-bottom py-1">
+            <div class="me-2">${label}</div>
+            <div class="text-end">${_diagBadge(ok)} <span class="text-muted ms-2">${detail}</span></div>
+        </div>`;
+    }
+
+    async function runGatewayDiagnostics() {
+        const box = document.getElementById('gateway-diagnostics');
+        if (!box) return;
+        box.innerHTML = '<div class="text-muted"><div class="spinner-border spinner-border-sm me-2"></div>正在检测连接...</div>';
+
+        try {
+            const res = await fetch('/api/gateway/diagnose');
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                box.innerHTML = `<div class="text-danger">检测失败: ${(data && data.error) || res.statusText}</div>`;
+                return;
+            }
+
+            const adapter = data.adapter || {};
+            const unified = data.unified_api || {};
+            const onebot = data.onebot || {};
+            const onebotHttp = onebot.http || {};
+            const onebotWs = onebot.ws || {};
+
+            box.innerHTML = [
+                `<div class="fw-semibold mb-1">前端连通性</div>`,
+                _diagLine('Frontend Ping', data.frontend_ping),
+                `<div class="fw-semibold mt-2 mb-1">Adapter (${adapter.base_url || '未检测到'})</div>`,
+                _diagLine('Adapter TCP', adapter.tcp),
+                _diagLine('Adapter /health', adapter.health),
+                _diagLine('Adapter /v1/models', adapter.models),
+                `<div class="fw-semibold mt-2 mb-1">Unified API (${unified.base_url || '-'})</div>`,
+                _diagLine('Unified Ping', unified.ping),
+                _diagLine('Unified TCP', unified.tcp),
+                _diagLine('Unified /health', unified.health),
+                `<div class="fw-semibold mt-2 mb-1">OneBot</div>`,
+                `<div class="small text-muted mb-1">HTTP: ${onebotHttp.url || '未配置'} | WS: ${onebotWs.url || '未配置'}</div>`,
+                _diagLine('OneBot HTTP Ping', onebotHttp.ping),
+                _diagLine('OneBot HTTP TCP', onebotHttp.tcp),
+                _diagLine('OneBot WS Ping', onebotWs.ping),
+                _diagLine('OneBot WS TCP', onebotWs.tcp),
+            ].join('');
+        } catch (e) {
+            box.innerHTML = `<div class="text-danger">检测异常: ${e}</div>`;
+        }
     }
 
     function monitorLoop() {
@@ -4359,10 +4780,6 @@
         } catch(e) {
             logOutput.textContent = 'Error loading logs: ' + e;
         }
-    }
-
-    function runDiagnostics() {
-        window.open('/diagnosis_page', '_blank');
     }
 
 </script>

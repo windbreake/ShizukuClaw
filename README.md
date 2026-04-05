@@ -118,8 +118,23 @@
 ### 4. 统一API服务模式
 - 提供统一的API接口，整合多种AI功能
 - 支持图片识别和网络搜索功能
-- 可作为代理服务使用，支持API密钥验证
+
+### 5. NapCat / AstrBot 接入
+- 本项目同时兼容 NapCat 的 WebSocket Client 和 AstrBot 的 Reverse WebSocket
+- NapCat 优先推荐使用 WebSocket Client 模式：让 NapCat 连接到本项目的 OneBot WS 地址
+- 默认 OneBot WS 地址为 `ws://127.0.0.1:3001/ws`，这是给 NapCat WebSocket Client 连接用的
+- 如果你使用 AstrBot Reverse WS，则默认连接地址为 `ws://127.0.0.1:6199/ws`
+- 启用 token 时，NapCat / AstrBot 侧填写的 token 必须和本项目一致
+- NapCat 消息格式建议使用 `array`，这样图片、@、表情等消息段更稳定
+- 如果你的 NapCat 是 Docker 或远程部署，请把 host 改成对方实际可达的 IP 或容器名
+- 可作为代理服务使用，支持 API 密钥验证
 - 运行：`python src/unified_api.py`
+
+NapCat 填写建议：
+- WebSocket Client 模式下，连接地址填本项目的 OneBot WS 地址
+- 如果本项目监听默认配置，通常是 `ws://127.0.0.1:3001/ws`
+- 反向 WS 仅在你明确要让本项目主动连外部服务端时使用
+- 控制面板里也提供了一个一键 WebSocket模式 按钮，适合 NapCat / NoneBot 等客户端快速切换
 
 ---
 

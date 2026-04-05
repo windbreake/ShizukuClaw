@@ -7,7 +7,7 @@ import os
 
 def main():
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    config_path = os.path.join(project_root, 'data', 'config.json')
+    config_path = os.path.join(project_root, 'data', 'system_config.json')
 
     if not os.path.exists(config_path):
         print(f"Config not found: {config_path}")

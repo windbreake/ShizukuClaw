@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import os
+import socket
 import sys
 import time
 import subprocess
@@ -17,6 +18,8 @@ import mimetypes
 import datetime
 import hashlib
 import hmac
+import urllib.request
+import urllib.error
 mimetypes.add_type('application/javascript', '.js')
 mimetypes.add_type('text/css', '.css')
 mimetypes.add_type('text/html', '.html')
@@ -31,6 +34,10 @@ from logging.handlers import RotatingFileHandler
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.ai_chat_system import AIChatSystem
+try:
+    from src.reply_policy import default_reply_policy
+except ImportError:
+    from reply_policy import default_reply_policy
 from src.config import CONFIG, generate_system_prompt
 
 init(autoreset=True)
@@ -72,6 +79,80 @@ def _default_work_mode_features(existing: dict = None) -> dict:
         'allow_coder_tool': bool(existing.get('allow_coder_tool', True))
     }
 
+
+def _system_config_path() -> str:
+    return os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')), 'data', 'system_config.json')
+
+
+def _load_system_config() -> dict:
+    default_data = {
+        'server': {'port': 8888},
+        'launcher': {
+            'startup_self_check': True,
+            'open_browser': True,
+            'startup_page': '/control_panel'
+        },
+        'unified_api': {
+            'host': '0.0.0.0',
+            'port': 8000,
+            'access_token': 'neko-proxy-key-123'
+        },
+        'onebot': {
+            'host': '0.0.0.0',
+            'port': 3000,
+            'access_token': '',
+            'http': {
+                'enable': False,
+                'host': '0.0.0.0',
+                'port': 3000
+            },
+            'ws': {
+                'enable': True,
+                'host': '0.0.0.0',
+                'port': 3001
+            },
+            'ws_reverse': {
+                'enable': False,
+                'url': ''
+            }
+        },
+        'work_mode': {
+            'enabled': False,
+            'password_hash': '',
+            'sandbox_enabled': False,
+            'reply_policy': default_reply_policy({}),
+            'features': _default_work_mode_features({}),
+            'allowed_databases': ['catgirl_db']
+        },
+        'comm_protocol': 'unified'
+    }
+
+    path = _system_config_path()
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                for key, value in default_data.items():
+                    if isinstance(value, dict):
+                        if key not in loaded or not isinstance(loaded.get(key), dict):
+                            loaded[key] = value
+                        else:
+                            for child_key, child_value in value.items():
+                                loaded[key].setdefault(child_key, child_value)
+                    else:
+                        loaded.setdefault(key, value)
+                return loaded
+        except Exception:
+            pass
+    return default_data
+
+
+def _save_system_config(system_config: dict):
+    path = _system_config_path()
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(system_config, f, ensure_ascii=False, indent=2)
+
 def start_monitor_thread():
     """启动后台监控线程"""
     global _MONITOR_THREAD_STARTED
@@ -84,13 +165,13 @@ def start_monitor_thread():
         
         # 0. Fast Initialization
         try:
-           if not _LATEST_SYSTEM_STATS:
+            if not _LATEST_SYSTEM_STATS:
                 _LATEST_SYSTEM_STATS = {
-                   'cpu_percent': 0, 
-                   'memory_percent': 0, 
-                   'token_stats': {'total_tokens': 0},
-                   'uptime': "Loading...",
-                   'input_tokens': 0, 'output_tokens': 0
+                    'cpu_percent': 0, 
+                    'memory_percent': 0, 
+                    'token_stats': {'total_tokens': 0},
+                    'uptime': "Loading...",
+                    'input_tokens': 0, 'output_tokens': 0
                 }
         except: pass
 
@@ -309,9 +390,9 @@ def api_sandbox_execute():
         
         # Security check (basic)
         if 'os.system' in code or 'subprocess' in code:
-             # In a real sandbox, we'd block this. But user might want it.
-             # For now, let's allow it but log it.
-             app.logger.warning("Sandbox executing potentially dangerous code.")
+            # In a real sandbox, we'd block this. But user might want it.
+            # For now, let's allow it but log it.
+            app.logger.warning("Sandbox executing potentially dangerous code.")
 
         from src.agent_manager import AgentManager
         am = AgentManager() # This initializes a new manager (and sandbox)
@@ -355,7 +436,7 @@ logging.getLogger('werkzeug').addFilter(NoMonitoringFilter())
 
 def run_web_server():
     """沙箱聊天模式 (Flask服务 + 控制面板)"""
-    port = 8888
+    port = int(CONFIG.get('server', {}).get('port', 8888) or 8888)
     # 使用绝对路径指向 src/static 目录
     # base_dir/static_dir are now global
     
@@ -393,7 +474,216 @@ def run_web_server():
     #     return send_from_directory(static_dir, 'logs.html')
     # }
     
-    chat_system = AIChatSystem()
+    class _LazyChatSystemProxy:
+        """Lazily initialize AIChatSystem so DB/config errors won't block panel startup."""
+
+        def __init__(self):
+            self._instance = None
+
+        def _ensure(self):
+            if self._instance is not None:
+                return self._instance
+            try:
+                self._instance = AIChatSystem()
+                return self._instance
+            except Exception as exc:
+                raise RuntimeError(f"AIChatSystem unavailable: {exc}") from exc
+
+        def __getattr__(self, item):
+            inst = self._ensure()
+            return getattr(inst, item)
+
+    chat_system = _LazyChatSystemProxy()
+
+    def _build_degraded_plugin_status(error_message):
+        """Return a safe plugin status payload when AIChatSystem is unavailable."""
+        plugin_framework_cfg = {}
+        plugin_projects = []
+        try:
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            config_path = os.path.join(base_path, 'data', 'config.json')
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+                    plugin_framework_cfg = cfg.get('plugin_framework', {}) or {}
+
+            plugins_dir = os.path.join(base_path, 'data', 'plungin')
+            if os.path.isdir(plugins_dir):
+                for item in os.listdir(plugins_dir):
+                    if item.startswith('_'):
+                        continue
+                    project_dir = os.path.join(plugins_dir, item)
+                    if os.path.isdir(project_dir):
+                        plugin_projects.append(item)
+        except Exception:
+            pass
+
+        return {
+            'enabled': bool(plugin_framework_cfg.get('enabled', True)),
+            'loaded_plugins': [],
+            'plugins': [],
+            'commands': [],
+            'degraded': True,
+            'error': str(error_message),
+            'project_count': len(plugin_projects),
+            'projects': plugin_projects,
+        }
+
+    def _test_database_connectivity(db_cfg):
+        """Run ping/TCP/login checks after database configuration changes."""
+        result = {
+            'engine': str((db_cfg or {}).get('engine', 'mysql') or 'mysql'),
+            'host': str((db_cfg or {}).get('host', '') or ''),
+            'port': int((db_cfg or {}).get('port', 3306) or 3306),
+            'ping': {'ok': False, 'detail': '未执行'},
+            'tcp': {'ok': False, 'detail': '未执行'},
+            'db_login': {'ok': False, 'detail': '未执行'},
+            'overall_ok': False,
+        }
+
+        host = result['host']
+        port = result['port']
+        if not host:
+            result['ping'] = {'ok': False, 'detail': 'host 为空'}
+            result['tcp'] = {'ok': False, 'detail': 'host 为空'}
+            result['db_login'] = {'ok': False, 'detail': 'host 为空'}
+            return result
+
+        # 1) Ping test
+        try:
+            if platform.system().lower().startswith('win'):
+                cmd = ['ping', '-n', '1', '-w', '2000', host]
+            else:
+                cmd = ['ping', '-c', '1', '-W', '2', host]
+            ping_proc = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if ping_proc.returncode == 0:
+                result['ping'] = {'ok': True, 'detail': 'ping 成功'}
+            else:
+                detail = (ping_proc.stderr or ping_proc.stdout or '').strip()
+                result['ping'] = {'ok': False, 'detail': detail[:200] or 'ping 失败'}
+        except Exception as exc:
+            result['ping'] = {'ok': False, 'detail': f'ping 异常: {exc}'}
+
+        # 2) TCP test
+        try:
+            with socket.create_connection((host, port), timeout=3):
+                result['tcp'] = {'ok': True, 'detail': f'TCP {host}:{port} 可达'}
+        except Exception as exc:
+            result['tcp'] = {'ok': False, 'detail': f'TCP 连接失败: {exc}'}
+
+        # 3) DB login handshake
+        try:
+            from src.database import get_connection
+            conn = get_connection()
+            if conn:
+                conn.close()
+                result['db_login'] = {'ok': True, 'detail': '数据库登录成功'}
+            else:
+                result['db_login'] = {'ok': False, 'detail': '数据库登录失败'}
+        except Exception as exc:
+            result['db_login'] = {'ok': False, 'detail': f'数据库登录异常: {exc}'}
+
+        result['overall_ok'] = bool(result['tcp']['ok'] and result['db_login']['ok'])
+        return result
+
+    def _normalize_onebot_config(onebot_cfg):
+        """Support both legacy and structured OneBot config."""
+        cfg = onebot_cfg if isinstance(onebot_cfg, dict) else {}
+        host = str(cfg.get('host', '0.0.0.0') or '0.0.0.0')
+        port = int(cfg.get('port', 3000) or 3000)
+        token = str(cfg.get('access_token', '') or '')
+
+        http_cfg = cfg.get('http', {}) if isinstance(cfg.get('http', {}), dict) else {}
+        ws_cfg = cfg.get('ws', {}) if isinstance(cfg.get('ws', {}), dict) else {}
+        rev_cfg = cfg.get('ws_reverse', {}) if isinstance(cfg.get('ws_reverse', {}), dict) else {}
+
+        if not http_cfg:
+            http_cfg = {'enable': True, 'host': host, 'port': port}
+        if not ws_cfg:
+            ws_cfg = {'enable': False, 'host': host, 'port': port + 1}
+        if not rev_cfg:
+            rev_cfg = {'enable': False, 'url': ''}
+
+        http_cfg.setdefault('enable', True)
+        http_cfg.setdefault('host', host)
+        http_cfg.setdefault('port', port)
+
+        ws_cfg.setdefault('enable', False)
+        ws_cfg.setdefault('host', host)
+        ws_cfg.setdefault('port', port + 1)
+
+        rev_cfg.setdefault('enable', False)
+        rev_cfg.setdefault('url', '')
+
+        return {
+            'access_token': token,
+            'http': http_cfg,
+            'ws': ws_cfg,
+            'ws_reverse': rev_cfg,
+        }
+
+    def _normalize_probe_host(host):
+        host = str(host or '').strip()
+        if host in ('', '0.0.0.0', '::'):
+            return '127.0.0.1'
+        return host
+
+    def _run_host_ping(host):
+        if not host:
+            return {'ok': False, 'detail': 'host 为空'}
+        host = _normalize_probe_host(host)
+        try:
+            if platform.system().lower().startswith('win'):
+                cmd = ['ping', '-n', '1', '-w', '1200', host]
+            else:
+                cmd = ['ping', '-c', '1', '-W', '1', host]
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+            if proc.returncode == 0:
+                return {'ok': True, 'detail': 'ping 成功'}
+            detail = (proc.stderr or proc.stdout or '').strip()
+            return {'ok': False, 'detail': detail[:200] or 'ping 失败'}
+        except Exception as exc:
+            return {'ok': False, 'detail': f'ping 异常: {exc}'}
+
+    def _check_tcp(host, port, timeout=3):
+        host = _normalize_probe_host(host)
+        try:
+            with socket.create_connection((host, int(port)), timeout=max(0.1, float(timeout))):
+                return {'ok': True, 'detail': f'TCP {host}:{port} 可达'}
+        except Exception as exc:
+            return {'ok': False, 'detail': f'TCP 连接失败: {exc}'}
+
+    def _check_http_json(url, timeout=3):
+        try:
+            req = urllib.request.Request(url, method='GET')
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode('utf-8', errors='replace')
+                status = int(getattr(resp, 'status', 200) or 200)
+                return {
+                    'ok': 200 <= status < 300,
+                    'status': status,
+                    'detail': raw[:240]
+                }
+        except urllib.error.HTTPError as exc:
+            return {'ok': False, 'status': int(exc.code), 'detail': str(exc)}
+        except Exception as exc:
+            return {'ok': False, 'status': 0, 'detail': str(exc)}
+
+    def _check_http_candidates(base_url, paths, timeout=3):
+        """Try multiple HTTP probe paths and return the first successful result."""
+        base = str(base_url or '').rstrip('/')
+        last_result = None
+        for path in paths:
+            suffix = path if str(path).startswith('/') else f'/{path}'
+            url = f"{base}{suffix}"
+            result = _check_http_json(url, timeout=timeout)
+            detail = str(result.get('detail', '') or '').strip()
+            result['detail'] = f"{suffix} {detail}".strip()
+            result['probe_url'] = url
+            if result.get('ok'):
+                return result
+            last_result = result
+        return last_result or {'ok': False, 'status': 0, 'detail': '未执行'}
 
     # 配置日志写入 app.log
     log_handler = RotatingFileHandler(CONFIG['server']['log_file'], maxBytes=1e6, backupCount=2, encoding='utf-8')
@@ -516,7 +806,8 @@ def run_web_server():
                 'global_enabled': bool(wm.get('enabled', False)),
                 'sandbox_enabled': bool(wm.get('sandbox_enabled', False)),
                 'has_password': bool(wm.get('password_hash')),
-                'features': _default_work_mode_features(wm.get('features', {}))
+                'features': _default_work_mode_features(wm.get('features', {})),
+                'reply_policy': default_reply_policy(wm.get('reply_policy', {}))
             })
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
@@ -530,26 +821,20 @@ def run_web_server():
             if len(password) < 6:
                 return jsonify({'success': False, 'error': '安全密码至少 6 位'}), 400
 
-            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-            config_path = os.path.join(base_path, 'data', 'config.json')
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config_data = json.load(f)
+            system_config = _load_system_config()
+            if 'work_mode' not in system_config:
+                system_config['work_mode'] = {}
 
-            if 'work_mode' not in config_data:
-                config_data['work_mode'] = {}
-
-            existing_hash = config_data['work_mode'].get('password_hash', '')
+            existing_hash = system_config['work_mode'].get('password_hash', '')
             if existing_hash and not _verify_password(current_password, existing_hash):
                 return jsonify({'success': False, 'error': '旧密码错误，无法修改'}), 403
 
-            config_data['work_mode']['password_hash'] = _hash_password(password)
-
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config_data, f, ensure_ascii=False, indent=2)
+            system_config['work_mode']['password_hash'] = _hash_password(password)
+            _save_system_config(system_config)
 
             if 'work_mode' not in CONFIG:
                 CONFIG['work_mode'] = {}
-            CONFIG['work_mode']['password_hash'] = config_data['work_mode']['password_hash']
+            CONFIG['work_mode']['password_hash'] = system_config['work_mode']['password_hash']
 
             return jsonify({'success': True, 'message': '安全密码已设置'})
         except Exception as e:
@@ -561,24 +846,21 @@ def run_web_server():
             data = request.get_json() or {}
             incoming = data.get('features', {})
             features = _default_work_mode_features(incoming)
+            reply_policy = default_reply_policy(data.get('reply_policy', {}))
 
-            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-            config_path = os.path.join(base_path, 'data', 'config.json')
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config_data = json.load(f)
-
-            if 'work_mode' not in config_data:
-                config_data['work_mode'] = {}
-            config_data['work_mode']['features'] = features
-
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config_data, f, ensure_ascii=False, indent=2)
+            system_config = _load_system_config()
+            if 'work_mode' not in system_config:
+                system_config['work_mode'] = {}
+            system_config['work_mode']['features'] = features
+            system_config['work_mode']['reply_policy'] = reply_policy
+            _save_system_config(system_config)
 
             if 'work_mode' not in CONFIG:
                 CONFIG['work_mode'] = {}
             CONFIG['work_mode']['features'] = features
+            CONFIG['work_mode']['reply_policy'] = reply_policy
 
-            return jsonify({'success': True, 'features': features})
+            return jsonify({'success': True, 'features': features, 'reply_policy': reply_policy})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -620,11 +902,15 @@ def run_web_server():
                 if 'work_mode' not in CONFIG:
                     CONFIG['work_mode'] = {}
                 CONFIG['work_mode']['sandbox_enabled'] = enable
+                system_config = _load_system_config()
+                system_config.setdefault('work_mode', {})['sandbox_enabled'] = enable
+                _save_system_config(system_config)
                 return jsonify({'success': True, 'scope': 'sandbox', 'enabled': enable})
 
             # Global scope requires password verification
-            wm = CONFIG.get('work_mode', {})
-            saved_hash = wm.get('password_hash', '')
+            system_config = _load_system_config()
+            wm = system_config.setdefault('work_mode', {})
+            saved_hash = wm.get('password_hash', '') or CONFIG.get('work_mode', {}).get('password_hash', '')
             if not saved_hash:
                 return jsonify({'success': False, 'error': '请先在设置中配置安全密码'}), 400
 
@@ -632,24 +918,16 @@ def run_web_server():
             if not _verify_password(password, saved_hash):
                 return jsonify({'success': False, 'error': '安全密码错误'}), 403
 
-            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-            config_path = os.path.join(base_path, 'data', 'config.json')
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config_data = json.load(f)
-
-            if 'work_mode' not in config_data:
-                config_data['work_mode'] = {}
-            config_data['work_mode']['enabled'] = enable
-            if 'features' not in config_data['work_mode']:
-                config_data['work_mode']['features'] = _default_work_mode_features({})
-
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config_data, f, ensure_ascii=False, indent=2)
+            wm['enabled'] = enable
+            wm['password_hash'] = saved_hash
+            wm['features'] = _default_work_mode_features(wm.get('features', {}))
+            _save_system_config(system_config)
 
             if 'work_mode' not in CONFIG:
                 CONFIG['work_mode'] = {}
             CONFIG['work_mode']['enabled'] = enable
-            CONFIG['work_mode']['features'] = _default_work_mode_features(CONFIG['work_mode'].get('features', {}))
+            CONFIG['work_mode']['password_hash'] = saved_hash
+            CONFIG['work_mode']['features'] = _default_work_mode_features(wm.get('features', {}))
 
             return jsonify({'success': True, 'scope': 'global', 'enabled': enable})
         except Exception as e:
@@ -659,13 +937,120 @@ def run_web_server():
     def adapter_console():
         return app.send_static_file('adapter_console.html')
 
+    @app.route('/api/gateway/diagnose', methods=['GET'])
+    def api_gateway_diagnose():
+        """Unified connectivity diagnostics for frontend integrations."""
+        try:
+            from src.config import CONFIG as LIVE_CONFIG
+
+            unified_cfg = LIVE_CONFIG.get('unified_api', {}) or {}
+            onebot_cfg = _normalize_onebot_config(LIVE_CONFIG.get('onebot', {}) or {})
+
+            adapter_candidates = []
+            configured_adapter_port = None
+            service_ports = LIVE_CONFIG.get('system_config', {}).get('service_ports', {})
+            if isinstance(service_ports, dict):
+                try:
+                    configured_adapter_port = int(service_ports.get('adapter'))
+                except Exception:
+                    configured_adapter_port = None
+
+            if configured_adapter_port:
+                adapter_candidates.append(configured_adapter_port)
+            adapter_candidates.extend([5000, 5001, 5002, 5003])
+
+            seen = set()
+            dedup_candidates = []
+            for p in adapter_candidates:
+                if p in seen:
+                    continue
+                seen.add(p)
+                dedup_candidates.append(p)
+
+            adapter_status = {
+                'port': None,
+                'tcp': {'ok': False, 'detail': '未执行'},
+                'health': {'ok': False, 'status': 0, 'detail': '未执行'},
+                'models': {'ok': False, 'status': 0, 'detail': '未执行'},
+            }
+
+            for p in dedup_candidates:
+                tcp = _check_tcp('127.0.0.1', p, timeout=0.35)
+                if not tcp['ok']:
+                    continue
+                health = _check_http_json(f'http://127.0.0.1:{p}/health', timeout=1.0)
+                models = _check_http_json(f'http://127.0.0.1:{p}/v1/models', timeout=1.0)
+                adapter_status = {'port': p, 'tcp': tcp, 'health': health, 'models': models}
+                if health.get('ok') or models.get('ok'):
+                    break
+
+            unified_host = str(unified_cfg.get('host', '127.0.0.1') or '127.0.0.1')
+            unified_port = int(unified_cfg.get('port', 8000) or 8000)
+            unified_check_host = '127.0.0.1' if unified_host in ('0.0.0.0', '::') else unified_host
+
+            onebot_http = onebot_cfg.get('http', {})
+            onebot_ws = onebot_cfg.get('ws', {})
+            onebot_rev = onebot_cfg.get('ws_reverse', {})
+
+            http_enabled = bool(onebot_http.get('enable', True))
+            ws_enabled = bool(onebot_ws.get('enable', False))
+            onebot_http_host = _normalize_probe_host(onebot_http.get('host', '127.0.0.1'))
+            onebot_ws_host = _normalize_probe_host(onebot_ws.get('host', '127.0.0.1'))
+            onebot_http_port = int(onebot_http.get('port', 3000) or 3000)
+            onebot_ws_port = int(onebot_ws.get('port', 3001) or 3001)
+
+            onebot_http_ping = _run_host_ping(onebot_http_host) if http_enabled else {'ok': True, 'detail': '未启用'}
+            onebot_http_tcp = _check_tcp(onebot_http_host, onebot_http_port, timeout=0.8) if http_enabled else {'ok': True, 'detail': '未启用'}
+            onebot_ws_ping = _run_host_ping(onebot_ws_host) if ws_enabled else {'ok': True, 'detail': '未启用'}
+            onebot_ws_tcp = _check_tcp(onebot_ws_host, onebot_ws_port, timeout=0.8) if ws_enabled else {'ok': True, 'detail': '未启用'}
+
+            target_host = (request.args.get('target_host') or '127.0.0.1').strip()
+
+            unified_base = f'http://{unified_check_host}:{unified_port}'
+            result = {
+                'success': True,
+                'timestamp': int(time.time()),
+                'frontend_ping': _run_host_ping(target_host),
+                'adapter': {
+                    'base_url': f"http://127.0.0.1:{adapter_status['port']}/v1" if adapter_status['port'] else '',
+                    **adapter_status,
+                },
+                'unified_api': {
+                    'base_url': f"{unified_base}/v1",
+                    'ping': _run_host_ping(unified_check_host),
+                    'tcp': _check_tcp(unified_check_host, unified_port, timeout=0.8),
+                    'health': _check_http_candidates(
+                        unified_base,
+                        ['/health', '/v1/health', '/v1/models'],
+                        timeout=1.2
+                    ),
+                },
+                'onebot': {
+                    'http': {
+                        'enabled': http_enabled,
+                        'url': f"http://{onebot_http_host}:{onebot_http_port}",
+                        'ping': onebot_http_ping,
+                        'tcp': onebot_http_tcp,
+                    },
+                    'ws': {
+                        'enabled': ws_enabled,
+                        'url': f"ws://{onebot_ws_host}:{onebot_ws_port}",
+                        'ping': onebot_ws_ping,
+                        'tcp': onebot_ws_tcp,
+                    },
+                    'ws_reverse': {
+                        'enabled': bool(onebot_rev.get('enable', False)),
+                        'url': str(onebot_rev.get('url', '') or ''),
+                    },
+                }
+            }
+            return jsonify(result)
+        except Exception as exc:
+            return jsonify({'success': False, 'error': str(exc)}), 500
+
     @app.route('/terminal_page')
     def terminal_page():
         return app.send_static_file('terminal_chat.html')
-
-    @app.route('/diagnosis_page')
-    def diagnosis_page():
-        return app.send_static_file('diagnosis.html')
 
     @app.route('/db_console')
     def db_console():
@@ -705,32 +1090,6 @@ def run_web_server():
         except Exception as e:
             app.logger.error(f"获取监控数据时出错: {str(e)}", exc_info=True)
             return jsonify({'error': str(e)}), 500
-
-    @app.route('/api/diagnosis')
-    def api_diagnosis():
-        import re
-        try:
-            # Run diagnose.py from src
-            # base_dir is src/
-            project_root = os.path.dirname(base_dir)
-            script_path = os.path.join('src', 'diagnose.py')
-            
-            result = subprocess.run([sys.executable, script_path], capture_output=True, text=True, cwd=project_root)
-            output = result.stdout + result.stderr
-            
-            # Strip ANSI codes
-            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-            try:
-                raw_output = (result.stdout or "") + (result.stderr or "")
-                clean_output = ansi_escape.sub('', raw_output)
-            except Exception as e:
-                clean_output = f"Error processing output: {str(e)}"
-            
-            # Simple formatting for HTML
-            html_output = f"<pre>{clean_output}</pre>"
-            return html_output
-        except Exception as e:
-            return f"<span class='text-danger'>Error running diagnosis: {str(e)}</span>"
 
     @app.route('/api/agent/status')
     def api_agent_status():
@@ -777,9 +1136,11 @@ def run_web_server():
     def api_plugins_status():
         try:
             status = chat_system.get_plugin_status()
+            status['degraded'] = False
             return jsonify({'success': True, 'status': status})
         except Exception as e:
-            return jsonify({'success': False, 'error': str(e)}), 500
+            degraded = _build_degraded_plugin_status(str(e))
+            return jsonify({'success': True, 'status': degraded, 'warning': '插件系统不可用，已返回降级状态'})
 
     @app.route('/api/plugins/reload', methods=['POST'])
     def api_plugins_reload():
@@ -908,8 +1269,9 @@ def run_web_server():
     @app.route('/api/records')
     def api_records():
         from src.database import DatabaseManager
-        db_manager = DatabaseManager()
+        db_manager = None
         try:
+            db_manager = DatabaseManager()
             # 减少默认查询数量，提高响应速度
             limit = min(int(request.args.get('limit', 50)), 100)  # 限制最大100条记录
             persona_filename = (request.args.get('persona_filename') or '').strip()
@@ -919,50 +1281,57 @@ def run_web_server():
             app.logger.error(f"获取聊天记录时出错: {str(e)}")
             return jsonify([]) 
         finally:
-            db_manager.close()
+            if db_manager:
+                db_manager.close()
 
     @app.route('/api/delete_record', methods=['POST'])
     def api_del_record():
         data = request.get_json()
         rid = data.get('id')
         from src.database import DatabaseManager
-        db_manager = DatabaseManager()
+        db_manager = None
         try:
+            db_manager = DatabaseManager()
             db_manager.delete_chat_record(rid)
             return jsonify({'message': 'ok'})
         except Exception as e:
             app.logger.error(f"删除聊天记录时出错: {str(e)}")
             return jsonify({'message': 'error'}), 500
         finally:
-            db_manager.close()
+            if db_manager:
+                db_manager.close()
 
     @app.route('/api/clear_records', methods=['POST'])
     def api_clear():
         from src.database import DatabaseManager
-        db_manager = DatabaseManager()
+        db_manager = None
         try:
+            db_manager = DatabaseManager()
             db_manager.clear_chat_history()
             return jsonify({'message': 'cleared'})
         except Exception as e:
             app.logger.error(f"清空聊天记录时出错: {str(e)}")
             return jsonify({'message': 'error'}), 500
         finally:
-            db_manager.close()
+            if db_manager:
+                db_manager.close()
 
     @app.route('/api/delete_first_n', methods=['POST'])
     def api_del_n():
         data = request.get_json()
         n = data.get('n', 0)
         from src.database import DatabaseManager
-        db_manager = DatabaseManager()
+        db_manager = None
         try:
+            db_manager = DatabaseManager()
             db_manager.delete_first_n_records(n)
             return jsonify({'message': 'deleted_first_n'})
         except Exception as e:
             app.logger.error(f"删除前N条聊天记录时出错: {str(e)}")
             return jsonify({'message': 'error'}), 500
         finally:
-            db_manager.close()
+            if db_manager:
+                db_manager.close()
 
     @app.route('/api/database/query', methods=['POST'])
     def api_db_query():
@@ -1381,6 +1750,7 @@ def run_web_server():
             # 获取项目根目录
             base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
             config_path = os.path.join(base_path, 'data', 'config.json')
+            system_config = _load_system_config()
             
             # 读取配置文件
             with open(config_path, 'r', encoding='utf-8') as f:
@@ -1403,6 +1773,20 @@ def run_web_server():
             config_data['database']['user'] = db_cfg.get('user', '')
             config_data['database']['password'] = db_cfg.get('password', '')
             config_data['database']['database'] = db_cfg.get('database', '')
+
+            config_data['server'] = system_config.get('server', {})
+            config_data['launcher'] = system_config.get('launcher', {})
+            config_data['unified_api'] = system_config.get('unified_api', {})
+            config_data['onebot'] = system_config.get('onebot', {})
+            config_data['comm_protocol'] = str(system_config.get('comm_protocol', 'unified') or 'unified').lower()
+            config_data['work_mode'] = {
+                'enabled': bool(system_config.get('work_mode', {}).get('enabled', False)),
+                'has_password': bool(system_config.get('work_mode', {}).get('password_hash', '')),
+                'sandbox_enabled': bool(system_config.get('work_mode', {}).get('sandbox_enabled', False)),
+                'reply_policy': default_reply_policy(system_config.get('work_mode', {}).get('reply_policy', {})),
+                'features': _default_work_mode_features(system_config.get('work_mode', {}).get('features', {})),
+                'allowed_databases': system_config.get('work_mode', {}).get('allowed_databases', ['catgirl_db'])
+            }
 
             # 从数据库获取角色信息
             try:
@@ -1430,13 +1814,6 @@ def run_web_server():
             except Exception as e:
                 print(f"获取角色信息时出错: {e}")
 
-            # Work mode: never expose password hash to frontend
-            wm = config_data.get('work_mode', {})
-            config_data['work_mode'] = {
-                'enabled': bool(wm.get('enabled', False)),
-                'has_password': bool(wm.get('password_hash', ''))
-            }
-            
             return jsonify(config_data)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
@@ -1450,6 +1827,7 @@ def run_web_server():
             
             # 获取请求数据
             new_config = request.get_json()
+            system_config = _load_system_config()
 
             # 先合并数据库配置，后续写库/读角色使用最新 engine
             if new_config and 'database' in new_config:
@@ -1465,6 +1843,33 @@ def run_web_server():
                     AIChatSystem.rebind_database()
                 except Exception as ex:
                     app.logger.warning('AIChatSystem.rebind_database failed: %s', ex)
+
+            if new_config and 'server' in new_config:
+                system_config['server'] = new_config['server']
+            if new_config and 'launcher' in new_config:
+                system_config['launcher'] = new_config['launcher']
+            if new_config and 'unified_api' in new_config:
+                system_config['unified_api'] = new_config['unified_api']
+            if new_config and 'onebot' in new_config:
+                system_config['onebot'] = new_config['onebot']
+            if new_config and 'work_mode' in new_config:
+                incoming_work_mode = new_config['work_mode'] or {}
+                current_work_mode = system_config.get('work_mode', {})
+                current_work_mode['enabled'] = bool(incoming_work_mode.get('enabled', current_work_mode.get('enabled', False)))
+                current_work_mode['sandbox_enabled'] = bool(incoming_work_mode.get('sandbox_enabled', current_work_mode.get('sandbox_enabled', False)))
+                if 'password_hash' in incoming_work_mode:
+                    current_work_mode['password_hash'] = incoming_work_mode.get('password_hash', current_work_mode.get('password_hash', ''))
+                if 'reply_policy' in incoming_work_mode:
+                    current_work_mode['reply_policy'] = default_reply_policy(incoming_work_mode.get('reply_policy', {}))
+                if 'features' in incoming_work_mode:
+                    current_work_mode['features'] = _default_work_mode_features(incoming_work_mode.get('features', {}))
+                if 'allowed_databases' in incoming_work_mode:
+                    current_work_mode['allowed_databases'] = incoming_work_mode.get('allowed_databases', current_work_mode.get('allowed_databases', ['catgirl_db']))
+                system_config['work_mode'] = current_work_mode
+            if new_config and 'comm_protocol' in new_config:
+                proto = str(new_config.get('comm_protocol', '') or '').strip().lower()
+                system_config['comm_protocol'] = 'onebot' if proto == 'onebot' else 'unified'
+            _save_system_config(system_config)
 
             # 读取现有配置
             with open(config_path, 'r', encoding='utf-8') as f:
@@ -1544,6 +1949,24 @@ def run_web_server():
                     CONFIG['unified_api'] = {}
                 CONFIG['unified_api'].update(new_config['unified_api'])
 
+            if 'server' in new_config:
+                if 'server' not in CONFIG:
+                    CONFIG['server'] = {}
+                CONFIG['server'].update(new_config['server'])
+
+            if 'launcher' in new_config:
+                if 'launcher' not in CONFIG:
+                    CONFIG['launcher'] = {}
+                CONFIG['launcher'].update(new_config['launcher'])
+
+            if 'onebot' in new_config:
+                if 'onebot' not in CONFIG:
+                    CONFIG['onebot'] = {}
+                CONFIG['onebot'].update(new_config['onebot'])
+
+            if 'work_mode' in new_config:
+                CONFIG['work_mode'] = system_config.get('work_mode', CONFIG.get('work_mode', {}))
+
             # 更新 Coder API 配置（在内存中）
             if 'coder_api' in new_config:
                 CONFIG['coder_api'] = new_config['coder_api']
@@ -1557,6 +1980,10 @@ def run_web_server():
 
             # database.json 已在请求开头写入；此处不再重复
 
+            db_test_result = None
+            if new_config and 'database' in new_config:
+                db_test_result = _test_database_connectivity(new_config.get('database', {}))
+
             # 更新 Persona (Separated)
             if 'character' in new_config:
                 active_persona = config_data.get('active_persona', 'shizuku.json')
@@ -1565,7 +1992,7 @@ def run_web_server():
                 # Try to load existing persona to preserve meta/system_prompt
                 current_persona = {}
                 if os.path.exists(persona_path):
-                     with open(persona_path, 'r', encoding='utf-8') as f:
+                    with open(persona_path, 'r', encoding='utf-8') as f:
                         current_persona = json.load(f)
                 
                 # Update character section
@@ -1579,7 +2006,10 @@ def run_web_server():
                 template = current_persona.get('system_prompt', {}).get('template', CONFIG.get('system_prompt_template', ''))
                 CONFIG['system_prompt'] = generate_system_prompt(new_config['character'], template)
             
-            return jsonify({'message': '配置更新成功'})
+            response_payload = {'message': '配置更新成功'}
+            if db_test_result is not None:
+                response_payload['database_test'] = db_test_result
+            return jsonify(response_payload)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
@@ -1599,8 +2029,8 @@ def run_web_server():
             config_path = os.path.join(base_path, 'data', 'config.json')
             active = "shizuku.json"
             if os.path.exists(config_path):
-                 with open(config_path, 'r', encoding='utf-8') as f:
-                     active = json.load(f).get('active_persona', 'shizuku.json')
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    active = json.load(f).get('active_persona', 'shizuku.json')
 
             for file in files:
                 try:
@@ -1630,7 +2060,7 @@ def run_web_server():
             with open(path, 'r', encoding='utf-8') as f:
                 return jsonify(json.load(f))
         except Exception as e:
-             return jsonify({'error': str(e)}), 500
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/personas', methods=['POST'])
     def create_persona():
@@ -1672,7 +2102,7 @@ def run_web_server():
             
             return jsonify({'success': True})
         except Exception as e:
-             return jsonify({'error': str(e)}), 500
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/personas/<filename>', methods=['DELETE'])
     def delete_persona(filename):
@@ -1682,7 +2112,7 @@ def run_web_server():
             os.remove(path)
             return jsonify({'success': True})
         except Exception as e:
-             return jsonify({'error': str(e)}), 500
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/personas/open-folder')
     def open_persona_folder():

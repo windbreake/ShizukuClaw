@@ -188,3 +188,48 @@
 2026-04-04 17:48:42,337 - INFO - 服务器启动于 http://localhost:8888
 2026-04-04 17:49:25,174 - INFO - 服务器启动于 http://localhost:8888
 2026-04-04 18:06:11,742 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 22:34:02,363 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 22:59:30,066 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:00:31,483 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:00:50,675 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:02:24,394 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:08:21,970 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:09:46,909 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:11:13,074 - WARNING - AIChatSystem.rebind_database failed: 2005 (HY000): Unknown MySQL server host 'localhost1' (11001)
+2026-04-05 23:11:14,533 - WARNING - AIChatSystem.rebind_database failed: 2005 (HY000): Unknown MySQL server host 'localhost1' (11001)
+2026-04-05 23:19:11,153 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:19:20,674 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:19:30,738 - ERROR - 获取聊天记录时出错: 2005 (HY000): Unknown MySQL server host 'localhost1' (11001)
+2026-04-05 23:21:02,791 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:21:08,257 - ERROR - 获取聊天记录时出错: 2005 (HY000): Unknown MySQL server host 'localhost1' (11001)
+2026-04-05 23:21:14,291 - ERROR - 获取聊天记录时出错: 2005 (HY000): Unknown MySQL server host 'localhost1' (11001)
+2026-04-05 23:21:17,288 - ERROR - 获取聊天记录时出错: 2005 (HY000): Unknown MySQL server host 'localhost1' (11001)
+2026-04-05 23:37:37,925 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:40:52,374 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:43:25,933 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:47:45,647 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:51:41,073 - INFO - 服务器启动于 http://localhost:8888
+2026-04-05 23:57:13,731 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 00:06:21,461 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 00:10:18,702 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 00:30:56,475 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 00:53:55,179 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 01:02:01,079 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 01:09:27,957 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 01:11:32,204 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 01:26:37,265 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 01:30:29,803 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 01:37:52,598 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 01:49:45,927 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 01:57:30,563 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 02:01:04,541 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 02:02:33,928 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 02:06:51,073 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 02:10:58,928 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 02:13:57,665 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 02:22:35,537 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 02:34:16,755 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 02:44:34,634 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 03:04:41,042 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 03:09:55,290 - INFO - 服务器启动于 http://localhost:8888
+2026-04-06 03:16:33,761 - INFO - 服务器启动于 http://localhost:8888

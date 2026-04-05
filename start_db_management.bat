@@ -1,13 +1,15 @@
 @echo off
-set PORT=8082
-set URL=http://localhost:%PORT%/db_console
+setlocal
+chcp 65001 > nul
 
-REM 启动Web服务器
 cd /d "%~dp0"
-start "WebServer" python -c "import sys; sys.path.insert(0, '.'); from src.web_server import run_web_server; run_web_server()"
+set PYTHON_EXE=python
 
-REM 等待服务器启动
-timeout /t 5 /nobreak >nul
+echo Starting DB management page via unified launcher...
+echo Running startup self-check based on launcher settings.
+echo.
 
-REM 打开数据库管理页面
-start "" %URL%
+set DEFAULT_PAGE=/db_console
+%PYTHON_EXE% src\launcher_boot.py
+
+endlocal

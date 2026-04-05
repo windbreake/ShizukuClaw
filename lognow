@@ -1,0 +1,185 @@
+Checking dependencies...
+
+==============================================
+  🐱 ShizukuNyaBot - Web Control Panel
+==============================================
+
+正在启动 Web 控制面板...
+服务启动后将自动打开浏览器访问: http://localhost:8888/control_panel
+
+按 Ctrl+C 可以停止服务
+
+标准输出编码: utf-8
+标准错误编码: utf-8
+文件系统编码: utf-8
+数据库连接成功
+[crawler.kemono] startup
+
+🌐 沙箱聊天模式已启动: http://localhost:8888
+[2026-04-05 22:34:02,363] INFO in web_server: 服务器启动于 http://localhost:8888
+ * Serving Flask app 'src.web_server'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8888
+ * Running on http://198.18.0.1:8888
+Press CTRL+C to quit
+127.0.0.1 - - [05/Apr/2026 22:34:04] "GET /control_panel HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:04] "GET /static/css/style.css HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:05] "GET /adapter_console HTTP/1.1" 304 -
+127.0.0.1 - - [05/Apr/2026 22:34:05] "GET /static/js/app.js HTTP/1.1" 304 -
+127.0.0.1 - - [05/Apr/2026 22:34:05] "GET /api/systems/system-status HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:05] "GET /api/work_mode/status HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:05] "GET /api/realtime_search/subscriptions HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:05] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:05] "GET /api/plugins/status HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:05] "GET /api/config HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:05] "GET /api/records?limit=50 HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:05] "GET /favicon.ico HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:05] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:05] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:06] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:06] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:06] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:06] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:06] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:06] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:06] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:07] "GET /api/records?limit=50&persona_filename=shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:07] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:07] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:10] "GET /api/config HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:10] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:10] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:10] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:10] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:10] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:11] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:11] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:14] "GET /api/records?limit=50 HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:15] "GET /api/logs HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:20] "GET /api/config HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:20] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:21] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:21] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:21] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:21] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:22] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:22] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:23] "GET /api/plugins/status HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:23] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:24] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:24] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:24] "GET /api/plugins/status HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:24] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:24] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:25] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:25] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:39] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:40] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:40] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:40] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:40] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:41] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:41] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:41] "GET /api/systems/instructions HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:41] "GET /api/systems/personalities HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:44] "GET /api/records?limit=50 HTTP/1.1" 200 -
+Exception in thread Thread-41 (_readerthread):
+Traceback (most recent call last):
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\threading.py", line 1073, in _bootstrap_inner
+    self.run()
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\threading.py", line 1010, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\subprocess.py", line 1599, in _readerthread
+    buffer.append(fh.read())
+                  ^^^^^^^^^
+UnicodeDecodeError: 'gbk' codec can't decode byte 0xab in position 59: illegal multibyte sequence
+127.0.0.1 - - [05/Apr/2026 22:34:46] "GET /api/diagnosis HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:50] "GET /api/plugins/status HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:50] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:50] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:51] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:51] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:51] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:51] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:34:51] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:37:19] "GET /api/config HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:37:19] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:37:19] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:37:19] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:37:19] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:37:20] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:37:20] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:37:20] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:39:52] "GET /api/systems/instructions HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:39:52] "GET /api/systems/personalities HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:39:53] "GET /api/systems/knowledge/entries?limit=50 HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:39:53] "GET /api/systems/mcp/servers HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:39:54] "GET /api/systems/knowledge/entries?limit=50 HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:39:58] "GET /api/systems/mcp/servers HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:39:58] "GET /api/realtime_search/subscriptions HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:01] "GET /api/systems/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:05] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:05] "GET /api/records?limit=50&persona_filename=azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:06] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:07] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:07] "GET /api/records?limit=50&persona_filename=selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:07] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:08] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:09] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:09] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+开始保存聊天记录: 1... -> 呵呵，指挥官，看到您这么早就开始工作了。...
+聊天记录已成功保存！ID: 81
+127.0.0.1 - - [05/Apr/2026 22:40:13] "POST /chat HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:16] "GET /api/personas/selena.json HTTP/1.1" 200 -
+开始保存聊天记录: 1... -> 您似乎只是发送了一个数字...这让我想起...
+聊天记录已成功保存！ID: 82
+127.0.0.1 - - [05/Apr/2026 22:40:20] "POST /chat HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:22] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:24] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:24] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:28] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:28] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:28] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:29] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:29] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:29] "GET /api/systems/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:30] "GET /api/realtime_search/subscriptions HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:31] "GET /api/systems/mcp/servers HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:31] "GET /api/systems/knowledge/entries?limit=50 HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:31] "GET /api/systems/instructions HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:32] "GET /api/systems/personalities HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:55] "GET /api/systems/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:56] "GET /api/realtime_search/subscriptions HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:57] "GET /api/systems/mcp/servers HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:57] "GET /api/realtime_search/subscriptions HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:58] "GET /api/realtime_search/subscriptions HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:58] "GET /api/systems/mcp/servers HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:58] "GET /api/systems/knowledge/entries?limit=50 HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:59] "GET /api/systems/instructions HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:59] "GET /api/systems/personalities HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:40:59] "GET /api/plugins/status HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:00] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:00] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:00] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:00] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:00] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:01] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:01] "GET /api/config HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:01] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:01] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:01] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:01] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:01] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:02] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:02] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:02] "GET /api/config HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:02] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:02] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:02] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:03] "GET /api/personas HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:03] "GET /api/personas/azuma.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:03] "GET /api/personas/selena.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:03] "GET /api/personas/shizuku.json HTTP/1.1" 200 -
+127.0.0.1 - - [05/Apr/2026 22:41:03] "GET /api/personas/azuma.json HTTP/1.1" 200 -
