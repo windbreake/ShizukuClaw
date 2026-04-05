@@ -191,9 +191,11 @@ CONFIG = {
         'behavior_rules': CONFIG_DATA.get('persona_runtime', {}).get('behavior_rules', [])
     },
     'database': CONFIG_DATA.get('database', {
+        'engine': 'mysql',
         'host': 'localhost',
+        'port': 3306,
         'user': 'root',
-        'password': 'Fjh0729!',
+        'password': 'yyty511511',
         'database': 'catgirl_db'
     }),
     'unified_api': CONFIG_DATA.get('unified_api', {

@@ -5,36 +5,11 @@ import os
 import subprocess
 import sys
 
-import mysql.connector
-from mysql.connector import Error
-
 # 添加项目根目录到 sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.config import CONFIG
+from src.database import get_connection, table_exists
 from src.logging_config import setup_logging
-from src.database import table_exists
-
-
-def get_connection():
-    """获取数据库连接
-    
-    Returns:
-        mysql.connector.connection.MySQLConnection: 数据库连接对象，连接失败时返回None
-    """
-    try:
-        connection = mysql.connector.connect(
-            host=CONFIG['database']['host'],
-            user=CONFIG['database']['user'],
-            password=CONFIG['database']['password'],
-            database=CONFIG['database']['database'],
-            charset='utf8mb4',
-            collation='utf8mb4_unicode_ci'
-        )
-        return connection
-    except Error as e:
-        logging.error("数据库连接失败: %s", e)
-        return None
 
 
 def reset_chat_history(connection):

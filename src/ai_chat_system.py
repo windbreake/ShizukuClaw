@@ -97,6 +97,20 @@ class AIChatSystem:
         self._realtime_lock = threading.Lock()
         self._ensure_realtime_storage_files()
 
+    @classmethod
+    def rebind_database(cls):
+        """CONFIG['database'] 在控制面板保存后重建连接，避免单例仍持有旧引擎（如 PostgreSQL）。"""
+        if cls._instance is None:
+            return
+        inst = cls._instance
+        old = getattr(inst, 'db', None)
+        if old is not None:
+            try:
+                old.close()
+            except Exception:
+                pass
+        inst.db = DatabaseManager()
+
     def reload_plugins(self):
         """Reload plugin framework and return latest status."""
         self.plugin_manager.reload_all()

@@ -970,24 +970,36 @@ def run_web_server():
             query = request.get_json().get('query')
             if not query:
                 return jsonify({'error': 'No query provided'}), 400
-            
-            from src.reset_database import get_connection
+
+            from src.database import get_connection, get_engine
+
+            uq = query.strip().upper()
+            if get_engine() == 'postgresql' and uq.startswith('SHOW'):
+                return jsonify({
+                    'error': 'PostgreSQL 不支持 SHOW，请查询 information_schema（例如 pg_tables）',
+                }), 400
+
             conn = get_connection()
             if not conn:
                 return jsonify({'error': 'Database connection failed'}), 500
-            
+
             try:
                 cur = conn.cursor()
                 cur.execute(query)
-                
-                if query.strip().upper().startswith('SELECT') or query.strip().upper().startswith('SHOW'):
+                is_read = (
+                    uq.startswith('SELECT')
+                    or uq.startswith('WITH')
+                    or uq.startswith('SHOW')
+                    or uq.startswith('DESCRIBE')
+                    or uq.startswith('EXPLAIN')
+                )
+                if is_read:
                     columns = [desc[0] for desc in cur.description] if cur.description else []
                     rows = cur.fetchall()
                     result = [dict(zip(columns, row)) for row in rows]
                     return jsonify({'success': True, 'data': result, 'columns': columns})
-                else:
-                    conn.commit()
-                    return jsonify({'success': True, 'message': f'Affected {cur.rowcount} rows'})
+                conn.commit()
+                return jsonify({'success': True, 'message': f'Affected {cur.rowcount} rows'})
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
             finally:
@@ -1378,21 +1390,32 @@ def run_web_server():
             if 'database' not in config_data:
                 config_data['database'] = {}
             
-            config_data['database']['host'] = CONFIG.get('database', {}).get('host', '')
-            config_data['database']['user'] = CONFIG.get('database', {}).get('user', '')
-            config_data['database']['password'] = CONFIG.get('database', {}).get('password', '')
-            config_data['database']['database'] = CONFIG.get('database', {}).get('database', '')
-            
+            db_cfg = CONFIG.get('database', {})
+            eng = str(db_cfg.get('engine', 'mysql')).lower()
+            is_pg = eng in ('postgresql', 'postgres', 'pg')
+            default_port = 5432 if is_pg else 3306
+            _p = db_cfg.get('port', default_port)
+            if _p is None or _p == '':
+                _p = default_port
+            config_data['database']['engine'] = 'postgresql' if is_pg else 'mysql'
+            config_data['database']['port'] = int(_p)
+            config_data['database']['host'] = db_cfg.get('host', '')
+            config_data['database']['user'] = db_cfg.get('user', '')
+            config_data['database']['password'] = db_cfg.get('password', '')
+            config_data['database']['database'] = db_cfg.get('database', '')
+
             # 从数据库获取角色信息
             try:
-                from src.reset_database import get_connection
+                from src.database import get_connection, table_exists
+
                 conn = get_connection()
                 if conn:
                     cur = conn.cursor()
-                    # 检查表是否存在
-                    cur.execute("SHOW TABLES LIKE 'character_info'")
-                    if cur.fetchone():
-                        cur.execute("SELECT name, personality, brother_qqid, height, weight, catchphrases FROM character_info WHERE name = '小雫'")
+                    if table_exists(cur, 'character_info'):
+                        cur.execute(
+                            'SELECT name, personality, brother_qqid, height, weight, catchphrases '
+                            'FROM character_info LIMIT 1'
+                        )
                         row = cur.fetchone()
                         if row:
                             config_data['character'] = {
@@ -1401,7 +1424,7 @@ def run_web_server():
                                 'brother_qqid': row[2],
                                 'height': row[3],
                                 'weight': row[4],
-                                'catchphrases': row[5]
+                                'catchphrases': row[5],
                             }
                     conn.close()
             except Exception as e:
@@ -1427,7 +1450,22 @@ def run_web_server():
             
             # 获取请求数据
             new_config = request.get_json()
-            
+
+            # 先合并数据库配置，后续写库/读角色使用最新 engine
+            if new_config and 'database' in new_config:
+                CONFIG['database'].update(new_config['database'])
+                db_path_early = os.path.join(
+                    os.path.abspath(os.path.join(os.path.dirname(__file__), '..')),
+                    'data',
+                    'database.json',
+                )
+                with open(db_path_early, 'w', encoding='utf-8') as df:
+                    json.dump(new_config['database'], df, ensure_ascii=False, indent=2)
+                try:
+                    AIChatSystem.rebind_database()
+                except Exception as ex:
+                    app.logger.warning('AIChatSystem.rebind_database failed: %s', ex)
+
             # 读取现有配置
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
@@ -1451,41 +1489,44 @@ def run_web_server():
             # 更新角色配置到数据库
             if 'character' in new_config:
                 try:
-                    from src.reset_database import get_connection
+                    from src.database import get_connection, get_engine, table_exists
+
                     conn = get_connection()
                     if conn:
                         cur = conn.cursor()
-                        # 检查表是否存在
-                        cur.execute("SHOW TABLES LIKE 'character_info'")
-                        if cur.fetchone():
-                            # 先检查是否有记录
-                            cur.execute("SELECT COUNT(*) FROM character_info")
+                        if table_exists(cur, 'character_info'):
+                            cur.execute('SELECT COUNT(*) FROM character_info')
                             count = cur.fetchone()[0]
+                            vals = (
+                                new_config['character'].get('name', 'Default Character'),
+                                new_config['character'].get('personality', ''),
+                                new_config['character'].get('brother_qqid', ''),
+                                new_config['character'].get('height', ''),
+                                new_config['character'].get('weight', ''),
+                                new_config['character'].get('catchphrases', ''),
+                            )
                             if count > 0:
-                                # 如果存在记录，则更新第一条记录
-                                cur.execute("""UPDATE character_info 
-                                             SET name = %s, personality = %s, brother_qqid = %s, 
-                                                 height = %s, weight = %s, catchphrases = %s 
-                                             LIMIT 1""", (
-                                    new_config['character'].get('name', 'Default Character'),
-                                    new_config['character'].get('personality', ''),
-                                    new_config['character'].get('brother_qqid', ''),
-                                    new_config['character'].get('height', ''),
-                                    new_config['character'].get('weight', ''),
-                                    new_config['character'].get('catchphrases', '')
-                                ))
+                                if get_engine() == 'postgresql':
+                                    cur.execute(
+                                        """UPDATE character_info SET name = %s, personality = %s,
+                                        brother_qqid = %s, height = %s, weight = %s, catchphrases = %s
+                                        WHERE id = (SELECT id FROM character_info ORDER BY id LIMIT 1)""",
+                                        vals,
+                                    )
+                                else:
+                                    cur.execute(
+                                        """UPDATE character_info SET name = %s, personality = %s,
+                                        brother_qqid = %s, height = %s, weight = %s, catchphrases = %s
+                                        LIMIT 1""",
+                                        vals,
+                                    )
                             else:
-                                # 如果没有记录，则插入新记录
-                                cur.execute("""INSERT INTO character_info 
-                                             (name, personality, brother_qqid, height, weight, catchphrases) 
-                                             VALUES (%s, %s, %s, %s, %s, %s)""", (
-                                    new_config['character'].get('name', 'Default Character'),
-                                    new_config['character'].get('personality', ''),
-                                    new_config['character'].get('brother_qqid', ''),
-                                    new_config['character'].get('height', ''),
-                                    new_config['character'].get('weight', ''),
-                                    new_config['character'].get('catchphrases', '')
-                                ))
+                                cur.execute(
+                                    """INSERT INTO character_info
+                                    (name, personality, brother_qqid, height, weight, catchphrases)
+                                    VALUES (%s, %s, %s, %s, %s, %s)""",
+                                    vals,
+                                )
                             conn.commit()
                         conn.close()
                 except Exception as e:
@@ -1496,10 +1537,6 @@ def run_web_server():
                 if 'character' not in config_data:
                     config_data['character'] = {}
                 config_data['character'].update(new_config['character'])
-            
-            # 更新数据库配置（在内存中）
-            if 'database' in new_config:
-                CONFIG['database'].update(new_config['database'])
             
             # 更新Unified API配置（在内存中）
             if 'unified_api' in new_config:
@@ -1518,12 +1555,7 @@ def run_web_server():
                 # 确保 system_prompt_template 不被写回（它现在在 persona 文件里）
                 json.dump(data_to_save, f, ensure_ascii=False, indent=2)
 
-            # 更新 Database (Separated)
-            if 'database' in new_config:
-                db_path = os.path.join(base_path, 'data', 'database.json')
-                with open(db_path, 'w', encoding='utf-8') as f:
-                    json.dump(new_config['database'], f, ensure_ascii=False, indent=2)
-                CONFIG['database'].update(new_config['database']) # Update Memory
+            # database.json 已在请求开头写入；此处不再重复
 
             # 更新 Persona (Separated)
             if 'character' in new_config:
