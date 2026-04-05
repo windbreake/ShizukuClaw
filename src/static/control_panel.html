@@ -448,6 +448,20 @@
                                 <h5 class="card-title mb-3">数据库 &amp; SQL 控制</h5>
                                 <form id="db-config-form">
                                     <div class="row g-3 align-items-end">
+                                        <div class="col-md-4 col-lg-3">
+                                            <label class="form-label">数据库类型</label>
+                                            <select class="form-select" name="db_engine" id="db_engine" onchange="applySuggestedDbPortForEngine()">
+                                                <option value="mysql">MySQL</option>
+                                                <option value="postgresql">PostgreSQL</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4 col-lg-2">
+                                            <label class="form-label">端口</label>
+                                            <input type="number" class="form-control" name="db_port" id="db_port" min="1" max="65535" placeholder="3306 / 5432">
+                                        </div>
+                                        
+                                    </div>
+                                    <div class="row g-3 align-items-end">
                                         <div class="col-md-3">
                                             <label class="form-label">Host</label>
                                             <input type="text" class="form-control" name="db_host" id="db_host">
@@ -1927,6 +1941,19 @@
                 dbForm.elements['db_user'].value = data.database.user || '';
                 dbForm.elements['db_password'].value = data.database.password || '';
                 dbForm.elements['db_name'].value = data.database.database || '';
+                const engRaw = String(data.database.engine || 'mysql').toLowerCase();
+                const isPg = (engRaw === 'postgresql' || engRaw === 'postgres' || engRaw === 'pg');
+                const engEl = document.getElementById('db_engine');
+                if (engEl) engEl.value = isPg ? 'postgresql' : 'mysql';
+                const portEl = document.getElementById('db_port');
+                if (portEl) {
+                    const p = data.database.port;
+                    if (p === undefined || p === null || p === '') {
+                        portEl.value = isPg ? 5432 : 3306;
+                    } else {
+                        portEl.value = p;
+                    }
+                }
             }
 
             // General API Keys
@@ -2405,6 +2432,19 @@
     });
 
     // --- Database & Comm ---
+    function applySuggestedDbPortForEngine() {
+        const eng = document.getElementById('db_engine');
+        const portEl = document.getElementById('db_port');
+        if (!eng || !portEl) return;
+        const cur = parseInt(portEl.value, 10);
+        const isDefaultEmpty = !portEl.value || portEl.value === '';
+        const wasMysqlPort = cur === 3306;
+        const wasPgPort = cur === 5432;
+        if (isDefaultEmpty || wasMysqlPort || wasPgPort) {
+            portEl.value = eng.value === 'postgresql' ? 5432 : 3306;
+        }
+    }
+
     function saveDbConfigOnly() {
         // Just triggers main save but could be separated
         saveAllConfig(); 
@@ -2457,7 +2497,14 @@
 
         try {
             // 1. DB
+            const eng = document.getElementById('db_engine') ? document.getElementById('db_engine').value : 'mysql';
+            let dbPort = parseInt(document.getElementById('db_port') && document.getElementById('db_port').value, 10);
+            if (!Number.isFinite(dbPort)) {
+                dbPort = eng === 'postgresql' ? 5432 : 3306;
+            }
             const dbPayload = {
+                engine: eng,
+                port: dbPort,
                 host: document.getElementById('db_host').value,
                 user: document.getElementById('db_user').value,
                 password: document.getElementById('db_password').value,
