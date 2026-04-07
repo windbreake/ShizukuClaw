@@ -1,5 +1,11 @@
 {
   "description": "Built-in basic plugin configuration",
   "version": "1.0.0",
-  "enabled": true
+  "enabled": true,
+  "weather_default_city": "Beijing",
+  "weather_lang": "zh",
+  "wiki_default_lang": "zh",
+  "news_default_query": "technology",
+  "news_limit": 5,
+  "request_timeout_seconds": 10
 }

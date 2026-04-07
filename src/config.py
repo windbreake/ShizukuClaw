@@ -66,6 +66,9 @@ def _system_config_default():
             'password_hash': '',
             'sandbox_enabled': False,
             'reply_policy': default_reply_policy({}),
+            'chat_settings': {
+                'bothub_enabled': True,
+            },
             'features': {
                 'allow_file_write': True,
                 'allow_code_exec': True,
@@ -330,6 +333,9 @@ CONFIG = {
         'password_hash': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('password_hash', ''),
         'sandbox_enabled': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('sandbox_enabled', False),
         'reply_policy': default_reply_policy(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('reply_policy', {})),
+        'chat_settings': {
+            'bothub_enabled': bool(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('chat_settings', {}).get('bothub_enabled', True)),
+        },
         'features': {
             'allow_file_write': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('features', {}).get('allow_file_write', True),
             'allow_code_exec': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('features', {}).get('allow_code_exec', True),

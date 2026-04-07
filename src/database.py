@@ -274,6 +274,48 @@ class DatabaseManager:
             if cursor:
                 cursor.close()
 
+    def purge_command_history(self, persona_filename=None):
+        """清理命令/菜单类历史，避免 bot hub 菜单污染后续上下文。"""
+        cursor = None
+        try:
+            cursor = self.connection.cursor()
+            if not table_exists(cursor, 'chat_history'):
+                return
+
+            patterns = [
+                '%/bothub%',
+                '%/hub%',
+                '%bot hub界面%',
+                '%请选择你要使用的设置%',
+                '%请使用 @机器人 /bothub%',
+                '%bothub 指令已关闭%',
+                '%bothub 指令格式错误%',
+                '%为避免误触发，请使用 /bothub%',
+            ]
+
+            if persona_filename:
+                persona_clause = ' AND persona_filename = %s'
+                params = [persona_filename]
+            else:
+                persona_clause = ''
+                params = []
+
+            conditions = ' OR '.join(['user_input LIKE %s OR ai_response LIKE %s'] * len(patterns))
+            query = f"DELETE FROM chat_history WHERE ({conditions}){persona_clause}"
+
+            query_params = []
+            for pattern in patterns:
+                query_params.extend([pattern, pattern])
+            query_params.extend(params)
+
+            cursor.execute(query, tuple(query_params))
+            self.connection.commit()
+        except Error as e:
+            print(f"清理命令聊天记录错误: {e}")
+        finally:
+            if cursor:
+                cursor.close()
+
     def delete_first_n_records(self, n):
         """删除前N条记录
         

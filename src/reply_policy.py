@@ -129,6 +129,23 @@ def _extract_bot_identity(payload: Dict[str, Any], policy: Dict[str, Any]) -> st
     return ''
 
 
+def _extract_sender_identity(payload: Dict[str, Any]) -> str:
+    candidates = [
+        str(payload.get('user_id', '') or '').strip(),
+        str(payload.get('sender_id', '') or '').strip(),
+        str(payload.get('sender_user_id', '') or '').strip(),
+    ]
+    sender = payload.get('sender', {}) if isinstance(payload.get('sender', {}), dict) else {}
+    candidates.extend([
+        str(sender.get('user_id', '') or '').strip(),
+        str(sender.get('sender_id', '') or '').strip(),
+    ])
+    for candidate in candidates:
+        if candidate:
+            return candidate
+    return ''
+
+
 def _conversation_key(payload: Dict[str, Any]) -> str:
     message_type = str(payload.get('message_type', 'private') or 'private').strip().lower()
     if message_type == 'group':
@@ -169,10 +186,16 @@ def _mention_triggered(info: Dict[str, Any], bot_qq: str) -> bool:
         return False
 
     targets = [str(target or '').strip() for target in info.get('at_targets', []) if str(target or '').strip()]
-    if not targets or not bot_qq:
-        return False
+    if bot_qq and targets and re.fullmatch(r'\d+', str(bot_qq).strip()):
+        return bot_qq in targets
 
-    return bot_qq in targets
+    # 在 bot_qq 未配置、配置为昵称(非数字)或上报不完整时，按有效 @ 事件触发。
+    if targets:
+        filtered = [t for t in targets if t and t.lower() not in {'all', 'everyone'}]
+        if filtered:
+            return True
+
+    return bool(info.get('has_at'))
 
 
 def _to_me_triggered(payload: Dict[str, Any]) -> bool:
@@ -190,7 +213,7 @@ def _contains_bothub_command(text: str) -> bool:
     normalized = str(text or '').strip().lower()
     if not normalized:
         return False
-    return re.search(r'(^|\s)/bothub(?:\s+\d+)?(?=\s|$)', normalized) is not None
+    return re.search(r'(^|\s)/bothub(?:\s+[^\s]+)?(?=\s|$)', normalized) is not None
 
 
 def should_reply_to_onebot_message(payload: Dict[str, Any], policy: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
@@ -214,11 +237,15 @@ def should_reply_to_onebot_message(payload: Dict[str, Any], policy: Dict[str, An
     to_me_hit = _to_me_triggered(payload)
 
     if _contains_bothub_command(text):
-        should_reply = (message_type == 'group') and (mention_hit or to_me_hit)
+        # bothub 为强约束指令：只允许群聊中显式 @ 机器人触发
+        should_reply = (message_type == 'group') and mention_hit
         return should_reply, {
             'reason': 'bothub command',
             'conversation_key': _conversation_key(payload),
             'message_text': text,
+            'user_id': str(payload.get('user_id', '') or '').strip(),
+            'sender_id': _extract_sender_identity(payload),
+            'group_id': str(payload.get('group_id', '') or '').strip(),
             'keyword_hit': False,
             'mention_hit': mention_hit,
             'to_me_hit': to_me_hit,
@@ -233,13 +260,13 @@ def should_reply_to_onebot_message(payload: Dict[str, Any], policy: Dict[str, An
             should_reply = True
             trigger_reason = 'group always'
         elif group_mode == 'mention_only':
-            should_reply = mention_hit
+            should_reply = mention_hit or to_me_hit
             trigger_reason = 'group mention'
         elif group_mode == 'keyword_only':
             should_reply = keyword_hit
             trigger_reason = 'group keyword'
         else:
-            should_reply = mention_hit or keyword_hit
+            should_reply = mention_hit or to_me_hit or keyword_hit
             trigger_reason = 'group mention_or_keyword'
     else:
         if private_mode == 'always':
@@ -249,21 +276,25 @@ def should_reply_to_onebot_message(payload: Dict[str, Any], policy: Dict[str, An
             should_reply = False
             trigger_reason = 'private disabled'
         elif private_mode == 'mention_only':
-            should_reply = mention_hit
+            should_reply = mention_hit or to_me_hit
             trigger_reason = 'private mention'
         elif private_mode == 'keyword_only':
             should_reply = keyword_hit
             trigger_reason = 'private keyword'
         else:
-            should_reply = mention_hit or keyword_hit
+            should_reply = mention_hit or to_me_hit or keyword_hit
             trigger_reason = 'private mention_or_keyword'
 
     return should_reply, {
         'reason': trigger_reason,
         'conversation_key': _conversation_key(payload),
         'message_text': text,
+        'user_id': str(payload.get('user_id', '') or '').strip(),
+        'sender_id': _extract_sender_identity(payload),
+        'group_id': str(payload.get('group_id', '') or '').strip(),
         'keyword_hit': keyword_hit,
         'mention_hit': mention_hit,
+        'to_me_hit': to_me_hit,
         'message_type': message_type,
     }
 

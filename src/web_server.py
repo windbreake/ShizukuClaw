@@ -5,11 +5,13 @@ import io
 import json
 import logging
 import os
+import re
 import socket
 import sys
 import time
 import subprocess
 import threading
+import uuid
 import webbrowser
 import psutil
 import locale
@@ -18,8 +20,12 @@ import mimetypes
 import datetime
 import hashlib
 import hmac
+import shutil
+import tempfile
 import urllib.request
 import urllib.error
+import zipfile
+import requests
 mimetypes.add_type('application/javascript', '.js')
 mimetypes.add_type('text/css', '.css')
 mimetypes.add_type('text/html', '.html')
@@ -80,6 +86,13 @@ def _default_work_mode_features(existing: dict = None) -> dict:
     }
 
 
+def _default_chat_settings(existing: dict = None) -> dict:
+    existing = existing or {}
+    return {
+        'bothub_enabled': bool(existing.get('bothub_enabled', True)),
+    }
+
+
 def _system_config_path() -> str:
     return os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')), 'data', 'system_config.json')
 
@@ -121,6 +134,7 @@ def _load_system_config() -> dict:
             'password_hash': '',
             'sandbox_enabled': False,
             'reply_policy': default_reply_policy({}),
+            'chat_settings': _default_chat_settings({}),
             'features': _default_work_mode_features({}),
             'allowed_databases': ['catgirl_db']
         },
@@ -529,6 +543,1297 @@ def run_web_server():
             'projects': plugin_projects,
         }
 
+    def _build_degraded_skill_status(error_message):
+        """Return a safe skill status payload when AIChatSystem is unavailable."""
+        skill_framework_cfg = {}
+        skill_projects = []
+        try:
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            config_path = os.path.join(base_path, 'data', 'config.json')
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+                    skill_framework_cfg = cfg.get('skill_framework', {}) or {}
+
+            skills_dir = os.path.join(base_path, 'data', 'skills')
+            if os.path.isdir(skills_dir):
+                for item in os.listdir(skills_dir):
+                    if item.startswith('_'):
+                        continue
+                    project_dir = os.path.join(skills_dir, item)
+                    skill_md = os.path.join(project_dir, 'SKILL.md')
+                    if os.path.isdir(project_dir) and os.path.exists(skill_md):
+                        skill_projects.append(item)
+        except Exception:
+            pass
+
+        return {
+            'enabled': bool(skill_framework_cfg.get('enabled', True)),
+            'loaded_skills': [],
+            'skills': [],
+            'degraded': True,
+            'error': str(error_message),
+            'project_count': len(skill_projects),
+            'projects': skill_projects,
+        }
+
+    def _extract_skill_zip_to_workspace(upload_file):
+        """Safely extract a skill zip to data/skills and return the installed skill id."""
+        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        skills_root = os.path.join(base_path, 'data', 'skills')
+        os.makedirs(skills_root, exist_ok=True)
+
+        filename = (getattr(upload_file, 'filename', '') or '').strip()
+        if not filename.lower().endswith('.zip'):
+            raise ValueError('仅支持 zip 压缩包')
+
+        temp_dir = tempfile.mkdtemp(prefix='skill_upload_')
+        try:
+            zip_path = os.path.join(temp_dir, 'upload.zip')
+            upload_file.save(zip_path)
+
+            with zipfile.ZipFile(zip_path, 'r') as archive:
+                members = archive.infolist()
+                if not members:
+                    raise ValueError('压缩包为空')
+
+                for member in members:
+                    member_path = os.path.normpath(member.filename)
+                    if member_path.startswith('..') or os.path.isabs(member_path):
+                        raise ValueError('压缩包包含非法路径')
+
+                extract_dir = os.path.join(temp_dir, 'extracted')
+                os.makedirs(extract_dir, exist_ok=True)
+                archive.extractall(extract_dir)
+
+            top_level = [item for item in os.listdir(extract_dir) if not item.startswith('__MACOSX')]
+            candidate_dir = None
+            if len(top_level) == 1:
+                first_path = os.path.join(extract_dir, top_level[0])
+                if os.path.isdir(first_path):
+                    candidate_dir = first_path
+
+            if candidate_dir is None:
+                candidate_dir = extract_dir
+
+            if not os.path.exists(os.path.join(candidate_dir, 'SKILL.md')):
+                nested_dirs = []
+                for item in os.listdir(candidate_dir):
+                    item_path = os.path.join(candidate_dir, item)
+                    if os.path.isdir(item_path) and os.path.exists(os.path.join(item_path, 'SKILL.md')):
+                        nested_dirs.append(item_path)
+                if len(nested_dirs) == 1:
+                    candidate_dir = nested_dirs[0]
+                else:
+                    raise ValueError('压缩包内未找到 SKILL.md')
+
+            skill_id = os.path.basename(candidate_dir.rstrip('\\/'))
+            target_dir = os.path.join(skills_root, skill_id)
+            if os.path.exists(target_dir):
+                shutil.rmtree(target_dir)
+            shutil.copytree(candidate_dir, target_dir)
+
+            return skill_id
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def _extract_skill_zip_file_to_workspace(zip_path):
+        """Safely extract a local zip file into data/skills and return installed skill id."""
+        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        skills_root = os.path.join(base_path, 'data', 'skills')
+        os.makedirs(skills_root, exist_ok=True)
+
+        if not os.path.exists(zip_path):
+            raise ValueError('zip 文件不存在')
+        if not str(zip_path).lower().endswith('.zip'):
+            raise ValueError('仅支持 zip 压缩包')
+
+        temp_dir = tempfile.mkdtemp(prefix='skill_market_')
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as archive:
+                members = archive.infolist()
+                if not members:
+                    raise ValueError('压缩包为空')
+                for member in members:
+                    member_path = os.path.normpath(member.filename)
+                    if member_path.startswith('..') or os.path.isabs(member_path):
+                        raise ValueError('压缩包包含非法路径')
+
+                extract_dir = os.path.join(temp_dir, 'extracted')
+                os.makedirs(extract_dir, exist_ok=True)
+                archive.extractall(extract_dir)
+
+            top_level = [item for item in os.listdir(extract_dir) if not item.startswith('__MACOSX')]
+            candidate_dir = None
+            if len(top_level) == 1:
+                first_path = os.path.join(extract_dir, top_level[0])
+                if os.path.isdir(first_path):
+                    candidate_dir = first_path
+
+            if candidate_dir is None:
+                candidate_dir = extract_dir
+
+            if not os.path.exists(os.path.join(candidate_dir, 'SKILL.md')):
+                nested_dirs = []
+                for item in os.listdir(candidate_dir):
+                    item_path = os.path.join(candidate_dir, item)
+                    if os.path.isdir(item_path) and os.path.exists(os.path.join(item_path, 'SKILL.md')):
+                        nested_dirs.append(item_path)
+                if len(nested_dirs) == 1:
+                    candidate_dir = nested_dirs[0]
+                else:
+                    raise ValueError('压缩包内未找到 SKILL.md')
+
+            skill_id = os.path.basename(candidate_dir.rstrip('\\/'))
+            target_dir = os.path.join(skills_root, skill_id)
+            if os.path.exists(target_dir):
+                shutil.rmtree(target_dir)
+            shutil.copytree(candidate_dir, target_dir)
+            return skill_id
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    _COCOLOOP_URLS_CACHE = {'ts': 0.0, 'urls': []}
+    _COCOLOOP_META_CACHE = {}
+    _COCOLOOP_URLS_TTL = 600
+    _COCOLOOP_META_TTL = 86400
+    _SKILL_MARKET_RESULTS_CACHE = {'entries': {}}
+    _SKILL_MARKET_RESULTS_TTL = 900
+    _SKILLHUB_INSTALL_JOBS = {}
+    _SKILLHUB_INSTALL_JOBS_LOCK = threading.Lock()
+    _SKILLHUB_INSTALL_JOB_TTL = 3600
+    _COCOLOOP_LAST_DIAG = {
+        'timestamp': 0.0,
+        'sources': [],
+        'errors': [],
+        'warnings': [],
+        'total_urls': 0,
+        'used_cache': False,
+    }
+
+    def _load_skill_market_config():
+        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        config_path = os.path.join(base_path, 'data', 'config.json')
+        if not os.path.exists(config_path):
+            return {}
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                cfg = json.load(f) or {}
+            market_cfg = cfg.get('skill_market', {}) or {}
+            return market_cfg.get('cocoloop', {}) or {}
+        except Exception:
+            return {}
+
+    def _load_skill_market_github_config():
+        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        config_path = os.path.join(base_path, 'data', 'config.json')
+        if not os.path.exists(config_path):
+            return {}
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                cfg = json.load(f) or {}
+            market_cfg = cfg.get('skill_market', {}) or {}
+            return market_cfg.get('github', {}) or {}
+        except Exception:
+            return {}
+
+    def _load_skillhub_config():
+        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        config_path = os.path.join(base_path, 'data', 'config.json')
+        if not os.path.exists(config_path):
+            return {}
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                cfg = json.load(f) or {}
+            market_cfg = cfg.get('skill_market', {}) or {}
+            return market_cfg.get('skillhub', {}) or {}
+        except Exception:
+            return {}
+
+    def _skillhub_runner():
+        cfg = _load_skillhub_config()
+        configured_bin = str(cfg.get('cli_bin') or '').strip()
+        candidate_bins = []
+        if configured_bin:
+            candidate_bins.append(configured_bin)
+        candidate_bins.extend(['skills', 'skillhub', 'skillhub-cli'])
+
+        seen = set()
+        for b in candidate_bins:
+            if not b or b in seen:
+                continue
+            seen.add(b)
+            full = shutil.which(b)
+            if full:
+                base_name = os.path.basename(full).lower()
+                if b == 'skills' or base_name.startswith('npx'):
+                    return [full, '-y', 'skills'] if base_name.startswith('npx') else [full]
+                return [full]
+
+        npx = shutil.which('npx')
+        if npx:
+            return [npx, '-y', 'skills']
+        return []
+
+    def _find_skillhub_cli():
+        runner = _skillhub_runner()
+        return ' '.join(runner) if runner else ''
+
+    def _run_skillhub_cli(args, timeout=45):
+        runner = _skillhub_runner()
+        if not runner:
+            raise RuntimeError('SkillHub CLI 未安装，请先点击“安装 SkillHub CLI”')
+        cmd = list(runner) + list(args or [])
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            timeout=max(5, int(timeout or 45)),
+            cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        )
+        return {
+            'ok': proc.returncode == 0,
+            'code': int(proc.returncode),
+            'stdout': str(proc.stdout or ''),
+            'stderr': str(proc.stderr or ''),
+            'cmd': cmd,
+        }
+
+    def _skillhub_install_job_log_dir():
+        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        log_dir = os.path.join(base_path, 'logs', 'skillhub_install')
+        os.makedirs(log_dir, exist_ok=True)
+        return log_dir
+
+    def _skillhub_install_job_prune_locked(now=None):
+        now = now or time.time()
+        stale_ids = []
+        for job_id, job in list(_SKILLHUB_INSTALL_JOBS.items()):
+            updated_at = float(job.get('updated_at') or job.get('created_at') or 0.0)
+            if job.get('status') in ('running', 'queued'):
+                continue
+            if (now - updated_at) > _SKILLHUB_INSTALL_JOB_TTL:
+                stale_ids.append(job_id)
+        for job_id in stale_ids:
+            _SKILLHUB_INSTALL_JOBS.pop(job_id, None)
+
+    def _skillhub_install_job_snapshot(job_id: str):
+        with _SKILLHUB_INSTALL_JOBS_LOCK:
+            _skillhub_install_job_prune_locked()
+            job = _SKILLHUB_INSTALL_JOBS.get(job_id)
+            if not job:
+                return None
+            return {
+                'job_id': job.get('job_id', job_id),
+                'status': job.get('status', 'queued'),
+                'created_at': job.get('created_at'),
+                'updated_at': job.get('updated_at'),
+                'command': job.get('command', ''),
+                'command_display': job.get('command_display', ''),
+                'log_path': job.get('log_path', ''),
+                'returncode': job.get('returncode'),
+                'message': job.get('message', ''),
+                'logs': list(job.get('logs') or []),
+                'installed': bool(job.get('status') == 'success'),
+            }
+
+    def _skillhub_install_job_append(job_id: str, line: str):
+        text = str(line or '').replace('\r', '').rstrip('\n')
+        if not text.strip():
+            return
+        log_line = text.strip('\n')
+        now = time.time()
+        with _SKILLHUB_INSTALL_JOBS_LOCK:
+            job = _SKILLHUB_INSTALL_JOBS.get(job_id)
+            if not job:
+                return
+            logs = list(job.get('logs') or [])
+            logs.append(log_line)
+            if len(logs) > 400:
+                logs = logs[-400:]
+            job['logs'] = logs
+            job['updated_at'] = now
+            log_path = job.get('log_path')
+        if log_path:
+            try:
+                with open(log_path, 'a', encoding='utf-8') as f:
+                    f.write(log_line + '\n')
+            except Exception:
+                pass
+        print(f"[SkillHub CLI][{job_id}] {log_line}")
+
+    def _skillhub_install_job_finish(job_id: str, status: str, message: str, returncode: int = None):
+        now = time.time()
+        with _SKILLHUB_INSTALL_JOBS_LOCK:
+            job = _SKILLHUB_INSTALL_JOBS.get(job_id)
+            if not job:
+                return
+            job['status'] = status
+            job['message'] = str(message or '')
+            job['updated_at'] = now
+            if returncode is not None:
+                job['returncode'] = int(returncode)
+            job['logs'] = list(job.get('logs') or [])
+        print(f"[SkillHub CLI][{job_id}] {status.upper()}: {message}")
+
+    def _start_skillhub_install_job():
+        bash = shutil.which('bash')
+        if not bash:
+            raise RuntimeError('未找到 bash，无法执行官方 SkillHub 安装脚本')
+
+        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        install_cmd = 'curl -fsSL https://skillhub.cn/install/install.sh | bash -s -- --no-skills'
+        command = [bash, '-lc', install_cmd]
+        job_id = uuid.uuid4().hex
+        log_dir = _skillhub_install_job_log_dir()
+        log_path = os.path.join(log_dir, f'{job_id}.log')
+        now = time.time()
+
+        with _SKILLHUB_INSTALL_JOBS_LOCK:
+            _skillhub_install_job_prune_locked(now)
+            _SKILLHUB_INSTALL_JOBS[job_id] = {
+                'job_id': job_id,
+                'status': 'queued',
+                'created_at': now,
+                'updated_at': now,
+                'command': command,
+                'command_display': install_cmd,
+                'log_path': log_path,
+                'returncode': None,
+                'message': '准备启动 SkillHub CLI 安装',
+                'logs': [
+                    '准备启动官方 SkillHub CLI 安装脚本',
+                    f'命令: {install_cmd}',
+                ],
+            }
+
+        def _runner():
+            process = None
+            try:
+                with _SKILLHUB_INSTALL_JOBS_LOCK:
+                    job = _SKILLHUB_INSTALL_JOBS.get(job_id)
+                    if job:
+                        job['status'] = 'running'
+                        job['updated_at'] = time.time()
+
+                _skillhub_install_job_append(job_id, f'工作目录: {base_path}')
+                _skillhub_install_job_append(job_id, '开始执行: curl -fsSL https://skillhub.cn/install/install.sh | bash -s -- --no-skills')
+
+                process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    encoding='utf-8',
+                    errors='replace',
+                    bufsize=1,
+                    cwd=base_path,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
+                )
+
+                if process.stdout:
+                    for raw_line in iter(process.stdout.readline, ''):
+                        if raw_line == '':
+                            break
+                        _skillhub_install_job_append(job_id, raw_line)
+
+                returncode = process.wait()
+                if returncode == 0:
+                    _skillhub_install_job_finish(job_id, 'success', 'SkillHub CLI 安装完成', returncode)
+                else:
+                    _skillhub_install_job_append(job_id, f'安装命令退出码: {returncode}')
+                    _skillhub_install_job_finish(job_id, 'error', 'SkillHub CLI 安装失败，请查看日志', returncode)
+            except Exception as exc:
+                _skillhub_install_job_append(job_id, f'安装异常: {exc}')
+                _skillhub_install_job_finish(job_id, 'error', str(exc), -1)
+            finally:
+                try:
+                    if process and process.stdout:
+                        process.stdout.close()
+                except Exception:
+                    pass
+
+        threading.Thread(target=_runner, daemon=True).start()
+        return _skillhub_install_job_snapshot(job_id)
+
+    def _extract_json_from_text(text):
+        raw = str(text or '').strip()
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except Exception:
+            pass
+
+        s1 = raw.find('[')
+        s2 = raw.find('{')
+        starts = [x for x in [s1, s2] if x >= 0]
+        if not starts:
+            return None
+        start = min(starts)
+
+        for end in range(len(raw), start, -1):
+            chunk = raw[start:end].strip()
+            if not chunk:
+                continue
+            try:
+                return json.loads(chunk)
+            except Exception:
+                continue
+        return None
+
+    def _normalize_skillhub_items(payload):
+        rows = []
+        if isinstance(payload, list):
+            rows = payload
+        elif isinstance(payload, dict):
+            for k in ('items', 'data', 'list', 'skills', 'results'):
+                v = payload.get(k)
+                if isinstance(v, list):
+                    rows = v
+                    break
+
+        out = []
+        for it in rows:
+            if not isinstance(it, dict):
+                continue
+            sid = str(it.get('id') or it.get('name') or it.get('slug') or '').strip()
+            if not sid:
+                continue
+            external_url = str(it.get('url') or it.get('homepage') or it.get('repository') or '').strip()
+            name = _skillhub_clean_text(it.get('name') or sid)
+            description = _skillhub_clean_text(it.get('description') or '')
+            author = _skillhub_clean_text(it.get('author') or it.get('owner') or '')
+            language = _skillhub_clean_text(it.get('language') or '')
+            topics = []
+            for tag in list(it.get('tags') or it.get('topics') or []):
+                cleaned_tag = _skillhub_clean_text(tag)
+                if cleaned_tag:
+                    topics.append(cleaned_tag)
+
+            if not name:
+                name = sid
+            out.append({
+                'id': sid,
+                'name': name,
+                'description': description,
+                'source': 'skillhub',
+                'external_url': external_url,
+                'author': author,
+                'version': _skillhub_clean_text(it.get('version') or ''),
+                'language': language,
+                'topics': topics,
+                'stars': int(it.get('stars') or it.get('stargazers_count') or 0),
+                'skillhub_id': sid,
+            })
+        return out
+
+    def _skillhub_clean_text(value):
+        text = str(value or '')
+        text = text.replace('\r', ' ').replace('\n', ' ')
+        text = re.sub(r'[│┆┊|]+', ' ', text)
+        text = re.sub(r'^[\s\-_=•·⋅⋮⋯…:;]+$', '', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        if not text:
+            return ''
+        lowered = text.lower()
+        if lowered in {'custom', 'unknown', 'undefined', 'null', '-', '---', '...', '....'}:
+            return ''
+        if not re.search(r'[\w\u4e00-\u9fff]', text):
+            return ''
+        return text
+
+    def _skill_market_cache_key(source: str, query: str, extra: str = '') -> str:
+        return f"{str(source or '').strip().lower()}|{str(query or '').strip().lower()}|{str(extra or '').strip().lower()}"
+
+    def _skill_market_cache_get(key: str):
+        now = time.time()
+        entry = _SKILL_MARKET_RESULTS_CACHE.get('entries', {}).get(key)
+        if not entry:
+            return None
+        if (now - float(entry.get('ts') or 0.0)) > _SKILL_MARKET_RESULTS_TTL:
+            return None
+        return dict(entry)
+
+    def _skill_market_cache_set(key: str, items, diag: dict = None):
+        _SKILL_MARKET_RESULTS_CACHE.setdefault('entries', {})[key] = {
+            'ts': time.time(),
+            'items': list(items or []),
+            'diag': dict(diag or {}),
+        }
+
+    def _extract_cocoloop_skill_links_from_html(html_text):
+        html = str(html_text or '')
+        links = []
+        seen = set()
+
+        for m in re.finditer(r'https?://hub\.cocoloop\.cn/skills/([^"\'\s<#?]+)', html, flags=re.IGNORECASE):
+            url = f'https://hub.cocoloop.cn/skills/{m.group(1)}'
+            if url not in seen:
+                seen.add(url)
+                links.append(url)
+
+        for m in re.finditer(r'(?:href|src)=["\'](/skills/[^"\'\s<#?]+)["\']', html, flags=re.IGNORECASE):
+            path = m.group(1)
+            url = f'https://hub.cocoloop.cn{path}'
+            if url not in seen:
+                seen.add(url)
+                links.append(url)
+
+        return links
+
+    def _normalize_cocoloop_api_items(payload):
+        items = []
+        if isinstance(payload, list):
+            items = payload
+        elif isinstance(payload, dict):
+            for key in ('items', 'data', 'list', 'rows', 'result'):
+                val = payload.get(key)
+                if isinstance(val, list):
+                    items = val
+                    break
+                if isinstance(val, dict):
+                    for nested_key in ('items', 'list', 'rows', 'result'):
+                        nested_val = val.get(nested_key)
+                        if isinstance(nested_val, list):
+                            items = nested_val
+                            break
+                    if items:
+                        break
+
+        out = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            sid = str(it.get('id') or it.get('skill_id') or it.get('slug') or '').strip()
+            name = str(it.get('name') or it.get('title') or '').strip()
+            desc = str(it.get('description') or it.get('desc') or '').strip()
+            external_url = str(it.get('external_url') or it.get('url') or it.get('link') or '').strip()
+            download_url = str(it.get('download_url') or it.get('download') or '').strip()
+
+            if not external_url and sid:
+                external_url = f'https://hub.cocoloop.cn/skills/{sid}'
+            if external_url and '/skills/' not in external_url:
+                continue
+
+            out.append({
+                'id': sid or (external_url.rsplit('/', 1)[-1] if external_url else ''),
+                'name': name,
+                'description': desc,
+                'external_url': external_url,
+                'download_url': download_url,
+            })
+        return out
+
+    def _fetch_cocoloop_urls_from_api(limit=2000, query=''):
+        cfg = _load_skill_market_config()
+        configured = cfg.get('api_urls', []) or []
+        default_candidates = [
+            'https://hub.cocoloop.cn/api/skills',
+            'https://hub.cocoloop.cn/api/market/skills',
+            'https://hub.cocoloop.cn/api/search/skills',
+        ]
+
+        candidates = []
+        for u in configured + default_candidates:
+            url = str(u or '').strip()
+            if not url:
+                continue
+            if url not in candidates:
+                candidates.append(url)
+
+        headers = {'User-Agent': 'ShizukuNyaBot/1.0'}
+        seen = set()
+        urls = []
+        source_diag = []
+        errors = []
+
+        max_pages = 12
+        for api_url in candidates:
+            try:
+                added_total = 0
+                for p in range(1, max_pages + 1):
+                    resp = requests.get(
+                        api_url,
+                        timeout=12,
+                        headers=headers,
+                        params={
+                            'page': p,
+                            'page_size': min(200, limit),
+                            'limit': min(200, limit),
+                            'per_page': min(200, limit),
+                            'size': min(200, limit),
+                            'query': query or ''
+                        }
+                    )
+                    resp.raise_for_status()
+                    payload = resp.json()
+                    normalized = _normalize_cocoloop_api_items(payload)
+                    if not normalized:
+                        break
+
+                    added_page = 0
+                    for it in normalized:
+                        u = str(it.get('external_url') or '').strip()
+                        if not u or u in seen:
+                            continue
+                        seen.add(u)
+                        urls.append(u)
+                        added_page += 1
+                        added_total += 1
+                        if len(urls) >= limit:
+                            break
+
+                    if len(urls) >= limit:
+                        break
+                    # 当翻页已无新增时提前停止
+                    if added_page == 0:
+                        break
+
+                source_diag.append({'source': f'api:{api_url}', 'count': added_total, 'ok': True})
+                if len(urls) >= limit:
+                    break
+            except Exception as exc:
+                errors.append(f'api {api_url}: {exc}')
+                source_diag.append({'source': f'api:{api_url}', 'count': 0, 'ok': False})
+
+        return urls[:limit], source_diag, errors
+
+    def _extract_cocoloop_locs(xml_text):
+        return re.findall(r'<loc>\s*([^<\s]+)\s*</loc>', str(xml_text or ''), flags=re.IGNORECASE)
+
+    def _fetch_cocoloop_skill_urls(limit=2000, query=''):
+        limit = max(1, min(5000, int(limit or 2000)))
+        now = time.time()
+        diag = {
+            'timestamp': now,
+            'sources': [],
+            'errors': [],
+            'total_urls': 0,
+            'used_cache': False,
+            'mode': 'official_only',
+        }
+        cached_urls = list(_COCOLOOP_URLS_CACHE.get('urls') or [])
+        if cached_urls and (now - float(_COCOLOOP_URLS_CACHE.get('ts') or 0.0)) <= _COCOLOOP_URLS_TTL:
+            diag['used_cache'] = True
+            diag['total_urls'] = min(len(cached_urls), limit)
+            _COCOLOOP_LAST_DIAG.update(diag)
+            return cached_urls[:limit]
+
+        skill_urls = []
+        seen = set()
+
+        api_urls, api_diag, api_errors = _fetch_cocoloop_urls_from_api(limit=limit, query=query)
+        for u in api_urls:
+            if u not in seen:
+                seen.add(u)
+                skill_urls.append(u)
+        diag['sources'].extend(api_diag)
+        diag['errors'].extend(api_errors)
+
+        if skill_urls:
+            _COCOLOOP_URLS_CACHE['ts'] = now
+            _COCOLOOP_URLS_CACHE['urls'] = list(skill_urls)
+            diag['total_urls'] = len(skill_urls)
+            _COCOLOOP_LAST_DIAG.update(diag)
+            return skill_urls[:limit]
+
+        diag['errors'].append('official api unavailable or empty')
+        diag['used_cache'] = True
+        diag['total_urls'] = min(len(cached_urls), limit)
+        _COCOLOOP_LAST_DIAG.update(diag)
+        return cached_urls[:limit]
+
+    def _extract_cocoloop_skill_meta(skill_url):
+        now = time.time()
+        cache_item = _COCOLOOP_META_CACHE.get(skill_url)
+        if cache_item and (now - float(cache_item.get('ts') or 0.0)) <= _COCOLOOP_META_TTL:
+            return dict(cache_item.get('data') or {})
+
+        headers = {'User-Agent': 'ShizukuNyaBot/1.0'}
+        try:
+            resp = requests.get(skill_url, timeout=12, headers=headers)
+            resp.raise_for_status()
+            html = resp.text
+        except Exception:
+            meta = {
+                'name': f'skill-{skill_url.rsplit("/", 1)[-1]}',
+                'description': '来自 CocoLoop 市场',
+                'download_url': ''
+            }
+            _COCOLOOP_META_CACHE[skill_url] = {'ts': now, 'data': meta}
+            return meta
+
+        name = ''
+        h1 = re.search(r'<h1[^>]*>(.*?)</h1>', html, flags=re.IGNORECASE | re.DOTALL)
+        if h1:
+            name = re.sub(r'<[^>]+>', '', h1.group(1)).strip()
+        if not name:
+            t = re.search(r'<title[^>]*>(.*?)</title>', html, flags=re.IGNORECASE | re.DOTALL)
+            if t:
+                name = re.sub(r'<[^>]+>', '', t.group(1)).strip().split('|')[0].strip()
+        if not name:
+            name = f'skill-{skill_url.rsplit("/", 1)[-1]}'
+
+        desc = ''
+        og_desc = re.search(r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)["\']', html, flags=re.IGNORECASE)
+        if og_desc:
+            desc = og_desc.group(1).strip()
+        if not desc:
+            meta_desc = re.search(r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']', html, flags=re.IGNORECASE)
+            if meta_desc:
+                desc = meta_desc.group(1).strip()
+        if not desc:
+            desc = '来自 CocoLoop 市场'
+
+        dl = ''
+        m = re.search(r'https?://dl\.cocoloop\.cn[^"\'\s>]+\.zip', html, flags=re.IGNORECASE)
+        if m:
+            dl = m.group(0).strip()
+
+        meta = {'name': name, 'description': desc, 'download_url': dl}
+        _COCOLOOP_META_CACHE[skill_url] = {'ts': now, 'data': meta}
+        return meta
+
+    def _fetch_cocoloop_market_items(limit=40, query=''):
+        """GitHub-driven skill market list (metadata only)."""
+        limit = max(1, min(5000, int(limit or 40)))
+        query = str(query or '').strip().lower()
+
+        gh_cfg = _load_skill_market_github_config()
+        topics = gh_cfg.get('topics') or ['copilot-skill', 'github-copilot-skill', 'ai-skill']
+        cache_key = _skill_market_cache_key('github', query, ','.join(sorted([str(t).strip().lower() for t in topics if str(t).strip()])))
+        cached = _skill_market_cache_get(cache_key)
+        if cached and cached.get('items'):
+            cached_items = list(cached.get('items') or [])
+            _COCOLOOP_LAST_DIAG['timestamp'] = cached.get('ts') or time.time()
+            _COCOLOOP_LAST_DIAG['sources'] = cached.get('diag', {}).get('sources') or [{'source': 'github.search.repositories', 'count': len(cached_items), 'ok': True}]
+            _COCOLOOP_LAST_DIAG['errors'] = []
+            _COCOLOOP_LAST_DIAG['warnings'] = []
+            _COCOLOOP_LAST_DIAG['total_urls'] = len(cached_items)
+            _COCOLOOP_LAST_DIAG['used_cache'] = True
+            _COCOLOOP_LAST_DIAG['mode'] = 'github_metadata_only'
+            _COCOLOOP_URLS_CACHE['ts'] = cached.get('ts') or time.time()
+            _COCOLOOP_URLS_CACHE['urls'] = [str(x.get('external_url') or '') for x in cached_items if str(x.get('external_url') or '').strip()]
+            return cached_items[:limit]
+
+        per_page = min(100, max(10, limit))
+        headers = {
+            'User-Agent': 'ShizukuNyaBot/1.0',
+            'Accept': 'application/vnd.github+json'
+        }
+
+        # 允许通过配置或环境变量提供 GitHub token，缓解匿名速率限制导致的 403。
+        token = str(gh_cfg.get('token') or os.getenv('GITHUB_TOKEN') or '').strip()
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+
+        fallback_repos = [
+            {
+                'full_name': 'microsoft/skills',
+                'name': 'skills',
+                'description': 'Community skills and examples',
+                'html_url': 'https://github.com/microsoft/skills',
+                'owner': {'login': 'microsoft'},
+                'stargazers_count': 0,
+                'language': '',
+                'topics': ['skill']
+            },
+            {
+                'full_name': 'openai/openai-cookbook',
+                'name': 'openai-cookbook',
+                'description': 'Examples and guides for AI integrations',
+                'html_url': 'https://github.com/openai/openai-cookbook',
+                'owner': {'login': 'openai'},
+                'stargazers_count': 0,
+                'language': 'Python',
+                'topics': ['ai', 'examples']
+            },
+            {
+                'full_name': 'modelcontextprotocol/servers',
+                'name': 'servers',
+                'description': 'Reference MCP servers and integrations',
+                'html_url': 'https://github.com/modelcontextprotocol/servers',
+                'owner': {'login': 'modelcontextprotocol'},
+                'stargazers_count': 0,
+                'language': '',
+                'topics': ['mcp', 'server', 'skill']
+            },
+        ]
+
+        all_items = []
+        seen = set()
+        errs = []
+        warns = []
+        for topic in topics:
+            try:
+                q = f'topic:{topic} archived:false'
+                resp = requests.get(
+                    'https://api.github.com/search/repositories',
+                    params={'q': q, 'sort': 'stars', 'order': 'desc', 'per_page': per_page},
+                    headers=headers,
+                    timeout=15
+                )
+                if resp.status_code == 403:
+                    rem = resp.headers.get('X-RateLimit-Remaining', '')
+                    rst = resp.headers.get('X-RateLimit-Reset', '')
+                    raise RuntimeError(f'github rate limit or forbidden (remaining={rem}, reset={rst})')
+                resp.raise_for_status()
+                payload = resp.json() or {}
+                repos = payload.get('items') or []
+                for repo in repos:
+                    rid = str(repo.get('full_name') or '').strip().lower()
+                    if not rid or rid in seen:
+                        continue
+                    seen.add(rid)
+                    tags = list(repo.get('topics') or [])
+                    item = {
+                        'id': rid.replace('/', '__'),
+                        'name': str(repo.get('name') or rid),
+                        'description': str(repo.get('description') or 'GitHub 开源 Skill 条目'),
+                        'source': 'github.com',
+                        'external_url': str(repo.get('html_url') or ''),
+                        'download_url': '',
+                        'author': str((repo.get('owner') or {}).get('login') or ''),
+                        'stars': int(repo.get('stargazers_count') or 0),
+                        'language': str(repo.get('language') or ''),
+                        'topics': tags,
+                        'updated_at': str(repo.get('updated_at') or ''),
+                        'registry_mode': 'metadata_only',
+                    }
+                    if query:
+                        qsrc = ' '.join([
+                            str(item.get('name', '')).lower(),
+                            str(item.get('description', '')).lower(),
+                            str(item.get('external_url', '')).lower(),
+                            str(item.get('author', '')).lower(),
+                            ' '.join([str(t).lower() for t in tags]),
+                        ])
+                        if query not in qsrc:
+                            continue
+                    all_items.append(item)
+                    if len(all_items) >= limit:
+                        break
+                if len(all_items) >= limit:
+                    break
+            except Exception as exc:
+                warns.append(f'github topic {topic}: {exc}')
+
+        # 无法从 GitHub API 拉到数据时，回退到稳定开源仓库清单，避免前端 0 条。
+        if not all_items:
+            for repo in fallback_repos:
+                rid = str(repo.get('full_name') or '').strip().lower()
+                if not rid or rid in seen:
+                    continue
+                seen.add(rid)
+                tags = list(repo.get('topics') or [])
+                item = {
+                    'id': rid.replace('/', '__'),
+                    'name': str(repo.get('name') or rid),
+                    'description': str(repo.get('description') or 'GitHub 开源 Skill 条目'),
+                    'source': 'github.com',
+                    'external_url': str(repo.get('html_url') or ''),
+                    'download_url': '',
+                    'author': str((repo.get('owner') or {}).get('login') or ''),
+                    'stars': int(repo.get('stargazers_count') or 0),
+                    'language': str(repo.get('language') or ''),
+                    'topics': tags,
+                    'updated_at': str(repo.get('updated_at') or ''),
+                    'registry_mode': 'metadata_only',
+                }
+                if query:
+                    qsrc = ' '.join([
+                        str(item.get('name', '')).lower(),
+                        str(item.get('description', '')).lower(),
+                        str(item.get('external_url', '')).lower(),
+                        str(item.get('author', '')).lower(),
+                        ' '.join([str(t).lower() for t in tags]),
+                    ])
+                    if query not in qsrc:
+                        continue
+                all_items.append(item)
+                if len(all_items) >= limit:
+                    break
+
+            if all_items:
+                warns.append('github api unavailable, fallback to built-in open-source repository list')
+
+        # 只要有可用条目，外部只展示空错误；警告仅作为内部信息，不推到主诊断。
+        if all_items:
+            errs = []
+            warns = []
+
+        # 回填缓存，避免诊断面板长期显示“缓存 0 条”。
+        now = time.time()
+        _COCOLOOP_URLS_CACHE['ts'] = now
+        _COCOLOOP_URLS_CACHE['urls'] = [str(x.get('external_url') or '') for x in all_items if str(x.get('external_url') or '').strip()]
+        _skill_market_cache_set(cache_key, all_items, {
+            'sources': [{'source': 'github.search.repositories', 'count': len(all_items), 'ok': len(all_items) > 0}],
+            'errors': errs,
+            'warnings': warns,
+        })
+
+        _COCOLOOP_LAST_DIAG['timestamp'] = now
+        _COCOLOOP_LAST_DIAG['sources'] = [{'source': 'github.search.repositories', 'count': len(all_items), 'ok': len(all_items) > 0}]
+        _COCOLOOP_LAST_DIAG['errors'] = errs
+        _COCOLOOP_LAST_DIAG['warnings'] = warns
+        _COCOLOOP_LAST_DIAG['total_urls'] = len(all_items)
+        _COCOLOOP_LAST_DIAG['used_cache'] = False
+        _COCOLOOP_LAST_DIAG['mode'] = 'github_metadata_only'
+
+        return all_items[:limit]
+
+    def _resolve_cocoloop_download_url(raw_url):
+        """Official-only: only direct CocoLoop download URL is accepted."""
+        url = str(raw_url or '').strip()
+        if not url:
+            raise ValueError('url is required')
+
+        if re.search(r'^https?://dl\.cocoloop\.cn/.+\.zip$', url, flags=re.IGNORECASE):
+            return url
+
+        raise ValueError('官方模式仅支持 dl.cocoloop.cn 的直链 zip。请先通过官方 API 获取 download_url。')
+
+    @app.route('/api/skills/market/github', methods=['GET'])
+    @app.route('/api/skills/market/cocoloop', methods=['GET'])
+    def api_skills_market_cocoloop():
+        try:
+            page = int(request.args.get('page', 1) or 1)
+            page_size = int(request.args.get('page_size', 30) or 30)
+            query = str(request.args.get('query', '') or '').strip()
+
+            page = max(1, page)
+            page_size = max(5, min(100, page_size))
+
+            fetch_limit = min(5000, page * page_size + page_size)
+            items = _fetch_cocoloop_market_items(limit=fetch_limit, query=query)
+
+            start = (page - 1) * page_size
+            end = start + page_size
+            paged = items[start:end]
+            has_more = end < len(items)
+
+            return jsonify({
+                'success': True,
+                'items': paged,
+                'count': len(paged),
+                'source': 'github.com',
+                'page': page,
+                'page_size': page_size,
+                'total': len(items),
+                'has_more': has_more,
+                'query': query,
+                'diagnostics': {
+                    'timestamp': _COCOLOOP_LAST_DIAG.get('timestamp'),
+                    'sources': list(_COCOLOOP_LAST_DIAG.get('sources') or []),
+                    'errors': list(_COCOLOOP_LAST_DIAG.get('errors') or []),
+                    'warnings': list(_COCOLOOP_LAST_DIAG.get('warnings') or []),
+                    'total_urls': _COCOLOOP_LAST_DIAG.get('total_urls', 0),
+                    'used_cache': bool(_COCOLOOP_LAST_DIAG.get('used_cache', False)),
+                    'cache': {
+                        'count': len(_COCOLOOP_URLS_CACHE.get('urls') or []),
+                        'age_seconds': (max(0, int(time.time() - float(_COCOLOOP_URLS_CACHE.get('ts') or 0.0))) if _COCOLOOP_URLS_CACHE.get('ts') else None),
+                        'ttl_seconds': _SKILL_MARKET_RESULTS_TTL,
+                    },
+                    'meta_cache': {
+                        'count': len(_COCOLOOP_META_CACHE),
+                        'ttl_seconds': _COCOLOOP_META_TTL,
+                    },
+                    'mode': 'github_metadata_only'
+                }
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'items': [],
+                'count': 0,
+                'source': 'github.com',
+                'page': 1,
+                'page_size': max(5, min(100, int(request.args.get('page_size', 30) or 30))),
+                'total': 0,
+                'has_more': False,
+                'query': str(request.args.get('query', '') or '').strip(),
+                'diagnostics': {
+                    'timestamp': _COCOLOOP_LAST_DIAG.get('timestamp'),
+                    'sources': list(_COCOLOOP_LAST_DIAG.get('sources') or []),
+                    'errors': list(_COCOLOOP_LAST_DIAG.get('errors') or []) + [str(e)],
+                    'warnings': list(_COCOLOOP_LAST_DIAG.get('warnings') or []),
+                    'total_urls': _COCOLOOP_LAST_DIAG.get('total_urls', 0),
+                    'used_cache': bool(_COCOLOOP_LAST_DIAG.get('used_cache', False)),
+                    'cache': {
+                        'count': len(_COCOLOOP_URLS_CACHE.get('urls') or []),
+                        'age_seconds': (max(0, int(time.time() - float(_COCOLOOP_URLS_CACHE.get('ts') or 0.0))) if _COCOLOOP_URLS_CACHE.get('ts') else None),
+                        'ttl_seconds': _SKILL_MARKET_RESULTS_TTL,
+                    },
+                    'meta_cache': {
+                        'count': len(_COCOLOOP_META_CACHE),
+                        'ttl_seconds': _COCOLOOP_META_TTL,
+                    },
+                    'mode': 'github_metadata_only'
+                }
+            }), 502
+
+    @app.route('/api/skills/market/github/install', methods=['POST'])
+    @app.route('/api/skills/market/cocoloop/install', methods=['POST'])
+    def api_skills_market_cocoloop_install():
+        try:
+            data = request.get_json() or {}
+            return jsonify({
+                'success': True,
+                'message': 'Skill 市场为元数据模式：请前往仓库 README 按说明手动配置',
+                'mode': 'github_metadata_only',
+                'setup_instructions': {
+                    'description': '该 Skill 由 GitHub 开源市场提供元数据，不执行自动下载安装。',
+                    'required_fields': ['repository_url', 'branch/tag', 'skill_entrypoint', 'env(optional)'],
+                    'note': '请点击“查看详情”进入仓库，按项目文档完成接入。'
+                }
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/market/skillhub/status', methods=['GET'])
+    def api_skills_market_skillhub_status():
+        try:
+            cli = _find_skillhub_cli()
+            if not cli:
+                return jsonify({'success': True, 'installed': False, 'cli': '', 'version': ''})
+
+            version = ''
+            for args in (['--version'], ['version']):
+                try:
+                    r = _run_skillhub_cli(args, timeout=10)
+                    if r.get('ok'):
+                        version = (r.get('stdout') or '').strip().splitlines()[0] if (r.get('stdout') or '').strip() else ''
+                        break
+                except Exception:
+                    continue
+            return jsonify({'success': True, 'installed': True, 'cli': cli, 'version': version})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/market/skillhub/cli/install', methods=['POST'])
+    def api_skills_market_skillhub_cli_install():
+        try:
+            job = _start_skillhub_install_job()
+            return jsonify({
+                'success': True,
+                'installed': False,
+                'message': 'SkillHub CLI 安装已在后台启动',
+                'job_id': job.get('job_id'),
+                'status_url': f"/api/skills/market/skillhub/cli/install/jobs/{job.get('job_id')}",
+                'command': job.get('command_display', ''),
+                'logs': list(job.get('logs') or []),
+                'status': job.get('status', 'queued')
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/market/skillhub/cli/install/jobs/<job_id>', methods=['GET'])
+    def api_skills_market_skillhub_cli_install_job(job_id):
+        try:
+            job = _skillhub_install_job_snapshot(str(job_id).strip())
+            if not job:
+                return jsonify({'success': False, 'error': 'job not found'}), 404
+            return jsonify({'success': True, **job})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/market/skillhub/search', methods=['GET'])
+    def api_skills_market_skillhub_search():
+        try:
+            page = int(request.args.get('page', 1) or 1)
+            page_size = int(request.args.get('page_size', 30) or 30)
+            query = str(request.args.get('query', '') or '').strip()
+
+            page = max(1, page)
+            page_size = max(5, min(100, page_size))
+
+            cli = _find_skillhub_cli()
+            if not cli:
+                return jsonify({'success': False, 'error': 'SkillHub CLI 未安装'}), 400
+
+            cache_key = _skill_market_cache_key('skillhub', query, cli)
+            cached = _skill_market_cache_get(cache_key)
+            if cached and cached.get('items'):
+                items = list(cached.get('items') or [])
+                start = (page - 1) * page_size
+                end = start + page_size
+                paged = items[start:end]
+                _COCOLOOP_URLS_CACHE['ts'] = cached.get('ts') or time.time()
+                _COCOLOOP_URLS_CACHE['urls'] = [str(x.get('external_url') or x.get('skillhub_id') or x.get('id') or '') for x in items if str(x.get('external_url') or x.get('skillhub_id') or x.get('id') or '').strip()]
+                diag = dict(cached.get('diag') or {})
+                diag.update({
+                    'mode': 'skillhub_cli',
+                    'cli': cli,
+                    'cached': True,
+                    'errors': list(diag.get('errors') or []),
+                })
+                return jsonify({
+                    'success': True,
+                    'items': paged,
+                    'count': len(paged),
+                    'source': 'skillhub',
+                    'page': page,
+                    'page_size': page_size,
+                    'total': len(items),
+                    'has_more': end < len(items),
+                    'query': query,
+                    'diagnostics': diag,
+                })
+
+            attempts = []
+            if query:
+                attempts.extend([
+                    ['find', query],
+                    ['search', query],
+                ])
+            else:
+                attempts.extend([
+                    ['find', ''],
+                    ['search', ''],
+                ])
+
+            payload = None
+            text_rows = []
+            errors = []
+            for args in attempts:
+                result = _run_skillhub_cli(args, timeout=40)
+                if not result.get('ok'):
+                    errors.append((result.get('stderr') or result.get('stdout') or '').strip()[:300])
+                    continue
+
+                out = result.get('stdout') or ''
+                parsed = _extract_json_from_text(out)
+                if parsed is not None:
+                    payload = parsed
+                    break
+
+                for line in out.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    text_rows.append(line)
+                if text_rows:
+                    break
+
+            items = _normalize_skillhub_items(payload) if payload is not None else []
+            if not items and text_rows:
+                for i, line in enumerate(text_rows, start=1):
+                    cleaned = _skillhub_clean_text(line)
+                    if not cleaned:
+                        continue
+                    if query and query.lower() not in cleaned.lower():
+                        continue
+                    sid = f'skillhub-{i}'
+                    items.append({
+                        'id': sid,
+                        'name': cleaned[:80],
+                        'description': cleaned,
+                        'source': 'skillhub',
+                        'external_url': '',
+                        'author': '',
+                        'version': '',
+                        'language': '',
+                        'topics': [],
+                        'stars': 0,
+                        'skillhub_id': sid,
+                    })
+
+            _skill_market_cache_set(cache_key, items, {
+                'mode': 'skillhub_cli',
+                'errors': [],
+                'warnings': errors[:5],
+                'cli': cli,
+                'cached': False,
+            })
+            _COCOLOOP_URLS_CACHE['ts'] = time.time()
+            _COCOLOOP_URLS_CACHE['urls'] = [str(x.get('external_url') or x.get('skillhub_id') or x.get('id') or '') for x in items if str(x.get('external_url') or x.get('skillhub_id') or x.get('id') or '').strip()]
+
+            start = (page - 1) * page_size
+            end = start + page_size
+            paged = items[start:end]
+            return jsonify({
+                'success': True,
+                'items': paged,
+                'count': len(paged),
+                'source': 'skillhub',
+                'page': page,
+                'page_size': page_size,
+                'total': len(items),
+                'has_more': end < len(items),
+                'query': query,
+                'diagnostics': {
+                    'mode': 'skillhub_cli',
+                    'errors': errors[:5],
+                    'cli': cli,
+                }
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/market/skillhub/install', methods=['POST'])
+    def api_skills_market_skillhub_install():
+        try:
+            data = request.get_json() or {}
+            skill_ref = str(data.get('skill_id') or data.get('id') or data.get('name') or '').strip()
+            if not skill_ref:
+                return jsonify({'success': False, 'error': 'skill_id is required'}), 400
+
+            attempts = [
+                ['install', skill_ref, '--yes'],
+                ['add', skill_ref, '--yes'],
+                ['install', skill_ref],
+            ]
+            errors = []
+            for args in attempts:
+                r = _run_skillhub_cli(args, timeout=120)
+                if r.get('ok'):
+                    try:
+                        chat_system.reload_skills()
+                    except Exception:
+                        pass
+                    return jsonify({
+                        'success': True,
+                        'skill_id': skill_ref,
+                        'message': f'SkillHub 技能安装完成: {skill_ref}',
+                        'stdout': (r.get('stdout') or '')[-1200:]
+                    })
+                errors.append((r.get('stderr') or r.get('stdout') or '').strip()[:500])
+
+            return jsonify({
+                'success': False,
+                'error': 'SkillHub 安装失败，请检查 CLI 输出',
+                'details': errors
+            }), 500
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/market/cocoloop/diagnostics', methods=['GET'])
+    def api_skills_market_cocoloop_diagnostics():
+        try:
+            now = time.time()
+            cache_ts = float(_COCOLOOP_URLS_CACHE.get('ts') or 0.0)
+            cached_count = len(_COCOLOOP_URLS_CACHE.get('urls') or [])
+            cache_age = max(0, int(now - cache_ts)) if cache_ts else None
+            diag = dict(_COCOLOOP_LAST_DIAG or {})
+            diag.update({
+                'cache': {
+                    'count': cached_count,
+                    'age_seconds': cache_age,
+                    'ttl_seconds': _COCOLOOP_URLS_TTL,
+                },
+                'meta_cache': {
+                    'count': len(_COCOLOOP_META_CACHE),
+                    'ttl_seconds': _COCOLOOP_META_TTL,
+                }
+            })
+            return jsonify({'success': True, 'diagnostics': diag})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     def _test_database_connectivity(db_cfg):
         """Run ping/TCP/login checks after database configuration changes."""
         result = {
@@ -806,7 +2111,9 @@ def run_web_server():
                 'global_enabled': bool(wm.get('enabled', False)),
                 'sandbox_enabled': bool(wm.get('sandbox_enabled', False)),
                 'has_password': bool(wm.get('password_hash')),
+                'active_persona': str(CONFIG.get('active_persona', 'shizuku.json') or 'shizuku.json'),
                 'features': _default_work_mode_features(wm.get('features', {})),
+                'chat_settings': _default_chat_settings(wm.get('chat_settings', {})),
                 'reply_policy': default_reply_policy(wm.get('reply_policy', {}))
             })
         except Exception as e:
@@ -847,20 +2154,23 @@ def run_web_server():
             incoming = data.get('features', {})
             features = _default_work_mode_features(incoming)
             reply_policy = default_reply_policy(data.get('reply_policy', {}))
+            chat_settings = _default_chat_settings(data.get('chat_settings', {}))
 
             system_config = _load_system_config()
             if 'work_mode' not in system_config:
                 system_config['work_mode'] = {}
             system_config['work_mode']['features'] = features
             system_config['work_mode']['reply_policy'] = reply_policy
+            system_config['work_mode']['chat_settings'] = chat_settings
             _save_system_config(system_config)
 
             if 'work_mode' not in CONFIG:
                 CONFIG['work_mode'] = {}
             CONFIG['work_mode']['features'] = features
             CONFIG['work_mode']['reply_policy'] = reply_policy
+            CONFIG['work_mode']['chat_settings'] = chat_settings
 
-            return jsonify({'success': True, 'features': features, 'reply_policy': reply_policy})
+            return jsonify({'success': True, 'features': features, 'reply_policy': reply_policy, 'chat_settings': chat_settings})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1262,6 +2572,63 @@ def run_web_server():
             if enabled:
                 chat_system.reload_plugins()
             return jsonify({'success': True, 'enabled': enabled})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/status', methods=['GET'])
+    def api_skills_status():
+        try:
+            status = chat_system.get_skill_status()
+            status['degraded'] = False
+            return jsonify({'success': True, 'status': status})
+        except Exception as e:
+            degraded = _build_degraded_skill_status(str(e))
+            return jsonify({'success': True, 'status': degraded, 'warning': '技能系统不可用，已返回降级状态'})
+
+    @app.route('/api/skills/reload', methods=['POST'])
+    def api_skills_reload():
+        try:
+            status = chat_system.reload_skills()
+            return jsonify({'success': True, 'status': status, 'message': 'Skill framework reloaded'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/policy', methods=['POST'])
+    def api_skills_policy():
+        try:
+            data = request.get_json() or {}
+            skill_id = (data.get('skill_id') or '').strip()
+            policy = data.get('policy') or {}
+            if not skill_id:
+                return jsonify({'success': False, 'error': 'skill_id is required'}), 400
+
+            normalized = chat_system.update_skill_policy(skill_id, policy)
+            return jsonify({'success': True, 'skill_id': skill_id, 'policy': normalized})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/framework_enabled', methods=['POST'])
+    def api_skills_framework_enabled():
+        try:
+            data = request.get_json() or {}
+            enabled = bool(data.get('enabled', True))
+            chat_system.set_skill_framework_enabled(enabled)
+            if enabled:
+                chat_system.reload_skills()
+            return jsonify({'success': True, 'enabled': enabled})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/upload', methods=['POST'])
+    def api_skills_upload():
+        try:
+            upload_file = request.files.get('file')
+            if not upload_file:
+                return jsonify({'success': False, 'error': 'file is required'}), 400
+
+            skill_id = _extract_skill_zip_to_workspace(upload_file)
+            chat_system.reload_skills()
+            return jsonify({'success': True, 'skill_id': skill_id, 'message': f'Skill {skill_id} uploaded'})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1784,6 +3151,7 @@ def run_web_server():
                 'has_password': bool(system_config.get('work_mode', {}).get('password_hash', '')),
                 'sandbox_enabled': bool(system_config.get('work_mode', {}).get('sandbox_enabled', False)),
                 'reply_policy': default_reply_policy(system_config.get('work_mode', {}).get('reply_policy', {})),
+                'chat_settings': _default_chat_settings(system_config.get('work_mode', {}).get('chat_settings', {})),
                 'features': _default_work_mode_features(system_config.get('work_mode', {}).get('features', {})),
                 'allowed_databases': system_config.get('work_mode', {}).get('allowed_databases', ['catgirl_db'])
             }
@@ -1861,6 +3229,8 @@ def run_web_server():
                     current_work_mode['password_hash'] = incoming_work_mode.get('password_hash', current_work_mode.get('password_hash', ''))
                 if 'reply_policy' in incoming_work_mode:
                     current_work_mode['reply_policy'] = default_reply_policy(incoming_work_mode.get('reply_policy', {}))
+                if 'chat_settings' in incoming_work_mode:
+                    current_work_mode['chat_settings'] = _default_chat_settings(incoming_work_mode.get('chat_settings', {}))
                 if 'features' in incoming_work_mode:
                     current_work_mode['features'] = _default_work_mode_features(incoming_work_mode.get('features', {}))
                 if 'allowed_databases' in incoming_work_mode:

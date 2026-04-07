@@ -25,6 +25,7 @@ from src.config import CONFIG, generate_system_prompt
 from src.database import get_connection, DatabaseManager
 from src.shared_utils import count_tokens, estimate_tokens
 from src.plugin_framework import PluginContext, PluginManager
+from src.skill_framework import SkillManager
 from src.agent_task_scheduler import get_task_scheduler, AgentTask, TaskType
 
 # 全局变量用于跟踪Token使用（需要在web_server.py中更新这些值）
@@ -70,6 +71,11 @@ class AIChatSystem:
         self.plugin_manager = PluginManager(self)
         self.plugin_manager.load_all()
 
+        # 初始化 Skill 框架（OpenClaw/AstrBot 风格目录）
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.skill_manager = SkillManager(project_root)
+        self.skill_manager.load_all()
+
         # 使用配置中的基础URL
         client = OpenAI(
             api_key=CONFIG['api']['key'],
@@ -98,7 +104,7 @@ class AIChatSystem:
         self._ensure_realtime_storage_files()
         self._bothub_pending = {}
         self._bothub_pending_lock = threading.Lock()
-        self._bothub_pending_ttl_seconds = 120.0
+        self._bothub_pending_ttl_seconds = 45.0
 
     @classmethod
     def rebind_database(cls):
@@ -161,6 +167,24 @@ class AIChatSystem:
             "response": response_text,
             "metadata": result.metadata,
         }
+
+    def reload_skills(self):
+        """Reload skill framework and return latest status."""
+        self.skill_manager.reload_all()
+        return self.skill_manager.get_framework_status()
+
+    def get_skill_status(self):
+        """Return skill framework status for admin API/UI."""
+        return self.skill_manager.get_framework_status()
+
+    def set_skill_framework_enabled(self, enabled):
+        """Enable or disable the skill framework."""
+        self.skill_manager.set_framework_enabled(bool(enabled), persist=True)
+        return self.skill_manager.get_framework_status()
+
+    def update_skill_policy(self, skill_id, policy):
+        """Update skill policy and return normalized policy."""
+        return self.skill_manager.update_skill_policy(skill_id, policy, persist=True)
 
     def _ensure_realtime_storage_files(self):
         if not os.path.exists(self.realtime_subscriptions_path):
@@ -371,22 +395,20 @@ class AIChatSystem:
         }
 
     @staticmethod
-    def _extract_bothub_selection(command_text: str) -> Optional[int]:
+    def _extract_bothub_selector(command_text: str) -> Optional[str]:
         command = str(command_text or '').strip().lower()
         if not command:
             return None
 
-        match = re.search(r'(^|\s)/bothub(?:\s+(\d+))?(?=\s|$)', command)
+        match = re.search(r'(^|\s)/bothub(?:\s+([^\s]+))?(?=\s|$)', command)
         if not match:
             return None
 
-        if not match.group(2):
-            return 0
+        raw_selector = str(match.group(2) or '').strip()
+        if not raw_selector:
+            return ''
 
-        try:
-            return max(1, int(match.group(2)))
-        except Exception:
-            return None
+        return raw_selector
 
     @staticmethod
     def _contains_invalid_bothub_variant(command_text: str) -> bool:
@@ -399,32 +421,25 @@ class AIChatSystem:
     def _is_numeric_only(command_text: str) -> bool:
         return re.fullmatch(r'\d+', str(command_text or '').strip()) is not None
 
-    def _set_bothub_pending(self, conversation_key: str) -> None:
+    @staticmethod
+    def _build_bothub_pending_key(conversation_key: str, sender_id: str = '') -> str:
         key = str(conversation_key or '').strip()
+        sender = str(sender_id or '').strip()
         if not key:
-            return
-        deadline = time.monotonic() + self._bothub_pending_ttl_seconds
-        with self._bothub_pending_lock:
-            self._bothub_pending[key] = deadline
+            return sender
+        if sender:
+            return f'{key}|sender:{sender}'
+        return key
 
-    def _is_bothub_pending(self, conversation_key: str) -> bool:
-        key = str(conversation_key or '').strip()
-        if not key:
-            return False
-        now = time.monotonic()
-        with self._bothub_pending_lock:
-            deadline = float(self._bothub_pending.get(key, 0.0) or 0.0)
-            if deadline <= now:
-                self._bothub_pending.pop(key, None)
-                return False
-            return True
+    def _set_bothub_pending(self, conversation_key: str, sender_id: str = '') -> None:
+        # 保留方法以兼容旧调用，但不再使用“等待下一个数字回复”的模式。
+        return
 
-    def _clear_bothub_pending(self, conversation_key: str) -> None:
-        key = str(conversation_key or '').strip()
-        if not key:
-            return
-        with self._bothub_pending_lock:
-            self._bothub_pending.pop(key, None)
+    def _is_bothub_pending(self, conversation_key: str, sender_id: str = '') -> bool:
+        return False
+
+    def _clear_bothub_pending(self, conversation_key: str, sender_id: str = '') -> None:
+        return
 
     def _list_persona_records(self):
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -466,15 +481,48 @@ class AIChatSystem:
             lines.append(f'{idx}.{record.get("name", "未命名")}{suffix}')
         return '\n'.join(lines)
 
-    def _activate_persona_by_index(self, selection_index: int) -> str:
+    def _activate_persona_by_selector(self, selector: str) -> str:
+        chat_settings = (CONFIG.get('work_mode', {}) or {}).get('chat_settings', {}) or {}
+        bothub_enabled = bool(chat_settings.get('bothub_enabled', True))
+        if not bothub_enabled:
+            return 'bothub 指令已关闭，请在控制面板的聊天设置中开启后使用。'
+
         records = self._list_persona_records()
         if not records:
             return '当前没有可用的人格'
 
-        if selection_index < 1 or selection_index > len(records):
-            return f'人格编号无效，请输入 1-{len(records)} 之间的数字'
+        normalized = str(selector or '').strip()
+        if not normalized:
+            return '请输入要切换的人格编号或类型'
 
-        selected = records[selection_index - 1]
+        if re.fullmatch(r'\d+', normalized):
+            selection_index = int(normalized)
+            if selection_index < 1 or selection_index > len(records):
+                return f'人格编号无效，请输入 1-{len(records)} 之间的数字'
+            selected = records[selection_index - 1]
+            selected_label = f'人格{selection_index}'
+        else:
+            key = normalized.lower()
+            selected = None
+            for idx, item in enumerate(records, start=1):
+                filename = str(item.get('filename', '')).strip().lower()
+                stem = filename[:-5] if filename.endswith('.json') else filename
+                name = str(item.get('name', '')).strip().lower()
+                if key in {filename, stem, name}:
+                    selected = item
+                    selected_label = f'人格{idx}'
+                    break
+            if selected is None:
+                for idx, item in enumerate(records, start=1):
+                    filename = str(item.get('filename', '')).strip().lower()
+                    stem = filename[:-5] if filename.endswith('.json') else filename
+                    name = str(item.get('name', '')).strip().lower()
+                    if key in name or key in stem:
+                        selected = item
+                        selected_label = f'人格{idx}'
+                        break
+            if selected is None:
+                return f'未找到类型“{normalized}”，请使用 /bothub 查看可选项'
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         config_path = os.path.join(project_root, 'data', 'config.json')
 
@@ -494,33 +542,29 @@ class AIChatSystem:
         self.system_prompt = CONFIG.get('system_prompt', self.system_prompt)
         self.persona_runtime = CONFIG.get('persona_runtime', self.persona_runtime)
 
-        return f'人格{selection_index}.“{selected["name"]}”成功加载'
+        return f'{selected_label}.“{selected["name"]}”成功加载'
 
     def _resolve_command_response(self, command_text: str, onebot_meta: Optional[dict] = None) -> Optional[str]:
         meta = onebot_meta or {}
         conversation_key = str(meta.get('conversation_key', '') or '').strip()
+        sender_id = str(meta.get('sender_id', '') or meta.get('user_id', '') or '').strip()
+
+        chat_settings = (CONFIG.get('work_mode', {}) or {}).get('chat_settings', {}) or {}
+        bothub_enabled = bool(chat_settings.get('bothub_enabled', True))
+        if not bothub_enabled:
+            if self._extract_bothub_selector(command_text) is not None:
+                return 'bothub 指令已关闭，请在控制面板的聊天设置中开启后使用。'
 
         if self._contains_invalid_bothub_variant(command_text):
-            return 'bothub 指令格式错误，请使用 /bothub 或 /bothub <序号>'
+            return 'bothub 指令格式错误，请使用 @机器人 /bothub <类型/序号>'
 
-        selection = self._extract_bothub_selection(command_text)
-        if selection is not None:
-            if selection == 0:
-                if conversation_key:
-                    self._set_bothub_pending(conversation_key)
+        selector = self._extract_bothub_selector(command_text)
+        if selector is not None:
+            if selector == '':
                 menu = self._format_bothub_menu()
-                return f'{menu}\n请输入序号（例如 1 或 /bothub 1）'
+                return f'{menu}\n请使用 @机器人 /bothub <类型/序号> 进行选择（例如 @机器人 /bothub 1）'
 
-            result = self._activate_persona_by_index(selection)
-            if '成功加载' in result and conversation_key:
-                self._clear_bothub_pending(conversation_key)
-            return result
-
-        if self._is_numeric_only(command_text) and conversation_key and self._is_bothub_pending(conversation_key):
-            selection = int(str(command_text).strip())
-            result = self._activate_persona_by_index(selection)
-            if '成功加载' in result:
-                self._clear_bothub_pending(conversation_key)
+            result = self._activate_persona_by_selector(selector)
             return result
 
         return None
@@ -556,6 +600,19 @@ class AIChatSystem:
             'persona_runtime': runtime,
             'raw': persona_data
         }
+
+    @staticmethod
+    def _should_skip_chat_history(user_input: str, assistant_reply: str) -> bool:
+        text = str(assistant_reply or '').strip()
+        if not text:
+            return True
+        menu_markers = ['bot hub界面', '请选择你要使用的设置', '请使用 @机器人 /bothub', 'bothub 指令已关闭']
+        if any(marker in text for marker in menu_markers):
+            return True
+        user_text = str(user_input or '').strip().lower()
+        if user_text in {'/bothub', '/bothub ', '/hub', '/hub '}:
+            return True
+        return False
 
     def _pick_persona_state(self, persona_runtime=None):
         """按概率切换 persona 状态，模拟更自然的人格波动。"""
@@ -1300,7 +1357,11 @@ If the request involves modifying existing code, output the full modified file c
         if frontend_source == 'onebot' and normalized_input:
             command_response = self._resolve_command_response(normalized_input, onebot_meta=onebot_meta)
             if command_response:
-                self.db.save_chat(user_input, command_response, None, persona_filename=effective_persona_filename)
+                if '/bothub' in normalized_input.lower() or '/hub' in normalized_input.lower():
+                    try:
+                        self.db.purge_command_history(persona_filename=effective_persona_filename)
+                    except Exception:
+                        pass
                 return command_response
         
         # === 核心变更2：每次动态构建上下文 ===

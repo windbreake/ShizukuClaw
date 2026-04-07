@@ -6,6 +6,11 @@
 from flask import Blueprint, request, jsonify
 from typing import Dict, Any
 import json
+import re
+import requests
+import shlex
+import time
+from html import unescape
 
 # 导入各个系统
 from src.enhanced_logging import get_enhanced_logger
@@ -19,6 +24,186 @@ from src.instruction_manager import (
 
 # 创建蓝图
 systems_bp = Blueprint('systems', __name__, url_prefix='/api/systems')
+
+# 官方 MCP Registry API 端点（内置式，可覆盖）
+# 常见的 MCP Registry 源：
+# - 官方: https://mcp.run/api/servers
+# - Smithery: https://registry.smithery.ai/servers
+MCP_REGISTRY_API = 'https://mcp.run/api/servers'
+MCP_REGISTRY_CACHE = {'ts': 0.0, 'data': []}
+MCP_REGISTRY_CACHE_TTL = 3600  # 1 小时缓存
+
+# 本地官方 MCP 示例（如果 Smithery 不可用）
+MCP_MARKET_CATALOG = [
+    {
+        'id': 'filesystem-local',
+        'name': 'Filesystem Local',
+        'description': '读写本地工作目录（stdio）',
+        'type': 'stdio',
+        'command': 'npx',
+        'args': ['-y', '@modelcontextprotocol/server-filesystem', '.'],
+        'tags': ['file', 'local', 'official']
+    },
+    {
+        'id': 'git-local',
+        'name': 'Git Local',
+        'description': 'Git 仓库操作（stdio）',
+        'type': 'stdio',
+        'command': 'npx',
+        'args': ['-y', '@modelcontextprotocol/server-git', '.'],
+        'tags': ['git', 'scm', 'official']
+    },
+    {
+        'id': 'fetch-web',
+        'name': 'Fetch Web',
+        'description': '网页抓取与摘要（stdio）',
+        'type': 'stdio',
+        'command': 'uvx',
+        'args': ['mcp-server-fetch'],
+        'tags': ['web', 'crawler', 'official']
+    },
+    {
+        'id': 'sqlite-local',
+        'name': 'SQLite Local',
+        'description': '快速连接 SQLite 文件',
+        'type': 'stdio',
+        'command': 'npx',
+        'args': ['-y', '@modelcontextprotocol/server-sqlite', '--db-path', 'data/database.sqlite'],
+        'tags': ['database', 'sqlite']
+    }
+]
+
+
+
+
+def _fetch_official_mcp_registry(limit: int = 30, registry_url: str = None):
+    """从官方 MCP Registry 获取服务器元数据及完整信息。
+    
+    返回格式包含：
+    - id, name, description（基础信息）
+    - author, license, homepage, documentation（详细信息）
+    - protocol_version, implementation（实现细节）
+    - registry_url（官方注册表链接，用于跳转）
+    - user_config_required（用户需要手动配置）
+    """
+    limit = max(1, min(200, int(limit or 30)))
+    api_url = registry_url or MCP_REGISTRY_API
+    
+    # 检查缓存
+    global MCP_REGISTRY_CACHE
+    now = time.time()
+    if MCP_REGISTRY_CACHE.get('ts', 0) + MCP_REGISTRY_CACHE_TTL > now and MCP_REGISTRY_CACHE.get('data'):
+        return MCP_REGISTRY_CACHE['data'][:limit]
+    
+    items = []
+    try:
+        # 调用官方 MCP Registry API
+        resp = requests.get(api_url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        # 兼容多种 API 返回格式
+        servers = data.get('servers', []) or data.get('data', []) or (data if isinstance(data, list) else [])
+        
+        for srv in servers:
+            item = {
+                # 基础信息
+                'id': str(srv.get('id') or srv.get('name', '').lower().replace(' ', '-')),
+                'name': str(srv.get('name') or 'MCP Server'),
+                'description': str(srv.get('description') or ''),
+                
+                # 详细元数据
+                'author': str(srv.get('author') or srv.get('maintainer', '')),
+                'license': str(srv.get('license', '')),
+                'version': str(srv.get('version', '')),
+                'keywords': list(srv.get('keywords', [])) or list(srv.get('tags', [])) or [],
+                
+                # 链接信息
+                'homepage': str(srv.get('homepage') or srv.get('url', '')),
+                'repository': str(srv.get('repository') or srv.get('repo', '')),
+                'documentation': str(srv.get('documentation') or srv.get('docs', '')),
+                'registry_url': str(srv.get('registry_url', f'https://mcp.run/servers/{srv.get("id", "")}')),
+                
+                # 实现信息
+                'protocol_version': str(srv.get('protocol_version', '1.0')),
+                'implementation': str(srv.get('implementation', '')),
+                'type': str(srv.get('protocol', srv.get('type', 'stdio'))),
+                
+                # 安装提示
+                'user_config_required': True,  # 用户需要自己配置连接参数
+                'source': 'mcp-registry',
+                'installable': True,
+            }
+            items.append(item)
+        
+        # 更新缓存
+        if items:
+            MCP_REGISTRY_CACHE = {'ts': now, 'data': items}
+            return items[:limit]
+    except Exception as e:
+        pass
+    
+    # 回退到本地官方目录
+    for it in MCP_MARKET_CATALOG:
+        items.append({
+            'id': str(it.get('id') or ''),
+            'name': str(it.get('name') or 'Official MCP'),
+            'description': str(it.get('description') or ''),
+            'author': 'Anthropic',
+            'license': 'MIT',
+            'version': '1.0',
+            'keywords': list(it.get('tags') or ['official']),
+            'homepage': 'https://modelcontextprotocol.io',
+            'repository': 'https://github.com/modelcontextprotocol',
+            'documentation': 'https://modelcontextprotocol.io/docs',
+            'registry_url': 'https://mcp.run',
+            'protocol_version': '1.0',
+            'implementation': f"{it.get('type', 'stdio')}: {it.get('command', '')}",
+            'type': str(it.get('type') or 'stdio'),
+            'user_config_required': True,
+            'source': 'official-local',
+            'installable': True,
+        })
+    
+    return items[:limit]
+
+
+def _fetch_mcpmarket_trending(limit: int = 30):
+    """[兼容函数] 从官方 MCP Registry 获取趋势 MCP。"""
+    return _fetch_official_mcp_registry(limit)
+
+
+def _parse_mcp_command_from_page(html: str):
+    text = unescape(str(html or ''))
+
+    # 优先解析 JSON 风格 command/args。
+    cmd_match = re.search(r'"command"\s*:\s*"([^"]+)"', text, flags=re.IGNORECASE)
+    args_match = re.search(r'"args"\s*:\s*\[(.*?)\]', text, flags=re.IGNORECASE | re.DOTALL)
+    if cmd_match:
+        command = cmd_match.group(1).strip()
+        args = []
+        if args_match:
+            raw_args = args_match.group(1)
+            args = re.findall(r'"([^"]+)"', raw_args)
+        return {'type': 'stdio', 'command': command, 'args': args}
+
+    # 其次解析 shell 行命令。
+    line_match = re.search(r'(npx|uvx|python3?|node)\s+([^\n<`]+)', text, flags=re.IGNORECASE)
+    if line_match:
+        line = f"{line_match.group(1)} {line_match.group(2)}".strip()
+        try:
+            parts = shlex.split(line)
+        except Exception:
+            parts = line.split()
+        if parts:
+            return {'type': 'stdio', 'command': parts[0], 'args': parts[1:]}
+
+    # 最后尝试识别 SSE / HTTP URL。
+    url_match = re.search(r'https?://[^\s"\'<>]+', text)
+    if url_match:
+        return {'type': 'http', 'url': url_match.group(0).strip()}
+
+    return None
 
 # ===== 日志API =====
 
@@ -248,6 +433,181 @@ def delete_mcp_server(server_id):
     if manager.delete_server(server_id):
         return jsonify({'code': 0, 'message': 'Server deleted'})
     return jsonify({'code': 404, 'message': 'Server not found'}), 404
+
+
+@systems_bp.route('/mcp/market', methods=['GET'])
+def list_mcp_market_catalog():
+    """返回内置 MCP 市场条目"""
+    return jsonify({
+        'code': 0,
+        'message': 'success',
+        'data': MCP_MARKET_CATALOG,
+        'count': len(MCP_MARKET_CATALOG)
+    })
+
+
+@systems_bp.route('/mcp/market/install', methods=['POST'])
+def install_mcp_market_item():
+    """根据市场条目一键创建 MCP server"""
+    try:
+        data = request.json or {}
+        item_id = str(data.get('id', '')).strip()
+        if not item_id:
+            return jsonify({'code': 400, 'message': 'id is required'}), 400
+
+        market_item = next((x for x in MCP_MARKET_CATALOG if x.get('id') == item_id), None)
+        if market_item is None:
+            return jsonify({'code': 404, 'message': 'Market item not found'}), 404
+
+        manager = get_mcp_manager()
+        servers = manager.list_servers(enabled_only=False)
+        for s in servers:
+            if (s.get('name') or '').strip().lower() == (market_item.get('name') or '').strip().lower():
+                return jsonify({
+                    'code': 0,
+                    'message': 'Server already exists',
+                    'data': {'id': s.get('id'), 'name': s.get('name'), 'exists': True}
+                })
+
+        server = MCPServer(
+            name=market_item.get('name', ''),
+            description=market_item.get('description', ''),
+            protocol_version='1.0',
+            type=market_item.get('type', ''),
+            command=market_item.get('command', ''),
+            args=list(market_item.get('args', []) or []),
+            url=market_item.get('url'),
+            enabled=True,
+            capabilities={'tags': list(market_item.get('tags', []) or []), 'source': 'market'}
+        )
+
+        if server.type in ('http', 'sse'):
+            server.url = market_item.get('url', '')
+
+        server_id = manager.add_server(server)
+        return jsonify({
+            'code': 0,
+            'message': 'Server installed',
+            'data': {'id': server_id, 'name': server.name, 'exists': False}
+        }), 201
+    except Exception as e:
+        return jsonify({'code': 400, 'message': str(e)}), 400
+
+
+@systems_bp.route('/mcp/market/registry', methods=['GET'])
+@systems_bp.route('/mcp/market/mcpmarket', methods=['GET'])
+def list_mcpmarket_items():
+    """官方 MCP Registry 条目列表（仅元数据）。"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 30, type=int)
+        query = str(request.args.get('query', '') or '').strip().lower()
+
+        page = max(1, int(page or 1))
+        page_size = max(5, min(100, int(page_size or 30)))
+
+        fetch_limit = min(200, page * page_size + page_size)
+        items = _fetch_mcpmarket_trending(limit=max(1, fetch_limit))
+
+        if query:
+            filtered = []
+            for item in items:
+                qsrc = ' '.join([
+                    str(item.get('name', '')).lower(),
+                    str(item.get('description', '')).lower(),
+                    str(item.get('external_url', '')).lower(),
+                    ' '.join([str(t).lower() for t in (item.get('tags') or [])])
+                ])
+                if query in qsrc:
+                    filtered.append(item)
+            items = filtered
+
+        start = (page - 1) * page_size
+        end = start + page_size
+        paged = items[start:end]
+        return jsonify({
+            'code': 0,
+            'message': 'success',
+            'data': paged,
+            'count': len(paged),
+            'page': page,
+            'page_size': page_size,
+            'total': len(items),
+            'has_more': end < len(items),
+            'query': query,
+            'mode': 'official_only',
+        })
+    except Exception as e:
+        fallback = []
+        return jsonify({
+            'code': 0,
+            'message': 'success',
+            'data': fallback,
+            'count': len(fallback),
+            'page': 1,
+            'page_size': len(fallback),
+            'total': len(fallback),
+            'has_more': False,
+            'query': str(request.args.get('query', '') or '').strip().lower(),
+            'warning': str(e),
+            'mode': 'registry_metadata_only',
+        })
+
+
+@systems_bp.route('/mcp/market/registry/install', methods=['POST'])
+@systems_bp.route('/mcp/market/mcpmarket/install', methods=['POST'])
+def install_mcpmarket_item_from_url():
+    """获取 MCP 元数据和安装指导（用户需要自己配置参数）。"""
+    try:
+        data = request.json or {}
+        server_id = str(data.get('server_id', '')).strip()
+        server_name = str(data.get('name', '')).strip()
+        
+        if not server_id or not server_name:
+            return jsonify({'code': 400, 'message': 'server_id and name are required'}), 400
+        
+        # 从官方 Registry 获取完整的服务器列表
+        servers = _fetch_official_mcp_registry(limit=200)
+        target_server = None
+        for srv in servers:
+            if srv['id'] == server_id or srv['name'].lower() == server_name.lower():
+                target_server = srv
+                break
+        
+        if not target_server:
+            return jsonify({'code': 400, 'message': f'Server {server_id} not found in MCP Registry'}), 400
+        
+        # 返回元数据和配置指导（类似 VSCode MCP 那样）
+        return jsonify({
+            'code': 0,
+            'message': 'MCP Server metadata and setup instructions',
+            'data': {
+                'server_info': target_server,
+                'setup_instructions': {
+                    'description': '该 MCP 服务器需要手动配置。请查看以下资源进行设置：',
+                    'links': [
+                        {'title': '官方注册表页面', 'url': target_server.get('registry_url', '')},
+                        {'title': '文档', 'url': target_server.get('documentation', '')},
+                        {'title': '项目主页', 'url': target_server.get('homepage', '')},
+                        {'title': '源代码仓库', 'url': target_server.get('repository', '')},
+                    ],
+                    'config_fields': [
+                        'protocol',
+                        'endpoint/command',
+                        'authentication_params',
+                        'environment_variables'
+                    ],
+                    'note': '请查看官方文档了解具体的连接参数和配置方法。不同的服务器有不同的配置要求。'
+                },
+                'editing_tips': {
+                    'vscode_style': '类似于 VSCode 的 MCP 配置，在 settings.json 中编辑 mcpServers 对象',
+                    'required_fields': ['name', 'type', 'command 或 url'],
+                    'optional_fields': ['env', 'args', 'disabled', 'alwaysAllow']
+                }
+            }
+        })
+    except Exception as e:
+        return jsonify({'code': 400, 'message': str(e)}), 400
 
 # ===== 知识库API =====
 

@@ -32,7 +32,7 @@
     }
   },
   "work_mode": {
-    "enabled": true,
+    "enabled": false,
     "password_hash": "73011b56941c1e4bd9675f2c4082fba8d7f8ee20b0dbaab8a55ca730eb5acd0c",
     "sandbox_enabled": false,
     "features": {
@@ -46,11 +46,14 @@
     ],
     "reply_policy": {
       "enabled": true,
-      "group_mode": "mention_or_keyword",
+      "group_mode": "mention_only",
       "private_mode": "always",
       "cooldown_seconds": 10,
       "keywords": [],
       "bot_qq": ""
+    },
+    "chat_settings": {
+      "bothub_enabled": false
     }
   },
   "comm_protocol": "onebot"

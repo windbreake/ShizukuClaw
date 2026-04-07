@@ -1,0 +1,137 @@
+[
+  {
+    "id": "8fdf3c9b",
+    "name": "Filesystem Local",
+    "description": "读写本地工作目录（stdio）",
+    "protocol_version": "1.0",
+    "type": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-filesystem",
+      "."
+    ],
+    "url": null,
+    "headers": {},
+    "capabilities": {
+      "tags": [
+        "file",
+        "local",
+        "official"
+      ],
+      "source": "market"
+    },
+    "enabled": true,
+    "status": "disconnected",
+    "last_sync": null,
+    "created_at": "2026-04-07T16:23:52.413904",
+    "updated_at": "2026-04-07T16:23:52.413904"
+  },
+  {
+    "id": "ac376286",
+    "name": "Git Local",
+    "description": "Git 仓库操作（stdio）",
+    "protocol_version": "1.0",
+    "type": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-git",
+      "."
+    ],
+    "url": null,
+    "headers": {},
+    "capabilities": {
+      "tags": [
+        "git",
+        "scm",
+        "official"
+      ],
+      "source": "market"
+    },
+    "enabled": true,
+    "status": "disconnected",
+    "last_sync": null,
+    "created_at": "2026-04-07T16:23:53.672878",
+    "updated_at": "2026-04-07T16:23:53.672878"
+  },
+  {
+    "id": "cc3ec9e9",
+    "name": "Fetch Web",
+    "description": "网页抓取与摘要（stdio）",
+    "protocol_version": "1.0",
+    "type": "stdio",
+    "command": "uvx",
+    "args": [
+      "mcp-server-fetch"
+    ],
+    "url": null,
+    "headers": {},
+    "capabilities": {
+      "tags": [
+        "web",
+        "crawler",
+        "official"
+      ],
+      "source": "market"
+    },
+    "enabled": true,
+    "status": "disconnected",
+    "last_sync": null,
+    "created_at": "2026-04-07T16:23:54.392742",
+    "updated_at": "2026-04-07T16:23:54.392742"
+  },
+  {
+    "id": "70a673f7",
+    "name": "SQLite Local",
+    "description": "快速连接 SQLite 文件",
+    "protocol_version": "1.0",
+    "type": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-sqlite",
+      "--db-path",
+      "data/database.sqlite"
+    ],
+    "url": null,
+    "headers": {},
+    "capabilities": {
+      "tags": [
+        "database",
+        "sqlite"
+      ],
+      "source": "market"
+    },
+    "enabled": true,
+    "status": "disconnected",
+    "last_sync": null,
+    "created_at": "2026-04-07T16:23:54.611246",
+    "updated_at": "2026-04-07T16:23:54.611246"
+  },
+  {
+    "id": "b4ea1ac4",
+    "name": "Uno Gateway (Official)",
+    "description": "官方 Uno 网关，一个 URL 调度所有 MCP（OAuth2 客户端）",
+    "protocol_version": "1.0",
+    "type": "http",
+    "command": "",
+    "args": [],
+    "url": "https://uno.mcpmarket.cn/mcp",
+    "headers": {},
+    "capabilities": {
+      "tags": [
+        "mcpmarket.cn",
+        "uno",
+        "official",
+        "oauth2"
+      ],
+      "source": "market"
+    },
+    "enabled": true,
+    "status": "disconnected",
+    "last_sync": null,
+    "created_at": "2026-04-07T16:34:00.837099",
+    "updated_at": "2026-04-07T16:34:00.837099"
+  }
+]

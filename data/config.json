@@ -143,6 +143,51 @@
           "crawl"
         ],
         "max_execution_ms": 35000
+      },
+      "default.data_query": {
+        "enabled": true,
+        "allow_network": true,
+        "allowed_domains": [
+          "wttr.in",
+          "wikipedia.org",
+          "en.wikipedia.org",
+          "zh.wikipedia.org",
+          "hn.algolia.com"
+        ],
+        "allowed_commands": [
+          "weather",
+          "wiki",
+          "news"
+        ],
+        "max_execution_ms": 12000
+      },
+      "default_data_query_plugin": {
+        "enabled": true,
+        "allow_network": true,
+        "allowed_domains": [],
+        "allowed_commands": [],
+        "max_execution_ms": 10000
+      }
+    }
+  },
+  "skill_framework": {
+    "enabled": true,
+    "skills": {
+      "office-excel-assistant": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "office-powerpoint-assistant": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "office-word-assistant": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "cls-certify-main": {
+        "enabled": true,
+        "allow_model_invocation": true
       }
     }
   }

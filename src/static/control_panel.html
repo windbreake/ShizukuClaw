@@ -86,6 +86,9 @@
                 <a class="nav-link nav-sub-link" id="v-plugins-tab" data-bs-toggle="pill" data-bs-target="#v-plugins" type="button" role="tab" onclick="loadPluginStatus()">
                     <i class="fas fa-puzzle-piece fa-fw"></i> 插件管理
                 </a>
+                <a class="nav-link nav-sub-link" id="v-skills-tab" data-bs-toggle="pill" data-bs-target="#v-skills" type="button" role="tab" onclick="loadSkillStatus()">
+                    <i class="fas fa-toolbox fa-fw"></i> skill 管理
+                </a>
                 <a class="nav-link nav-sub-link" id="v-persona-tab" data-bs-toggle="pill" data-bs-target="#v-persona" type="button" role="tab">
                     <i class="fas fa-face-smile-beam fa-fw"></i> 人格设定
                 </a>
@@ -164,6 +167,15 @@
                             <i class="fas fa-list-alt fa-3x text-warning mb-3"></i>
                             <h5 class="card-title text-dark">查看日志</h5>
                             <p class="card-text text-muted small">诊断问题</p>
+                         </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center h-100 py-3 pointer" onclick="document.getElementById('v-skills-tab').click()">
+                         <div class="card-body">
+                            <i class="fas fa-toolbox fa-3x text-secondary mb-3"></i>
+                            <h5 class="card-title text-dark">skill 管理</h5>
+                            <p class="card-text text-muted small">查看和开关 SKILL.md 能力</p>
                          </div>
                     </div>
                 </div>
@@ -454,6 +466,22 @@
                                 </div>
 
                                 <div class="p-3 border rounded bg-light mb-3">
+                                    <h6 class="mb-2">聊天设置</h6>
+                                    <div class="row g-2 mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label small">当前人格</label>
+                                            <select id="chat-settings-persona-select" class="form-select form-select-sm">
+                                                <option value="">加载中...</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6 d-flex align-items-end">
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="chat-settings-bothub-enabled" checked>
+                                                <label class="form-check-label" for="chat-settings-bothub-enabled">启用 /bothub 指令</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <h6 class="mb-2">回复触发规则</h6>
                                     <div class="row g-2">
                                         <div class="col-md-4">
@@ -481,11 +509,14 @@
                                         <div class="col-md-6">
                                             <label class="form-label small">机器人 QQ（可选）</label>
                                             <input type="text" id="wm-bot-qq" class="form-control form-control-sm" placeholder="用于精确识别 @ 目标">
-                                            <div class="form-text">如果不填写，@ 触发会自动关闭，只保留关键词触发。</div>
+                                            <div class="form-text">可选。若不填写，系统将优先依据 to_me / @ 事件自动判断。</div>
                                         </div>
                                         <div class="col-12">
                                             <label class="form-label small">自定义关键词</label>
                                             <textarea id="wm-reply-keywords" class="form-control form-control-sm" rows="3" placeholder="一行一个关键词，或用中文/英文逗号分隔"></textarea>
+                                        </div>
+                                        <div class="col-12 d-flex justify-content-end">
+                                            <button type="button" class="btn btn-primary btn-sm" onclick="saveWorkModeOptions()">保存聊天设置</button>
                                         </div>
                                     </div>
                                 </div>
@@ -925,7 +956,7 @@
             <div class="d-flex justify-content-between align-items-start mb-4">
                 <div>
                     <h3 class="mb-1"><i class="fas fa-plug me-2"></i>MCP 系统</h3>
-                    <p class="text-muted small mb-0">管理 MCP 服务器、资源和工具定义。</p>
+                    <p class="text-muted small mb-0">管理 MCP 服务器、资源和工具定义，并支持市场一键接入。</p>
                 </div>
                 <button class="btn btn-sm btn-outline-secondary" onclick="loadMcpManager()"><i class="fas fa-sync me-1"></i> 刷新</button>
             </div>
@@ -942,6 +973,64 @@
                     </div>
                 </div>
                 <div class="col-lg-8">
+                    <div class="card shadow-sm border-0 mb-3">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center gap-2">
+                                <span><i class="fas fa-store me-2 text-primary"></i>MCP 市场栏目卡</span>
+                                <span class="badge bg-primary" id="mcp-market-count-badge">0</span>
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#mcp-market-collapse" aria-expanded="false" aria-controls="mcp-market-collapse">
+                                <i class="fas fa-chevron-down me-1"></i>展开/收起
+                            </button>
+                        </div>
+                        <div id="mcp-market-collapse" class="collapse">
+                        <div class="card-body border-bottom py-2">
+                            <div class="row g-2 align-items-center">
+                                <div class="col-md-5">
+                                    <input id="mcp-market-search" class="form-control form-control-sm" placeholder="搜索名称/描述/标签..." oninput="onMcpMarketSearchInput()">
+                                </div>
+                                <div class="col-md-4">
+                                    <select id="mcp-market-tag-filter" class="form-select form-select-sm" onchange="loadMcpManager()">
+                                        <option value="">全部标签</option>
+                                        <option value="official">official</option>
+                                        <option value="database">database</option>
+                                        <option value="web">web</option>
+                                        <option value="git">git</option>
+                                        <option value="file">file</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mt-1">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="mcp-market-installed-only" onchange="loadMcpManager()">
+                                        <label class="form-check-label small" for="mcp-market-installed-only">仅显示未接入</label>
+                                    </div>
+                                </div>
+                                <div class="col-12 d-flex align-items-center justify-content-between mt-1">
+                                    <div class="small text-muted" id="mcp-market-page-label">第 1 页</div>
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="mcp market pager">
+                                        <button id="mcp-market-prev-btn" class="btn btn-outline-secondary" type="button" onclick="changeMcpMarketPage(-1)"><i class="fas fa-angle-left me-1"></i>上一页</button>
+                                        <button id="mcp-market-next-btn" class="btn btn-outline-secondary" type="button" onclick="changeMcpMarketPage(1)">下一页<i class="fas fa-angle-right ms-1"></i></button>
+                                    </div>
+                                </div>
+                                <div class="col-12 d-flex gap-2 flex-wrap">
+                                    <button class="btn btn-sm btn-outline-primary" type="button" onclick="syncMcpRegistryMarket()">
+                                        <i class="fas fa-cloud-download-alt me-1"></i>同步 MCP Registry 元数据
+                                    </button>
+                                    <div class="input-group input-group-sm" style="max-width: 560px;">
+                                        <span class="input-group-text">Registry 条目 ID</span>
+                                        <input id="mcpmarket-url-input" class="form-control" placeholder="例如: filesystem-local">
+                                        <button class="btn btn-primary" type="button" onclick="importMcpRegistryItem()">查看配置</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="mcp-market-cards" class="row g-3">
+                                <div class="col-12 text-muted">点击“同步 MCP Registry 元数据”加载条目...</div>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
                     <div class="card shadow-sm border-0">
                         <div class="card-header bg-white d-flex justify-content-between align-items-center">
                             <span><i class="fas fa-network-wired me-2 text-info"></i>服务器列表</span>
@@ -1082,6 +1171,142 @@
                 <div class="card-body">
                     <div id="plugins-cards" class="row g-3">
                         <div class="col-12 text-muted">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Skills Tab -->
+        <div class="tab-pane fade" id="v-skills" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h3 class="mb-1"><i class="fas fa-toolbox me-2"></i> skill 管理</h3>
+                    <p class="text-muted small mb-0">兼容 OpenClaw/Astr 风格 SKILL.md 目录，支持接入 GitHub 开源市场与 SkillHub 商店。</p>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    <div class="plugin-toolbar-search">
+                        <i class="fas fa-search"></i>
+                        <input id="skills-search-input" type="text" class="form-control form-control-sm" placeholder="搜索 skill...">
+                    </div>
+                    <button class="btn btn-outline-success btn-sm" type="button" onclick="openSkillUploadModal()"><i class="fas fa-upload me-1"></i>上传 Skills</button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="loadSkillStatus()"><i class="fas fa-sync me-1"></i>刷新</button>
+                    <button class="btn btn-primary btn-sm" onclick="reloadSkillsFromPanel()"><i class="fas fa-rotate me-1"></i>热重载</button>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2">
+                        <span><i class="fas fa-store me-2 text-success"></i>Skill 市场栏目卡</span>
+                        <span class="badge bg-success" id="skills-market-count-badge">0</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#skills-market-collapse" aria-expanded="false" aria-controls="skills-market-collapse">
+                        <i class="fas fa-chevron-down me-1"></i>展开/收起
+                    </button>
+                </div>
+                <div id="skills-market-collapse" class="collapse">
+                <div class="card-body border-bottom py-2">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-4">
+                            <input id="skills-market-search" class="form-control form-control-sm" placeholder="搜索 GitHub Skill 条目..." oninput="onSkillMarketSearchInput()">
+                        </div>
+                        <div class="col-md-8 d-flex gap-2 flex-wrap">
+                            <button class="btn btn-sm btn-outline-success" type="button" onclick="syncGithubSkillMarket()">
+                                <i class="fas fa-cloud-download-alt me-1"></i>同步 GitHub Skill 市场
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary" type="button" onclick="installSkillhubCli()">
+                                <i class="fas fa-download me-1"></i>安装 SkillHub CLI
+                            </button>
+                            <button class="btn btn-sm btn-primary" type="button" onclick="syncSkillhubMarket()">
+                                <i class="fas fa-store me-1"></i>同步 SkillHub 商店
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" onclick="loadSkillMarketDiagnostics()">
+                                <i class="fas fa-stethoscope me-1"></i>市场诊断
+                            </button>
+                            <div class="input-group input-group-sm" style="max-width: 560px;">
+                                <span class="input-group-text">SkillHub ID / 仓库链接</span>
+                                <input id="cocoloop-skill-url-input" class="form-control" placeholder="例如: skill-name 或 https://github.com/owner/repo">
+                                <button class="btn btn-success" type="button" onclick="installCocoloopSkillByInput()">安装或配置</button>
+                            </div>
+                        </div>
+                        <div class="col-12 d-flex align-items-center justify-content-between mt-1">
+                            <div class="small text-muted" id="skills-market-page-label">第 1 页</div>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="skills market pager">
+                                <button id="skills-market-prev-btn" class="btn btn-outline-secondary" type="button" onclick="changeSkillMarketPage(-1)"><i class="fas fa-angle-left me-1"></i>上一页</button>
+                                <button id="skills-market-next-btn" class="btn btn-outline-secondary" type="button" onclick="changeSkillMarketPage(1)">下一页<i class="fas fa-angle-right ms-1"></i></button>
+                            </div>
+                        </div>
+                        <div class="col-12 small text-muted" id="skills-market-diagnostics">诊断信息：未加载</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="skills-market-cards" class="row g-3">
+                        <div class="col-12 text-muted">点击“同步 GitHub Skill 市场”或“同步 SkillHub 商店”加载条目...</div>
+                    </div>
+                </div>
+                </div>
+            </div>
+
+            <div class="modal fade" id="skillhub-install-modal" tabindex="-1" aria-labelledby="skillhub-install-modal-label" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content border-0 shadow">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title mb-1" id="skillhub-install-modal-label">SkillHub CLI 安装</h5>
+                                <div class="small text-muted" id="skillhub-install-command-label">准备启动官方安装脚本</div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                                <span class="badge bg-secondary" id="skillhub-install-status-badge">等待开始</span>
+                                <span class="small text-muted" id="skillhub-install-job-id"></span>
+                            </div>
+                            <div class="border rounded bg-dark text-light p-3" style="min-height: 320px; max-height: 52vh; overflow: auto; white-space: pre-wrap; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 0.9rem;" id="skillhub-install-log">尚未开始安装...</div>
+                            <div class="small text-muted mt-2">安装日志会同步显示在后端控制台与日志文件中，关闭弹窗后仍会继续在后台运行。</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+                            <button type="button" class="btn btn-primary" onclick="closeSkillhubInstallToBackground()">关闭并转到后台</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-th-large me-2"></i>Skill 列表</span>
+                    <span id="skills-framework-enabled-badge" class="badge bg-success">Enabled</span>
+                </div>
+                <div class="card-body">
+                    <div id="skills-cards" class="row g-3">
+                        <div class="col-12 text-muted">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <input id="skills-upload-input" type="file" class="d-none" accept=".zip" onchange="handleSkillUploadInput(this)">
+
+        <div class="modal fade" id="skillsUploadModal" tabindex="-1" aria-labelledby="skillsUploadModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="skillsUploadModalLabel"><i class="fas fa-upload me-2"></i>上传 Skills</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="small text-muted mb-3">请上传 zip 压缩包，解压后应为 skill_name/ 目录，且包含 SKILL.md。</p>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('skills-upload-input').click()">
+                                <i class="fas fa-folder-open me-1"></i>选择 zip 文件
+                            </button>
+                            <div id="skills-upload-file-name" class="small text-muted text-center">未选择文件</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button id="skills-upload-submit" type="button" class="btn btn-success" onclick="uploadSelectedSkill()" disabled>上传</button>
                     </div>
                 </div>
             </div>
@@ -3022,6 +3247,12 @@
                 setChecked('wm-feature-coder-tool', data.features.allow_coder_tool);
             }
 
+            const bothubToggle = document.getElementById('chat-settings-bothub-enabled');
+            if (bothubToggle) {
+                const chatSettings = data.chat_settings || {};
+                bothubToggle.checked = !!chatSettings.bothub_enabled;
+            }
+
             if (data.reply_policy) {
                 const setValue = (id, value) => {
                     const el = document.getElementById(id);
@@ -3033,8 +3264,36 @@
                 setValue('wm-bot-qq', data.reply_policy.bot_qq || '');
                 setValue('wm-reply-keywords', Array.isArray(data.reply_policy.keywords) ? data.reply_policy.keywords.join('\n') : '');
             }
+
+            await loadChatSettingsPersonaOptions(data.active_persona || '');
         } catch (e) {
             console.warn('loadWorkModeStatus failed', e);
+        }
+    }
+
+    async function loadChatSettingsPersonaOptions(activePersona = '') {
+        const select = document.getElementById('chat-settings-persona-select');
+        if (!select) return;
+        try {
+            const res = await fetch('/api/personas');
+            const data = await res.json();
+            const personas = Array.isArray(data.personas) ? data.personas : [];
+            const effectiveActive = (activePersona || data.active || (personas[0] && personas[0].filename) || '').trim();
+
+            select.innerHTML = '';
+            personas.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.filename;
+                opt.textContent = `${p.name || p.filename} (${p.filename})`;
+                select.appendChild(opt);
+            });
+
+            if (effectiveActive) {
+                select.value = effectiveActive;
+            }
+        } catch (e) {
+            select.innerHTML = '<option value="">加载失败</option>';
+            console.warn('loadChatSettingsPersonaOptions failed', e);
         }
     }
 
@@ -3161,6 +3420,8 @@
 
     async function saveWorkModeOptions() {
         const keywordValue = (document.getElementById('wm-reply-keywords')?.value || '').trim();
+        const selectedPersona = (document.getElementById('chat-settings-persona-select')?.value || '').trim();
+        const bothubEnabled = !!document.getElementById('chat-settings-bothub-enabled')?.checked;
         const replyPolicy = {
             group_mode: document.getElementById('wm-reply-group-mode')?.value || 'mention_or_keyword',
             private_mode: document.getElementById('wm-reply-private-mode')?.value || 'always',
@@ -3174,6 +3435,9 @@
                 allow_code_exec: !!document.getElementById('wm-feature-code-exec')?.checked,
                 allow_plan_update: !!document.getElementById('wm-feature-plan-update')?.checked,
                 allow_coder_tool: !!document.getElementById('wm-feature-coder-tool')?.checked
+            },
+            chat_settings: {
+                bothub_enabled: bothubEnabled
             },
             reply_policy: replyPolicy
         };
@@ -3191,9 +3455,28 @@
             });
             return;
         }
+
+        if (selectedPersona) {
+            const pRes = await fetch('/api/personas/activate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ filename: selectedPersona })
+            });
+            const pData = await pRes.json();
+            if (!pRes.ok || !pData.success) {
+                await showUnifiedActionModal({
+                    title: '人格切换失败',
+                    message: (pData && pData.error) ? pData.error : '设置已保存，但人格切换失败',
+                    level: 'warning'
+                });
+                await loadWorkModeStatus();
+                return;
+            }
+        }
+
         await showUnifiedActionModal({
             title: '已保存',
-            message: '工作模式选项已保存。',
+            message: '聊天设置与工作模式选项已保存。',
             level: 'success'
         });
         loadWorkModeStatus();
@@ -3270,6 +3553,32 @@
     // 2.5 Plugin Framework Logic
     let pluginStatusCache = null;
     let currentPluginName = '';
+    let skillStatusCache = null;
+    let skillMarketCache = [];
+    let skillMarketLastDiagnostics = null;
+    let skillMarketSource = 'github';
+    let skillhubInstallJobState = {
+        jobId: '',
+        pollTimer: null,
+        active: false,
+        startedAt: 0,
+        modal: null,
+    };
+    let mcpMarketPageState = {
+        page: 1,
+        pageSize: 24,
+        hasMore: false,
+        total: 0,
+        query: '',
+        data: []
+    };
+    let skillMarketPageState = {
+        page: 1,
+        pageSize: 24,
+        hasMore: false,
+        total: 0,
+        query: ''
+    };
 
     // 安全的 toastr 包装
     if (typeof toastr === 'undefined') {
@@ -3709,10 +4018,609 @@
         }
     }
 
+    function _skillPolicyText(policy) {
+        if (!policy) return '-';
+        return [
+            `enabled=${policy.enabled ? 'Y' : 'N'}`,
+            `model=${policy.allow_model_invocation ? 'Y' : 'N'}`
+        ].join(' | ');
+    }
+
+    function renderSkillCards(skills) {
+        const cards = document.getElementById('skills-cards');
+        const keyword = (document.getElementById('skills-search-input')?.value || '').trim().toLowerCase();
+        if (!cards) return;
+        cards.innerHTML = '';
+
+        const filtered = (skills || []).filter(s => {
+            if (!keyword) return true;
+            const name = String(s.name || '').toLowerCase();
+            const sid = String(s.skill_id || '').toLowerCase();
+            const desc = String(s.description || '').toLowerCase();
+            return name.includes(keyword) || sid.includes(keyword) || desc.includes(keyword);
+        });
+
+        if (!filtered.length) {
+            cards.innerHTML = '<div class="col-12 text-muted">No skill loaded</div>';
+            return;
+        }
+
+        filtered.forEach(s => {
+            const card = document.createElement('div');
+            card.className = 'col-xl-4 col-md-6';
+            card.innerHTML = `
+                <div class="card h-100 plugin-card plugin-entry-card" data-skill-id="${s.skill_id}">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="d-flex align-items-start gap-2 flex-grow-1 plugin-title-wrap">
+                                <div class="plugin-icon"><i class="fas fa-toolbox"></i></div>
+                                <div class="plugin-title-meta">
+                                    <h6 class="mb-1 plugin-name" title="${s.name}">${s.name}</h6>
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        <span class="badge text-bg-info plugin-mini-badge">id:${s.skill_id}</span>
+                                        <span class="badge text-bg-light plugin-mini-badge">v${s.version || '-'}</span>
+                                        <span class="badge text-bg-light plugin-mini-badge">scripts:${s.has_scripts ? 'Y' : 'N'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-check form-switch m-0 ms-2">
+                                <input class="form-check-input skill-card-toggle" type="checkbox" role="switch" ${s.policy && s.policy.enabled ? 'checked' : ''} data-skill-id="${s.skill_id}" title="启用/禁用 skill ${s.skill_id}">
+                            </div>
+                        </div>
+                        <div class="small text-muted mb-3 plugin-desc">${s.description || '无描述'}</div>
+                        <div class="small plugin-policy-line mt-auto">
+                            <span>${_skillPolicyText(s.policy)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const toggleEl = card.querySelector('.skill-card-toggle');
+            if (toggleEl) {
+                toggleEl.addEventListener('click', (ev) => ev.stopPropagation());
+                toggleEl.addEventListener('change', (ev) => {
+                    toggleSkillEnabled(s.skill_id, !!ev.target.checked);
+                });
+            }
+            cards.appendChild(card);
+        });
+    }
+
+    async function toggleSkillEnabled(skillId, enabled) {
+        try {
+            const data = await fetchJsonSafe('/api/skills/policy', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({skill_id: skillId, policy: {enabled}})
+            });
+            if (!data.success) throw new Error(data.error || 'toggle failed');
+            toastr.success(`skill ${skillId} 已${enabled ? '启用' : '禁用'}`);
+            await loadSkillStatus();
+        } catch (e) {
+            toastr.error('skill 开关失败: ' + e.message);
+        }
+    }
+
+    async function loadSkillStatus() {
+        const cards = document.getElementById('skills-cards');
+        if (cards) cards.innerHTML = '<div class="col-12 text-muted">Loading...</div>';
+        try {
+            const data = await fetchJsonSafe('/api/skills/status');
+            if (!data.success) throw new Error(data.error || 'load failed');
+
+            skillStatusCache = data.status;
+            const status = data.status || {};
+            const skills = status.skills || [];
+
+            const badge = document.getElementById('skills-framework-enabled-badge');
+            if (badge) {
+                badge.textContent = status.enabled ? 'Enabled' : 'Disabled';
+                badge.className = `badge ${status.enabled ? 'bg-success' : 'bg-secondary'}`;
+            }
+
+            renderSkillCards(skills);
+            await loadSkillMarketCocoloop(false);
+        } catch (e) {
+            if (cards) cards.innerHTML = `<div class="col-12 text-danger">${e.message}</div>`;
+        }
+    }
+
+    function renderSkillMarketCards(items) {
+        const wrap = document.getElementById('skills-market-cards');
+        const badge = document.getElementById('skills-market-count-badge');
+        if (!wrap) return;
+
+        const list = items || [];
+
+        if (badge) badge.textContent = String(list.length);
+
+        if (!list.length) {
+            wrap.innerHTML = '<div class="col-12 text-muted">暂无可显示的市场条目</div>';
+            return;
+        }
+
+        function cleanMarketText(value) {
+            return String(value || '')
+                .replace(/[│┆┊|]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .replace(/^\s+|\s+$/g, '')
+                .replace(/^(custom|unknown|undefined|null)\s*$/i, '')
+                .trim();
+        }
+
+        wrap.innerHTML = list.map(item => {
+            const src = String(item.source || '').toLowerCase();
+            const isSkillhubMarket = skillMarketSource === 'skillhub';
+            const isSkillhub = isSkillhubMarket || src === 'skillhub' || src === 'custom' || String(item.skillhub_id || '').trim() !== '';
+            const sourceBadge = isSkillhub ? 'SkillHub' : 'GitHub';
+            const displayName = cleanMarketText(item.name) || (isSkillhub ? 'SkillHub' : 'GitHub Skill');
+            const displayAuthor = cleanMarketText(item.author) || '-';
+            const displayDescription = cleanMarketText(item.description) || (isSkillhub ? '来自 SkillHub 商店' : '来自 GitHub 开源市场');
+            const actionBtn = isSkillhub
+                ? `<button class="btn btn-sm btn-success" onclick="installSkillhubSkill('${escapeHtml(item.skillhub_id || item.id || '')}', '${escapeHtml(displayName || '')}')"><i class="fas fa-bolt me-1"></i>安装并使用</button>`
+                : `<button class="btn btn-sm btn-success" onclick="installCocoloopSkill('${escapeHtml(item.external_url || '')}')"><i class="fas fa-circle-info me-1"></i>配置指导</button>`;
+            return `
+            <div class="col-xl-4 col-md-6">
+                <div class="card h-100 plugin-card plugin-entry-card">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="d-flex align-items-start gap-2 flex-grow-1 plugin-title-wrap">
+                                <div class="plugin-icon"><i class="fas fa-store"></i></div>
+                                <div class="plugin-title-meta">
+                                    <h6 class="mb-1 plugin-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</h6>
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        <span class="badge text-bg-success plugin-mini-badge">${sourceBadge}</span>
+                                        <span class="badge text-bg-light plugin-mini-badge">id:${escapeHtml(item.id || '-')}</span>
+                                        ${item.stars !== undefined ? `<span class="badge text-bg-warning plugin-mini-badge">★ ${escapeHtml(String(item.stars))}</span>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="small text-muted mb-1">作者：${escapeHtml(displayAuthor)} ${item.language ? `· 语言：${escapeHtml(item.language)}` : ''}</div>
+                        <div class="small text-muted mb-2 plugin-desc">${escapeHtml(displayDescription)}</div>
+                        <div class="small text-muted mb-3">${item.external_url ? `<a href="${escapeHtml(item.external_url)}" target="_blank" rel="noopener">查看详情</a>` : '<span>-</span>'}</div>
+                        <div class="mt-auto d-flex gap-2">
+                            ${item.external_url ? `<a class="btn btn-sm btn-outline-primary" href="${escapeHtml(item.external_url)}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt me-1"></i>打开详情</a>` : ''}
+                            ${actionBtn}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        }).join('');
+
+        updateSkillMarketPagerUI();
+    }
+
+    function renderMcpMarketCards(items, existingNames) {
+        const wrap = document.getElementById('mcp-market-cards');
+        const badge = document.getElementById('mcp-market-count-badge');
+        const list = Array.isArray(items) ? items : [];
+        if (!wrap) return;
+
+        if (badge) badge.textContent = String(list.length);
+        if (!list.length) {
+            wrap.innerHTML = '<div class="col-12 text-muted">暂无市场条目</div>';
+            return;
+        }
+
+        wrap.innerHTML = list.map(item => {
+            const installed = existingNames.has(String(item.name || '').trim().toLowerCase());
+            const keywords = Array.isArray(item.keywords) ? item.keywords : (Array.isArray(item.tags) ? item.tags : []);
+            const source = String(item.source || '').toLowerCase();
+            const installable = item.installable !== false;
+            
+            // 链接信息
+            const docUrl = escapeHtml(item.documentation || '');
+            const homeUrl = escapeHtml(item.homepage || '');
+            const repoUrl = escapeHtml(item.repository || '');
+            const registryUrl = escapeHtml(item.registry_url || '#');
+            
+            // 构建链接HTML
+            let linksHtml = '';
+            if (docUrl) linksHtml += `<a href="${docUrl}" target="_blank" class="badge bg-info me-2" title="查看文档"><i class="fas fa-book me-1"></i>文档</a>`;
+            if (homeUrl) linksHtml += `<a href="${homeUrl}" target="_blank" class="badge bg-secondary me-2" title="访问主页"><i class="fas fa-globe me-1"></i>主页</a>`;
+            if (repoUrl) linksHtml += `<a href="${repoUrl}" target="_blank" class="badge bg-dark me-2" title="查看源代码"><i class="fab fa-github me-1"></i>GitHub</a>`;
+            if (registryUrl && registryUrl !== '#') linksHtml += `<a href="${registryUrl}" target="_blank" class="badge bg-primary me-2" title="打开注册表页面"><i class="fas fa-link me-1"></i>注册表</a>`;
+            
+            // 构建操作按钮
+            const installAction = `installMcpMarketItem('${escapeHtml(item.id || '')}')`;
+            const actionBtn = !installable
+                ? `<a class="btn btn-sm btn-outline-secondary" href="${registryUrl}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt me-1"></i>浏览</a>`
+                : `<button class="btn btn-sm ${installed ? 'btn-outline-success' : 'btn-primary'}" onclick="${installAction}" ${installed ? 'disabled' : ''} title="${item.user_config_required ? '需要手动配置连接参数' : ''}"><i class="fas ${installed ? 'fa-check' : 'fa-gears'} me-1"></i>${installed ? '已接入' : '查看配置'}</button>`;
+            
+            return `
+                <div class="col-xl-4 col-md-6">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <!-- 头部：名称 + 类型Badge -->
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div class="fw-semibold text-truncate me-2" title="${escapeHtml(item.name || '')}">${escapeHtml(item.name || '')}</div>
+                                <span class="badge bg-light text-dark border small">${escapeHtml(item.type || 'stdio')}</span>
+                            </div>
+                            
+                            <!-- 作者信息 -->
+                            ${item.author ? `<div class="small text-muted mb-1"><i class="fas fa-user me-1"></i>By ${escapeHtml(item.author)}</div>` : ''}
+                            
+                            <!-- 版本信息 -->
+                            ${item.version ? `<div class="small text-muted mb-2"><i class="fas fa-tag me-1"></i>v${escapeHtml(item.version)}</div>` : ''}
+                            
+                            <!-- 描述 -->
+                            <div class="small text-muted mb-2" style="min-height: 42px; max-height: 60px; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.description || '-')}</div>
+                            
+                            <!-- 关键字/标签 -->
+                            ${keywords.length > 0 ? `<div class="small mb-3"><span class="badge bg-light text-dark">${keywords.slice(0, 3).map(t => escapeHtml(t)).join('</span> <span class="badge bg-light text-dark">')}</span></div>` : '<div class="small mb-3 text-muted">-</div>'}
+                            
+                            <!-- 跳转链接（文档、主页、GitHub等） -->
+                            ${linksHtml ? `<div class="small mb-3" style="word-break: break-word;">${linksHtml}</div>` : ''}
+                            
+                            <!-- 配置提示 -->
+                            ${item.user_config_required ? `<div class="alert alert-warning alert-sm small mb-2 p-2" role="alert"><i class="fas fa-info-circle me-1"></i>需要手动配置连接参数</div>` : ''}
+                            
+                            <!-- 操作按钮 -->
+                            <div class="mt-auto">
+                                ${actionBtn}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function updateSkillMarketPagerUI() {
+        const label = document.getElementById('skills-market-page-label');
+        const prevBtn = document.getElementById('skills-market-prev-btn');
+        const nextBtn = document.getElementById('skills-market-next-btn');
+        const st = skillMarketPageState || {page: 1, pageSize: 24, hasMore: false, total: 0};
+
+        if (label) {
+            const approxTotalPages = Math.max(st.page, Math.ceil((Number(st.total || 0) || 1) / (Number(st.pageSize || 24) || 24)));
+            label.textContent = `第 ${st.page} / ${approxTotalPages} 页 · 共 ${st.total || 0} 条`;
+        }
+        if (prevBtn) prevBtn.disabled = st.page <= 1;
+        if (nextBtn) nextBtn.disabled = !st.hasMore;
+    }
+
+    function changeSkillMarketPage(delta) {
+        const nextPage = Math.max(1, (skillMarketPageState.page || 1) + Number(delta || 0));
+        if (nextPage === skillMarketPageState.page) return;
+        skillMarketPageState.page = nextPage;
+        loadSkillMarketCocoloop(false);
+    }
+
+    function onSkillMarketSearchInput() {
+        const query = (document.getElementById('skills-market-search')?.value || '').trim();
+        skillMarketPageState.query = query;
+        skillMarketPageState.page = 1;
+        loadSkillMarketCocoloop(false);
+    }
+
+    async function loadSkillMarketCocoloop(showToast = true) {
+        try {
+            const query = encodeURIComponent(skillMarketPageState.query || '');
+            const page = Number(skillMarketPageState.page || 1);
+            const pageSize = Number(skillMarketPageState.pageSize || 24);
+            const apiPath = skillMarketSource === 'skillhub'
+                ? `/api/skills/market/skillhub/search?page=${page}&page_size=${pageSize}&query=${query}`
+                : `/api/skills/market/github?page=${page}&page_size=${pageSize}&query=${query}`;
+            const data = await fetchJsonSafe(apiPath);
+            if (!data.success) throw new Error(data.error || 'load market failed');
+            skillMarketCache = Array.isArray(data.items) ? data.items : [];
+            skillMarketPageState.page = Number(data.page || page);
+            skillMarketPageState.pageSize = Number(data.page_size || pageSize);
+            skillMarketPageState.total = Number(data.total || skillMarketCache.length || 0);
+            skillMarketPageState.hasMore = !!data.has_more;
+            skillMarketLastDiagnostics = data.diagnostics || null;
+            renderSkillMarketCards(skillMarketCache);
+            updateSkillMarketDiagnosticsText();
+            if (showToast) toastr.success(`已同步 ${skillMarketSource === 'skillhub' ? 'SkillHub 商店' : 'GitHub Skill 市场'}条目：${skillMarketCache.length}`);
+        } catch (e) {
+            if (showToast) toastr.error(`同步${skillMarketSource === 'skillhub' ? 'SkillHub 商店' : 'GitHub Skill 市场'}失败: ` + e.message);
+        }
+    }
+
+    function updateSkillMarketDiagnosticsText() {
+        const el = document.getElementById('skills-market-diagnostics');
+        if (!el) return;
+        const d = skillMarketLastDiagnostics || {};
+        const cache = d.cache || {};
+        const src = Array.isArray(d.sources) ? d.sources : [];
+        const errs = Array.isArray(d.errors) ? d.errors : [];
+        const srcOk = src.filter(x => x && x.ok).length;
+        const srcTotal = src.length;
+        const topSrc = src.slice(0, 3).map(x => `${x.source || '-'}:${x.count || 0}`).join(' | ');
+        const age = (cache.age_seconds === null || cache.age_seconds === undefined) ? '-' : `${cache.age_seconds}s`;
+        if (!skillMarketLastDiagnostics) {
+            el.textContent = '诊断信息：未加载';
+            return;
+        }
+        const errText = errs.length ? `，错误 ${errs.length} 条` : '';
+        el.textContent = `诊断信息：缓存 ${cache.count || 0} 条（年龄 ${age}），源 ${srcOk}/${srcTotal} 可用${errText}${topSrc ? `，命中：${topSrc}` : ''}`;
+    }
+
+    async function loadSkillMarketDiagnostics(showToast = false) {
+        try {
+            if (!skillMarketCache.length) {
+                await loadSkillMarketCocoloop(false);
+            } else {
+                const query = encodeURIComponent(skillMarketPageState.query || '');
+                const page = Number(skillMarketPageState.page || 1);
+                const pageSize = Number(skillMarketPageState.pageSize || 24);
+                const apiPath = skillMarketSource === 'skillhub'
+                    ? `/api/skills/market/skillhub/search?page=${page}&page_size=${pageSize}&query=${query}`
+                    : `/api/skills/market/github?page=${page}&page_size=${pageSize}&query=${query}`;
+                const data = await fetchJsonSafe(apiPath);
+                if (data.success) {
+                    skillMarketLastDiagnostics = data.diagnostics || skillMarketLastDiagnostics;
+                    skillMarketCache = Array.isArray(data.items) ? data.items : skillMarketCache;
+                    renderSkillMarketCards(skillMarketCache);
+                }
+            }
+            updateSkillMarketDiagnosticsText();
+            if (showToast) toastr.success('市场诊断已更新');
+        } catch (e) {
+            const el = document.getElementById('skills-market-diagnostics');
+            if (el) el.textContent = `诊断信息：加载失败 - ${e.message}`;
+            if (showToast) toastr.error('市场诊断失败: ' + e.message);
+        }
+    }
+
+    async function installCocoloopSkill(url) {
+        if (!url) {
+            toastr.warning('无效的仓库链接');
+            return;
+        }
+        try {
+            const data = await fetchJsonSafe('/api/skills/market/github/install', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({url})
+            });
+            if (!data.success) throw new Error(data.error || 'install failed');
+            window.open(url, '_blank', 'noopener');
+            toastr.info(data.message || '请根据仓库文档手动配置 Skill');
+        } catch (e) {
+            toastr.error('获取配置指导失败: ' + e.message);
+        }
+    }
+
+    async function installCocoloopSkillByInput() {
+        const input = document.getElementById('cocoloop-skill-url-input');
+        const url = (input?.value || '').trim();
+        if (!url) {
+            toastr.warning('请先输入 SkillHub ID 或 GitHub 仓库链接');
+            return;
+        }
+        if (skillMarketSource === 'skillhub' && !/^https?:\/\//i.test(url)) {
+            await installSkillhubSkill(url, url);
+            return;
+        }
+        await installCocoloopSkill(url);
+    }
+
+    async function installSkillhubCli() {
+        try {
+            const st = await fetchJsonSafe('/api/skills/market/skillhub/status');
+            if (st.success && st.installed) {
+                toastr.success(`SkillHub CLI 已安装${st.version ? '：' + st.version : ''}`);
+                return;
+            }
+            const data = await fetchJsonSafe('/api/skills/market/skillhub/cli/install', {method: 'POST'});
+            if (!data.success) throw new Error(data.error || 'install failed');
+            openSkillhubInstallModal(data);
+        } catch (e) {
+            toastr.error('安装 SkillHub CLI 失败: ' + e.message);
+        }
+    }
+
+    function _skillhubInstallStatusMeta(status) {
+        const value = String(status || '').toLowerCase();
+        if (value === 'success') return {text: '安装完成', className: 'bg-success'};
+        if (value === 'error') return {text: '安装失败', className: 'bg-danger'};
+        if (value === 'running') return {text: '正在安装', className: 'bg-primary'};
+        if (value === 'queued') return {text: '排队中', className: 'bg-secondary'};
+        return {text: '等待开始', className: 'bg-secondary'};
+    }
+
+    function _skillhubInstallRenderLogs(lines) {
+        const logEl = document.getElementById('skillhub-install-log');
+        if (!logEl) return;
+        const list = Array.isArray(lines) ? lines : [];
+        logEl.textContent = list.length ? list.join('\n') : '尚未开始安装...';
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function _skillhubInstallUpdateModal(job) {
+        if (!job) return;
+        const badge = document.getElementById('skillhub-install-status-badge');
+        const cmd = document.getElementById('skillhub-install-command-label');
+        const jobId = document.getElementById('skillhub-install-job-id');
+        const meta = _skillhubInstallStatusMeta(job.status);
+        if (badge) {
+            badge.textContent = meta.text;
+            badge.className = `badge ${meta.className}`;
+        }
+        if (cmd) {
+            cmd.textContent = job.command_display || 'curl -fsSL https://skillhub.cn/install/install.sh | bash -s -- --no-skills';
+        }
+        if (jobId) {
+            jobId.textContent = job.job_id ? `Job: ${job.job_id}` : '';
+        }
+        _skillhubInstallRenderLogs(job.logs || []);
+    }
+
+    function _skillhubInstallStopPolling() {
+        if (skillhubInstallJobState.pollTimer) {
+            clearInterval(skillhubInstallJobState.pollTimer);
+            skillhubInstallJobState.pollTimer = null;
+        }
+    }
+
+    async function _skillhubInstallPollJob() {
+        const jobId = skillhubInstallJobState.jobId;
+        if (!jobId) return;
+        try {
+            const data = await fetchJsonSafe(`/api/skills/market/skillhub/cli/install/jobs/${encodeURIComponent(jobId)}`);
+            if (!data.success) throw new Error(data.error || 'poll failed');
+            _skillhubInstallUpdateModal(data);
+            if (data.status === 'success') {
+                _skillhubInstallStopPolling();
+                skillhubInstallJobState.active = false;
+                toastr.success(data.message || 'SkillHub CLI 安装完成');
+            } else if (data.status === 'error') {
+                _skillhubInstallStopPolling();
+                skillhubInstallJobState.active = false;
+                toastr.error(data.message || 'SkillHub CLI 安装失败');
+            }
+        } catch (e) {
+            const badge = document.getElementById('skillhub-install-status-badge');
+            if (badge) {
+                badge.textContent = '轮询失败';
+                badge.className = 'badge bg-warning text-dark';
+            }
+        }
+    }
+
+    function openSkillhubInstallModal(data) {
+        const modalEl = document.getElementById('skillhub-install-modal');
+        if (!modalEl) return;
+        skillhubInstallJobState.jobId = data.job_id || '';
+        skillhubInstallJobState.startedAt = Date.now();
+        skillhubInstallJobState.active = true;
+        _skillhubInstallUpdateModal(data);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl, {backdrop: true, keyboard: true});
+        skillhubInstallJobState.modal = modal;
+        modal.show();
+        _skillhubInstallStopPolling();
+        skillhubInstallJobState.pollTimer = setInterval(_skillhubInstallPollJob, 1000);
+        _skillhubInstallPollJob();
+    }
+
+    function closeSkillhubInstallToBackground() {
+        const modalEl = document.getElementById('skillhub-install-modal');
+        if (!modalEl) return;
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        _skillhubInstallStopPolling();
+        skillhubInstallJobState.active = false;
+        toastr.info('SkillHub CLI 仍在后台安装，可稍后重新打开查看日志');
+    }
+
+    const skillhubInstallModalEl = document.getElementById('skillhub-install-modal');
+    if (skillhubInstallModalEl) {
+        skillhubInstallModalEl.addEventListener('hidden.bs.modal', () => {
+            _skillhubInstallStopPolling();
+            skillhubInstallJobState.active = false;
+        });
+    }
+
+    async function syncGithubSkillMarket() {
+        skillMarketSource = 'github';
+        skillMarketPageState.page = 1;
+        await loadSkillMarketCocoloop(true);
+    }
+
+    async function syncSkillhubMarket() {
+        skillMarketSource = 'skillhub';
+        skillMarketPageState.page = 1;
+        await loadSkillMarketCocoloop(true);
+    }
+
+    async function installSkillhubSkill(skillId, fallbackName = '') {
+        if (!skillId) {
+            toastr.warning('无效的 SkillHub skill ID');
+            return;
+        }
+        try {
+            const data = await fetchJsonSafe('/api/skills/market/skillhub/install', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({skill_id: skillId, name: fallbackName})
+            });
+            if (!data.success) throw new Error(data.error || 'install failed');
+            toastr.success(data.message || `Skill 安装成功: ${skillId}`);
+            await loadSkillStatus();
+        } catch (e) {
+            toastr.error('SkillHub 安装失败: ' + e.message);
+        }
+    }
+
+    async function reloadSkillsFromPanel() {
+        try {
+            const data = await fetchJsonSafe('/api/skills/reload', {method: 'POST'});
+            if (!data.success) throw new Error(data.error || 'reload failed');
+            toastr.success('skill 热重载完成');
+            await loadSkillStatus();
+        } catch (e) {
+            toastr.error('skill 热重载失败: ' + e.message);
+        }
+    }
+
+    function openSkillUploadModal() {
+        const input = document.getElementById('skills-upload-input');
+        const label = document.getElementById('skills-upload-file-name');
+        const submit = document.getElementById('skills-upload-submit');
+        if (input) input.value = '';
+        if (label) label.textContent = '未选择文件';
+        if (submit) submit.disabled = true;
+
+        const modalEl = document.getElementById('skillsUploadModal');
+        if (modalEl && window.bootstrap && bootstrap.Modal) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+    }
+
+    function handleSkillUploadInput(input) {
+        const file = input && input.files && input.files[0] ? input.files[0] : null;
+        const label = document.getElementById('skills-upload-file-name');
+        const submit = document.getElementById('skills-upload-submit');
+        if (label) label.textContent = file ? file.name : '未选择文件';
+        if (submit) submit.disabled = !file;
+    }
+
+    async function uploadSelectedSkill() {
+        const input = document.getElementById('skills-upload-input');
+        const file = input && input.files && input.files[0] ? input.files[0] : null;
+        if (!file) {
+            toastr.warning('请先选择 zip 文件');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const submit = document.getElementById('skills-upload-submit');
+        if (submit) submit.disabled = true;
+
+        try {
+            const res = await fetch('/api/skills/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error((data && data.error) ? data.error : `HTTP ${res.status}`);
+            }
+
+            toastr.success(`skill ${data.skill_id || ''} 上传成功`);
+            const modalEl = document.getElementById('skillsUploadModal');
+            if (modalEl && window.bootstrap && bootstrap.Modal) {
+                const inst = bootstrap.Modal.getInstance(modalEl);
+                if (inst) inst.hide();
+            }
+            await loadSkillStatus();
+        } catch (e) {
+            toastr.error('上传失败: ' + e.message);
+        } finally {
+            if (submit) submit.disabled = false;
+        }
+    }
+
 
 
     const AGENT_SUB_TAB_IDS = ['v-tasks-tab', 'v-mcp-tab', 'v-knowledge-tab', 'v-instructions-tab'];
-    const EXTENSIONS_SUB_TAB_IDS = ['v-plugins-tab', 'v-persona-tab'];
+    const EXTENSIONS_SUB_TAB_IDS = ['v-plugins-tab', 'v-skills-tab', 'v-persona-tab'];
     const OPS_SUB_TAB_IDS = ['v-config-tab', 'v-system-tab', 'v-database-tab', 'v-logs-tab', 'v-terminal-tab', 'v-gateway-tab'];
     let agentSubmenuCollapse = null;
     let extensionsSubmenuCollapse = null;
@@ -3930,7 +4838,15 @@
                     renderPluginCards(plugins);
                 });
             }
+            const skillSearch = document.getElementById('skills-search-input');
+            if (skillSearch) {
+                skillSearch.addEventListener('input', () => {
+                    const skills = (skillStatusCache && skillStatusCache.skills) ? skillStatusCache.skills : [];
+                    renderSkillCards(skills);
+                });
+            }
             loadPluginStatus();
+            loadSkillStatus();
         } catch (e) {
             console.error("Initialization Error:", e);
         }
@@ -4503,13 +5419,74 @@
 
     async function loadMcpManager() {
         try {
-            const res = await fetch('/api/systems/mcp/servers');
-            const data = await res.json();
+            const query = encodeURIComponent(mcpMarketPageState.query || '');
+            const mcpPage = Number(mcpMarketPageState.page || 1);
+            const mcpPageSize = Number(mcpMarketPageState.pageSize || 24);
+            const settled = await Promise.allSettled([
+                fetch('/api/systems/mcp/servers'),
+                fetch('/api/systems/mcp/market'),
+                fetch(`/api/systems/mcp/market/registry?page=${mcpPage}&page_size=${mcpPageSize}&query=${query}`)
+            ]);
+
+            async function safeJsonFromSettled(item, fallback = {}) {
+                try {
+                    if (!item || item.status !== 'fulfilled' || !item.value) return fallback;
+                    const res = item.value;
+                    const text = await res.text();
+                    try {
+                        return JSON.parse(text);
+                    } catch {
+                        return fallback;
+                    }
+                } catch {
+                    return fallback;
+                }
+            }
+
+            const data = await safeJsonFromSettled(settled[0], {code: 1, data: []});
+            const marketData = await safeJsonFromSettled(settled[1], {code: 1, data: []});
+            const marketCnData = await safeJsonFromSettled(settled[2], {code: 1, data: []});
             const servers = (data.code === 0 && Array.isArray(data.data)) ? data.data : [];
+            const marketItemsLocal = (marketData.code === 0 && Array.isArray(marketData.data)) ? marketData.data : [];
+            const marketItemsCn = (marketCnData.code === 0 && Array.isArray(marketCnData.data)) ? marketCnData.data : [];
+            mcpMarketPageState.page = Number(marketCnData.page || mcpPage);
+            mcpMarketPageState.pageSize = Number(marketCnData.page_size || mcpPageSize);
+            mcpMarketPageState.total = Number(marketCnData.total || marketItemsCn.length || 0);
+            mcpMarketPageState.hasMore = !!marketCnData.has_more;
+            mcpMarketPageState.data = marketItemsCn;
+            const marketItems = [...marketItemsLocal, ...marketItemsCn];
             const body = document.getElementById('mcp-body');
             const badge = document.getElementById('mcp-count-badge');
+            const marketBadge = document.getElementById('mcp-market-count-badge');
+            const marketSearch = (document.getElementById('mcp-market-search')?.value || '').trim().toLowerCase();
+            const marketTag = (document.getElementById('mcp-market-tag-filter')?.value || '').trim().toLowerCase();
+            const uninstalledOnly = !!document.getElementById('mcp-market-installed-only')?.checked;
             if (badge) badge.textContent = servers.length;
+            if (marketBadge) marketBadge.textContent = marketItems.length;
             if (!body) return;
+
+            const existingNames = new Set(servers.map(s => String(s.name || '').trim().toLowerCase()));
+            const filteredMarket = marketItems.filter(item => {
+                const name = String(item.name || '').toLowerCase();
+                const desc = String(item.description || '').toLowerCase();
+                const tags = (Array.isArray(item.tags) ? item.tags : []).map(t => String(t || '').toLowerCase());
+                const installed = existingNames.has(String(item.name || '').trim().toLowerCase());
+
+                if (marketSearch && !(name.includes(marketSearch) || desc.includes(marketSearch) || tags.some(t => t.includes(marketSearch)))) {
+                    return false;
+                }
+                if (marketTag && !tags.includes(marketTag)) {
+                    return false;
+                }
+                if (uninstalledOnly && installed) {
+                    return false;
+                }
+                return true;
+            });
+            if (marketBadge) marketBadge.textContent = filteredMarket.length;
+            updateMcpMarketPagerUI();
+            renderMcpMarketCards(filteredMarket, existingNames);
+
             if (!servers.length) {
                 body.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">暂无 MCP 服务器</td></tr>';
                 return;
@@ -4525,6 +5502,202 @@
         } catch (e) {
             toastr.error('加载 MCP 失败: ' + e.message);
         }
+    }
+
+    function updateMcpMarketPagerUI() {
+        const label = document.getElementById('mcp-market-page-label');
+        const prevBtn = document.getElementById('mcp-market-prev-btn');
+        const nextBtn = document.getElementById('mcp-market-next-btn');
+        const st = mcpMarketPageState || {page: 1, pageSize: 24, hasMore: false, total: 0};
+
+        if (label) {
+            const approxTotalPages = Math.max(st.page, Math.ceil((Number(st.total || 0) || 1) / (Number(st.pageSize || 24) || 24)));
+            label.textContent = `第 ${st.page} / ${approxTotalPages} 页 · 共 ${st.total || 0} 条`;
+        }
+        if (prevBtn) prevBtn.disabled = st.page <= 1;
+        if (nextBtn) nextBtn.disabled = !st.hasMore;
+    }
+
+    function changeMcpMarketPage(delta) {
+        const nextPage = Math.max(1, (mcpMarketPageState.page || 1) + Number(delta || 0));
+        if (nextPage === mcpMarketPageState.page) return;
+        mcpMarketPageState.page = nextPage;
+        loadMcpManager();
+    }
+
+    function onMcpMarketSearchInput() {
+        const query = (document.getElementById('mcp-market-search')?.value || '').trim();
+        mcpMarketPageState.query = query;
+        mcpMarketPageState.page = 1;
+        loadMcpManager();
+    }
+
+    async function syncMcpRegistryMarket() {
+        try {
+            await loadMcpManager();
+            toastr.success('已同步 MCP Registry 元数据');
+        } catch (e) {
+            toastr.error('同步 MCP Registry 失败: ' + e.message);
+        }
+    }
+
+    async function installMcpMarketCnItem(url, fallbackName = '') {
+        if (!url) {
+            toastr.warning('无效的 Registry 条目');
+            return;
+        }
+        try {
+            const res = await fetch('/api/systems/mcp/market/registry/install', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({url, name: fallbackName})
+            });
+            const data = await res.json();
+            if (data.code !== 0) throw new Error(data.message || '接入失败');
+
+            if (data.data && data.data.exists) {
+                toastr.info(`MCP 已存在: ${data.data.name || ''}`);
+            } else {
+                toastr.success(`MCP 接入成功: ${(data.data && data.data.name) || fallbackName || 'MCP Server'}`);
+            }
+            await loadMcpManager();
+        } catch (e) {
+            toastr.error('MCP Registry 接入失败: ' + e.message);
+        }
+    }
+
+    async function importMcpRegistryItem() {
+        const input = document.getElementById('mcpmarket-url-input');
+        const itemId = (input?.value || '').trim();
+        if (!itemId) {
+            toastr.warning('请先输入 Registry 条目 ID');
+            return;
+        }
+        await installMcpMarketItem(itemId);
+    }
+
+    async function installMcpMarketItem(itemId) {
+        if (!itemId) return;
+        try {
+            // 从市场数据中找到该项
+            const currentPage = mcpMarketPageState || {data: [], page: 1, total: 0};
+            const item = currentPage.data && currentPage.data.find(i => String(i.id) === String(itemId));
+            if (!item) {
+                toastr.error('未找到该 MCP 服务器信息');
+                return;
+            }
+            
+            // 调用后端获取元数据和配置指导
+            const res = await fetch('/api/systems/mcp/market/registry/install', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({server_id: itemId, name: item.name})
+            });
+            const data = await res.json();
+            if (data.code !== 0) throw new Error(data.message || '获取配置信息失败');
+            
+            // 显示配置指导模态框
+            showMcpConfigModal(item, data.data);
+        } catch (e) {
+            toastr.error('获取 MCP 配置信息失败: ' + e.message);
+        }
+    }
+    
+    function showMcpConfigModal(item, configData) {
+        const serverInfo = configData.server_info || {};
+        const setupInstructions = configData.setup_instructions || {};
+        const links = (setupInstructions.links || []).filter(l => l.url);
+        
+        const linksHtml = links.map(link => 
+            `<a href="${escapeHtml(link.url)}" target="_blank" class="btn btn-sm btn-outline-primary me-2 mb-2"><i class="fas fa-external-link-alt me-1"></i>${escapeHtml(link.title || '链接')}</a>`
+        ).join('');
+        
+        const fieldsHtml = (setupInstructions.config_fields || []).map(field =>
+            `<li><code>${escapeHtml(field)}</code></li>`
+        ).join('');
+        
+        const modalContent = `
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-cogs me-2"></i>${escapeHtml(item.name || '')}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- 基本信息 -->
+                <div class="mb-3">
+                    <h6 class="fw-bold mb-2">服务器信息</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="small text-muted mb-1">描述</p>
+                            <p class="small">${escapeHtml(serverInfo.description || item.description || '-')}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="small text-muted mb-1">协议版本</p>
+                            <p class="small">${escapeHtml(serverInfo.protocol_version || '1.0')}</p>
+                        </div>
+                        ${serverInfo.author ? `
+                        <div class="col-md-6">
+                            <p class="small text-muted mb-1">作者/维护者</p>
+                            <p class="small">${escapeHtml(serverInfo.author)}</p>
+                        </div>
+                        ` : ''}
+                        ${serverInfo.license ? `
+                        <div class="col-md-6">
+                            <p class="small text-muted mb-1">许可证</p>
+                            <p class="small">${escapeHtml(serverInfo.license)}</p>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                <!-- 重要链接 -->
+                <div class="mb-3">
+                    <h6 class="fw-bold mb-2">官方资源</h6>
+                    <div>${linksHtml || '<p class="text-muted small">暂无链接</p>'}</div>
+                </div>
+                
+                <!-- 配置指导 -->
+                <div class="mb-3">
+                    <h6 class="fw-bold mb-2">配置指导</h6>
+                    <p class="small text-muted">${setupInstructions.description || '请向官方文档了解详细的连接参数和配置方法。'}</p>
+                    ${setupInstructions.note ? `<p class="alert alert-info alert-sm small">${escapeHtml(setupInstructions.note)}</p>` : ''}
+                </div>
+                
+                <!-- 需要配置的字段 -->
+                ${fieldsHtml ? `<div class="mb-3">
+                    <h6 class="fw-bold mb-2">通常需要配置的参数</h6>
+                    <ul class="small">${fieldsHtml}</ul>
+                </div>` : ''}
+                
+                <!-- VSCode 风格配置提示 -->
+                <div class="alert alert-secondary small">
+                    <p class="mb-2"><strong>类似 VSCode 的配置方式</strong></p>
+                    <p class="text-muted mb-0">大多数 MCP 服务器可以通过 JSON 配置文件来集成，类似于 VSCode 中的 settings.json。请根据服务器的具体文档进行配置。</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        `;
+        
+        // 创建或更新模态框
+        let modal = document.getElementById('mcp-config-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'mcp-config-modal';
+            modal.className = 'modal fade';
+            modal.setAttribute('tabindex', '-1');
+            document.body.appendChild(modal);
+        }
+        
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    ${modalContent}
+                </div>
+            </div>
+        `;
+        
+        new bootstrap.Modal(modal).show();
     }
 
     async function createQuickMcp() {
