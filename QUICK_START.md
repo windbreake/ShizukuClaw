@@ -1,244 +1,138 @@
-# 新系统快速开始指南
+# ShizukuNyaBot 快速开始
 
-## 📦 安装依赖
+本指南聚焦当前稳定可用链路：
+
+- 数据目录统一在 `data/`
+- 上下文构建走 DB 优先缓存（未命中再检索）
+- 记忆系统（短/中/长期）与 DB 缓存可共存
+- 数据库运行时支持 MySQL / PostgreSQL / SQLite
+
+## 1. 安装与启动
 
 ```bash
-# 安装所有依赖
+cd Shizuku_Nya_Bot-master
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
 pip install -r requirements.txt
-
-# 或单独安装APScheduler
-pip install apscheduler~=3.10.4
-```
-
-## 🚀 快速开始
-
-### 1. 初始化系统（首次运行）
-
-```bash
-python init_systems.py
-```
-
-这将：
-- 初始化所有系统模块
-- 创建默认配置
-- 生成示例数据
-- 启动定时任务调度器
-
-### 2. 启动Web服务器
-
-```bash
 python main.py
-# 或选择菜单选项启动web服务
 ```
 
-服务器启动后，所有系统API会自动注册：
-- 基础地址：`http://localhost:8888/api/systems/`
+可选：双击 `start.bat`。
 
-## 🎯 常见使用场景
+控制面板默认地址：
 
-### 场景1：创建日程提醒
+- `http://localhost:8888/control_panel`
 
-```python
-import requests
-from datetime import datetime, timedelta
+## 2. 最小配置
 
-# 创建明天下午3点的提醒
-tomorrow_3pm = (datetime.now() + timedelta(days=1)).replace(hour=15, minute=0)
+编辑 `data/config.json`。
 
-response = requests.post(
-    'http://localhost:8888/api/systems/tasks',
-    json={
-        'name': '项目截止日期提醒',
-        'task_type': 'one_time',
-        'scheduled_time': tomorrow_3pm.isoformat(),
-        'command': 'remind',
-        'args': {'project': 'MyProject'},
-        'notify_on_complete': True
+### 2.1 数据库引擎
+
+```json
+{
+    "database": {
+        "engine": "mysql",
+        "host": "127.0.0.1",
+        "port": 3306,
+        "user": "root",
+        "password": "***",
+        "database": "shizuku_nya_bot",
+        "sqlite_path": "data/chat_history.db"
     }
-)
-
-print(f"任务ID: {response.json()['data']['id']}")
+}
 ```
 
-### 场景2：添加知识库条目
+说明：
 
-```python
-import requests
+- `engine=mysql`：默认路径
+- `engine=postgresql`：需安装可用 psycopg2
+- `engine=sqlite`：使用 `sqlite_path`
 
-response = requests.post(
-    'http://localhost:8888/api/systems/knowledge/entries',
-    json={
-        'title': '项目配置说明',
-        'content': '项目配置文件位于data/config.json...',
-        'type': 'knowledge',
-        'category': '文档',
-        'tags': ['config', 'documentation'],
-        'keywords': ['配置', '设置'],
-        'priority': 5
+### 2.2 仓库上下文检索（省 Token）
+
+```json
+{
+    "repo_context_retrieval": {
+        "enabled": true,
+        "mode": "coarse2fine",
+        "gamma": 0.25,
+        "max_chars": 1800,
+        "min_remaining_tokens": 280,
+        "history_recall_limit": 3,
+        "history_recall_max_chars": 900
     }
-)
-
-print(f"条目ID: {response.json()['data']['id']}")
+}
 ```
 
-### 场景3：配置Agent人格
+## 3. 当前存储与注入逻辑
 
-```python
-import requests
+上下文构建顺序：
 
-# 创建新人格
-response = requests.post(
-    'http://localhost:8888/api/systems/personalities',
-    json={
-        'name': '专业助手',
-        'description': '专业、严谨的AI助手人格',
-        'tone': 'formal',
-        'traits': {
-            'professionalism': 0.95,
-            'cheerfulness': 0.4,
-            'humor': 0.3
-        },
-        'response_length': 'medium',
-        'emoji_usage': False
-    }
-)
+1. 读取最近聊天记录
+2. 构建动态系统提示词
+3. 优先从 `repo_context_cache` 取仓库上下文缓存
+4. 未命中则执行代码图检索并回写缓存
+5. 对重复片段做增量注入（同会话去重）
+6. 合并历史回忆并按预算截断
 
-personality_id = response.json()['data']['id']
-print(f"人格ID: {personality_id}")
-```
+记忆系统共存：
 
-### 场景4：添加行为规则
+- Agent 记忆：`agent_datas/workspace/memory/`
+    - `short_term.json` / `short_term.md`
+    - `mid_term.md`
+    - `long_term.md`
+    - `context_compression.md`
+- DB 缓存：`repo_context_cache`（或 Provider 接管）
 
-```python
-import requests
+## 4. 插件扩展数据库能力
 
-# 添加反馈收集规则
-response = requests.post(
-    'http://localhost:8888/api/systems/behavior-rules',
-    json={
-        'name': '用户满意度反馈',
-        'trigger_pattern': '(满意|不满意|一般)',
-        'trigger_type': 'regex',
-        'action_type': 'response',
-        'action_content': '感谢您的反馈！',
-        'priority': 20,
-        'weight': 1.0,
-        'cooldown_seconds': 60
-    }
-)
+代码扩展点（无需改业务调用层）：
 
-print(f"规则ID: {response.json()['data']['id']}")
-```
+- 连接工厂注册：
+    - `DatabaseManager.register_connection_factory(engine, factory)`
+- 缓存 Provider 注册（适合 Redis）：
+    - `DatabaseManager.register_cache_provider(engine, provider)`
+- 生命周期钩子：
+    - `on_connect`
+    - `before_execute`
+    - `after_execute`
+    - `on_error`
 
-### 场景5：访问系统日志
+### Provider 需要实现的最小方法
 
-```python
-import requests
+- `get_repo_context_cache(query_text, persona_filename=None)`
+- `save_repo_context_cache(query_text, payload, persona_filename=None)`
 
-# 获取最近100条信息日志
-response = requests.get(
-    'http://localhost:8888/api/systems/logs?level=INFO&limit=100'
-)
+可选：
 
-logs = response.json()['data']
-for log in logs:
-    print(f"[{log['timestamp']}] {log['level']}: {log['message']}")
-```
+- `touch_repo_context_cache_hit(cache_id)`
+- `prune_repo_context_cache(max_rows=2000)`
 
-## 📊 数据存储位置
+## 5. 常用检查
 
-所有数据都保存在本地：
+### 5.1 运行测试
 
-```
-data/
-├── tasks/
-│   └── tasks.json              # 定时任务配置
-├── knowledge_base/
-│   ├── entries.json            # 知识库条目
-│   ├── glossaries.json         # 词库
-│   └── index.json              # 搜索索引
-├── instructions/
-│   ├── instructions.json       # 系统指令
-│   ├── personalities.json      # 人格配置
-│   └── behavior_rules.json     # 行为规则
-├── mcp/
-│   ├── servers.json            # MCP服务器
-│   ├── resources.json          # MCP资源  
-│   └── tools.json              # MCP工具
-└── logs/
-    └── enhanced.log            # 详细日志
-```
-
-## 🔧 配置说明
-
-### 日志系统配置
-
-日志文件自动保存到 `data/logs/enhanced.log`，支持日志轮转：
-- 最多保存5个日志文件
-- 单个文件最大10MB
-
-### 任务调度配置
-
-定时任务支持Cron表达式：
-```
-# 每天9点执行
-"0 9 * * *"
-
-# 每周一10点执行
-"0 10 * * 1"
-
-# 每小时第5分钟执行
-"5 * * * *"
-```
-
-## 🐛 故障排查
-
-### 问题1：apscheduler模块未找到
-
-**解决方案：**
 ```bash
-pip install apscheduler==3.10.4
+python -m pytest -q
 ```
 
-### 问题2：数据目录不存在
+### 5.2 快速验证仓库上下文缓存链路
 
-**解决方案：**
 ```bash
-# 运行初始化脚本会自动创建所有目录
-python init_systems.py
+python -c "from src.agent.ai_chat_system import AIChatSystem; s=AIChatSystem(); _=s.build_chat_context('cache check', max_tokens=6000, persona_filename='shizuku.json'); print(s.get_repo_retrieval_stats())"
 ```
 
-### 问题3：任务没有执行
+## 6. 故障排查
 
-**检查步骤：**
-1. 确认任务已启用：`GET /api/systems/tasks/{id}`
-2. 检查任务状态：查看response中的`status`字段
-3. 查看系统日志：`GET /api/systems/logs`
+- 启动失败：先检查 `data/config.json` 中数据库配置是否可连接。
+- PostgreSQL 失败：确认 `psycopg2` 已安装且账号权限正确。
+- 缓存不生效：检查 `repo_context_retrieval.enabled` 是否为 `true`。
+- token 偏高：降低 `max_chars`、`history_recall_max_chars`，或提高 `min_remaining_tokens`。
 
-## 📖 详细文档
+## 7. 注意事项
 
-- [系统详细文档](SYSTEMS_README.md) - 完整的API参考和使用示例
-- 各模块源代码注释完整，可直接查看源码了解细节
-
-## 💡 最佳实践
-
-1. **日志记录**：在关键操作处使用get_enhanced_logger()记录日志
-2. **任务管理**：为长时间任务设置合理的重试次数
-3. **知识库**：使用合理的关键字和标签便于搜索
-4. **人格配置**：创建多个人格以应对不同场景
-5. **备份数据**：定期备份data目录中的JSON文件
-
-## 🚨 注意事项
-
-- 所有系统都会在启动时自动加载已保存的数据
-- 删除操作是永久的，请谨慎操作
-- API密钥和敏感信息不应存储在知识库中
-- 大量任务可能会影响系统性能
-
-## 联系支持
-
-如有问题或建议，请查看源代码或提交反馈。
-
----
-
-**现在您已经准备好使用这些强大的系统了！祝您使用愉快！** 🎉
+- 敏感配置不要提交到公开仓库。
+- 所有运行时数据应保持在 `data/`，不要写回 `src/`。
+- 生产环境建议启用数据库备份与日志轮转。

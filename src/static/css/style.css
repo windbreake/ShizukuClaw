@@ -769,11 +769,6 @@ body {
     flex-shrink: 0;
 }
 
-.plugin-ban-icon {
-    color: #e35454;
-    font-size: 1.05rem;
-}
-
 .plugin-desc {
     min-height: 48px;
     display: -webkit-box;

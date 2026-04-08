@@ -4,6 +4,7 @@
 import json
 import logging
 import os
+import shutil
 from dataclasses import dataclass, asdict
 from typing import Dict, List
 
@@ -208,6 +209,36 @@ class SkillManager:
         self._framework_enabled = bool(enabled)
         if persist:
             self._save_policies_to_config()
+
+    def delete_skill_project(self, skill_id: str) -> dict:
+        """Delete skill directory and unregister from manager."""
+        sid = str(skill_id or '').strip()
+        if not sid:
+            raise ValueError('skill_id is required')
+
+        skill = self._skills.get(sid)
+        if not skill:
+            raise ValueError(f'Skill not found: {sid}')
+
+        skill_path = os.path.abspath(str(skill.path or ''))
+        skills_root = os.path.abspath(self.skills_dir)
+        if not skill_path or not skill_path.startswith(skills_root + os.sep):
+            raise ValueError('Invalid skill path')
+
+        removed_from_disk = False
+        if os.path.exists(skill_path):
+            shutil.rmtree(skill_path)
+            removed_from_disk = True
+
+        self._skills.pop(sid, None)
+        self._skill_policies.pop(sid, None)
+        self._save_policies_to_config()
+
+        return {
+            'skill_id': sid,
+            'path': skill_path,
+            'removed_from_disk': removed_from_disk,
+        }
 
     def get_framework_status(self) -> dict:
         items = []

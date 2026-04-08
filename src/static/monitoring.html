@@ -2,6 +2,7 @@
 <html lang="zh-cn">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>系统监控面板</title>
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -54,6 +55,26 @@
       position: relative;
       height: 300px;
       margin: 20px 0;
+    }
+    .unified-console {
+      background: #0f172a;
+      color: #d1e7ff;
+      border-radius: 8px;
+      padding: 12px;
+      height: 360px;
+      overflow-y: auto;
+      font-family: Consolas, 'Courier New', monospace;
+      white-space: pre-wrap;
+      line-height: 1.45;
+    }
+    .console-toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .console-input {
+      font-family: Consolas, 'Courier New', monospace;
     }
   </style>
 </head>
@@ -158,6 +179,26 @@
                 <p><strong>平台:</strong> <span id="platform">-</span></p>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-12">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span>统一日志面板（系统日志 + 终端命令行）</span>
+            <small class="text-muted">自动刷新: 3 秒</small>
+          </div>
+          <div class="card-body">
+            <div class="console-toolbar">
+              <input id="unified-cmd" class="form-control console-input" placeholder="输入终端命令，例如: dir /b" />
+              <button class="btn btn-primary" onclick="runUnifiedCommand()">执行命令</button>
+              <button class="btn btn-outline-secondary" onclick="refreshUnifiedConsole(true)">刷新日志</button>
+              <button class="btn btn-outline-danger" onclick="clearUnifiedConsole()">清空面板</button>
+            </div>
+            <div id="unified-console" class="unified-console">[INFO] 统一日志面板初始化中...</div>
           </div>
         </div>
       </div>
@@ -332,12 +373,114 @@
       }
     }
 
+    let lastLogSnapshot = '';
+
+    function appendConsoleLine(text) {
+      const consoleEl = document.getElementById('unified-console');
+      const now = new Date().toLocaleTimeString();
+      consoleEl.textContent += `\n[${now}] ${text}`;
+      if (consoleEl.textContent.length > 120000) {
+        consoleEl.textContent = consoleEl.textContent.slice(-100000);
+      }
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function clearUnifiedConsole() {
+      const consoleEl = document.getElementById('unified-console');
+      consoleEl.textContent = '[INFO] 面板已清空，等待新日志...';
+      lastLogSnapshot = '';
+    }
+
+    async function refreshUnifiedConsole(forceFull = false) {
+      try {
+        const response = await fetch('/api/logs');
+        const text = await response.text();
+        const current = text || '';
+
+        if (!current.trim()) {
+          return;
+        }
+
+        if (forceFull || !lastLogSnapshot) {
+          appendConsoleLine('[SYSTEM] 已载入系统日志快照');
+          const lines = current.split('\n').slice(-25);
+          lines.forEach((line) => {
+            if (line.trim()) appendConsoleLine(`[LOG] ${line}`);
+          });
+          lastLogSnapshot = current;
+          return;
+        }
+
+        if (current.startsWith(lastLogSnapshot)) {
+          const added = current.slice(lastLogSnapshot.length);
+          const lines = added.split('\n').filter((line) => line.trim());
+          lines.forEach((line) => appendConsoleLine(`[LOG] ${line}`));
+        } else if (current !== lastLogSnapshot) {
+          appendConsoleLine('[SYSTEM] 日志文件发生轮转或截断，已重新同步');
+          const lines = current.split('\n').slice(-25);
+          lines.forEach((line) => {
+            if (line.trim()) appendConsoleLine(`[LOG] ${line}`);
+          });
+        }
+
+        lastLogSnapshot = current;
+      } catch (error) {
+        appendConsoleLine(`[ERROR] 拉取系统日志失败: ${error}`);
+      }
+    }
+
+    async function runUnifiedCommand() {
+      const input = document.getElementById('unified-cmd');
+      const cmd = (input.value || '').trim();
+      if (!cmd) {
+        appendConsoleLine('[WARN] 请输入命令后再执行');
+        return;
+      }
+
+      appendConsoleLine(`[CMD] ${cmd}`);
+      try {
+        const response = await fetch('/api/exec_cmd', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cmd })
+        });
+        const html = await response.text();
+        const text = html
+          .replace(/^<pre>/i, '')
+          .replace(/<\/pre>$/i, '')
+          .replace(/<br\s*\/?\s*>/gi, '\n')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&amp;/g, '&');
+
+        const outLines = text.split('\n').slice(0, 80);
+        outLines.forEach((line) => appendConsoleLine(`[OUT] ${line}`));
+      } catch (error) {
+        appendConsoleLine(`[ERROR] 命令执行失败: ${error}`);
+      } finally {
+        input.value = '';
+        input.focus();
+        refreshUnifiedConsole(false);
+      }
+    }
+
     // 页面加载完成后初始化
     document.addEventListener('DOMContentLoaded', function() {
       // 立即获取一次数据
       fetchMonitoringData();
+      refreshUnifiedConsole(true);
       // 每2秒更新一次数据
       setInterval(fetchMonitoringData, 2000);
+      // 每3秒拉取一次系统日志
+      setInterval(() => refreshUnifiedConsole(false), 3000);
+
+      const cmdInput = document.getElementById('unified-cmd');
+      cmdInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          runUnifiedCommand();
+        }
+      });
     });
   </script>
 </body>

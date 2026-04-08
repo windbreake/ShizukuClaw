@@ -10,6 +10,7 @@
 import sys
 import io
 import os
+import traceback
 from colorama import init, Fore
 import socket
 import requests
@@ -30,7 +31,7 @@ init(autoreset=True)
 def check_ports():
     """检查常用端口状态"""
     try:
-        from src.config import CONFIG, SYSTEM_CONFIG_DATA
+        from src.core.config import CONFIG, SYSTEM_CONFIG_DATA
         ports_to_check = [
             (int(CONFIG.get('server', {}).get('port', 8888) or 8888), "Web服务器"),
             (int(CONFIG.get('unified_api', {}).get('port', 8000) or 8000), "统一API"),
@@ -96,7 +97,7 @@ def test_deepseek_api():
     """测试DeepSeek API连接"""
     print(Fore.CYAN + "\nDeepSeek API测试:")
     try:
-        from src.config import CONFIG
+        from src.core.config import CONFIG
         headers = {"Authorization": f"Bearer {CONFIG['api']['key']}"}
         response = requests.get(
             f"{CONFIG['api']['base_url']}/models",
@@ -119,7 +120,7 @@ def full_diagnosis():
     print(Fore.YELLOW + "🐱 服务诊断工具")
     print(Fore.CYAN + "=" * 50)
     try:
-        from src.config import check_service_status
+        from src.core.config import check_service_status
         print(check_service_status())
     except Exception as e:
         print(Fore.RED + f"诊断执行失败: {str(e)}")
@@ -130,28 +131,27 @@ def run_mode(mode):
     """根据模式编号运行相应的服务"""
     try:
         if mode == 0:
-            from src.adapter_service import run_adapter_service
+            from src.services.adapter_service import run_adapter_service
             run_adapter_service()
         elif mode == 1:
-            from src.web_server import run_terminal_chat
+            from src.services.web_server import run_terminal_chat
             run_terminal_chat()
         elif mode == 2:
             # 沙箱模式 - 启动Web服务器并默认打开沙箱页面
-            from src.web_server import run_web_server
+            from src.services.web_server import run_web_server
             os.environ.setdefault('DEFAULT_PAGE', '/sandbox')
             exit_code = run_web_server()
             sys.exit(exit_code)
         elif mode == 5:
             # 控制面板模式 - 启动Web服务器并默认打开控制面板
-            from src.web_server import run_web_server
+            from src.services.web_server import run_web_server
             os.environ.setdefault('DEFAULT_PAGE', '/control_panel')
             exit_code = run_web_server()
             sys.exit(exit_code)
         else:
             print(Fore.RED + "无效的模式选择!")
-    except Exception as e:
+    except Exception:
         # 添加更详细的错误信息
-        import traceback
         error_trace = traceback.format_exc()
         print(Fore.RED + f"运行错误详情:\n{error_trace}")
         print(Fore.YELLOW + "请检查相关服务配置")

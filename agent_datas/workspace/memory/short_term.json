@@ -358,5 +358,75 @@
     "role": "system",
     "content": "Result: Error: System is in Entertainment Mode. Write operations and code execution are disabled for safety. Please switch to Work Mode to perform these actions.",
     "timestamp": 1775289952.1063755
+  },
+  {
+    "role": "user",
+    "content": "你好喵",
+    "timestamp": 1775642817.2951972
+  },
+  {
+    "role": "assistant",
+    "content": "你好呀喵~今天怎么突然这么礼貌Nanaoda~",
+    "timestamp": 1775642819.5593455
+  },
+  {
+    "role": "user",
+    "content": "捏你",
+    "timestamp": 1775642825.2556443
+  },
+  {
+    "role": "assistant",
+    "content": "才...才不给捏呢喵~",
+    "timestamp": 1775642827.0926821
+  },
+  {
+    "role": "user",
+    "content": "@3793802439 晚上好，现在几点了？",
+    "timestamp": 1775642877.8443987
+  },
+  {
+    "role": "assistant",
+    "content": "现在时间是 2026-04-08 18:07:57",
+    "timestamp": 1775642877.8469303
+  },
+  {
+    "role": "user",
+    "content": "@3793802439 捏你！！",
+    "timestamp": 1775642904.0307195
+  },
+  {
+    "role": "assistant",
+    "content": "都说了不给捏啦喵~再闹就挠你哦Nanaoda~",
+    "timestamp": 1775642965.5690546
+  },
+  {
+    "role": "user",
+    "content": "1",
+    "timestamp": 1775642965.5772657
+  },
+  {
+    "role": "assistant",
+    "content": "1什么1呀喵~说清楚点嘛Nanaoda~",
+    "timestamp": 1775642967.5312412
+  },
+  {
+    "role": "user",
+    "content": "笨蛋",
+    "timestamp": 1775642981.558383
+  },
+  {
+    "role": "assistant",
+    "content": "你才是笨蛋呢喵~不理你了哒~",
+    "timestamp": 1775642983.1989295
+  },
+  {
+    "role": "user",
+    "content": "@3793802439 1",
+    "timestamp": 1775642989.2313528
+  },
+  {
+    "role": "assistant",
+    "content": "又发1是什么意思嘛喵~不说清楚不理你啦Nanaoda~",
+    "timestamp": 1775642991.2398965
   }
 ]

@@ -1,4 +1,4 @@
-import pygame
+import pygame  # pylint: disable=import-error
 import random
 import sys
 
