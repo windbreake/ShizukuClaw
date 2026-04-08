@@ -14,6 +14,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Marked.js -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- jQuery (toastr dependency) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <!-- Toastr JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/2.1.4/toastr.min.js"></script>
     <!-- Custom CSS -->
@@ -972,6 +974,31 @@
                         </div>
                     </div>
                 </div>
+                <div class="modal fade" id="smithery-install-modal" tabindex="-1" aria-labelledby="smithery-install-modal-label" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                        <div class="modal-content border-0 shadow">
+                            <div class="modal-header">
+                                <div>
+                                    <h5 class="modal-title mb-1" id="smithery-install-modal-label">Smithery CLI 安装</h5>
+                                    <div class="small text-muted" id="smithery-install-command-label">准备启动安装命令</div>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                                    <span class="badge bg-secondary" id="smithery-install-status-badge">等待开始</span>
+                                    <span class="small text-muted" id="smithery-install-job-id"></span>
+                                </div>
+                                <div class="border rounded bg-dark text-light p-3" style="min-height: 320px; max-height: 52vh; overflow: auto; white-space: pre-wrap; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 0.9rem;" id="smithery-install-log">尚未开始安装...</div>
+                                <div class="small text-muted mt-2">安装日志会同步显示在后端控制台，关闭弹窗后仍会继续在后台运行。</div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+                                <button type="button" class="btn btn-primary" onclick="closeSmitheryInstallToBackground()">关闭并转到后台</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="col-lg-8">
                     <div class="card shadow-sm border-0 mb-3">
                         <div class="card-header bg-white d-flex justify-content-between align-items-center">
@@ -1013,13 +1040,16 @@
                                     </div>
                                 </div>
                                 <div class="col-12 d-flex gap-2 flex-wrap">
+                                    <button class="btn btn-sm btn-outline-primary" type="button" onclick="installSmitheryCli()">
+                                        <i class="fas fa-download me-1"></i>安装 Smithery CLI
+                                    </button>
                                     <button class="btn btn-sm btn-outline-primary" type="button" onclick="syncMcpRegistryMarket()">
-                                        <i class="fas fa-cloud-download-alt me-1"></i>同步 MCP Registry 元数据
+                                        <i class="fas fa-store me-1"></i>同步 Smithery MCP 商店
                                     </button>
                                     <div class="input-group input-group-sm" style="max-width: 560px;">
-                                        <span class="input-group-text">Registry 条目 ID</span>
-                                        <input id="mcpmarket-url-input" class="form-control" placeholder="例如: filesystem-local">
-                                        <button class="btn btn-primary" type="button" onclick="importMcpRegistryItem()">查看配置</button>
+                                        <span class="input-group-text">Smithery MCP ID / URL</span>
+                                        <input id="mcpmarket-url-input" class="form-control" placeholder="例如: notion 或 https://server.smithery.ai/github">
+                                        <button class="btn btn-primary" type="button" onclick="importMcpRegistryItem()">安装并接入</button>
                                     </div>
                                 </div>
                             </div>
@@ -3557,7 +3587,18 @@
     let skillMarketCache = [];
     let skillMarketLastDiagnostics = null;
     let skillMarketSource = 'github';
+    let skillMarketSyncInflight = false;
+    let skillhubCliRequestInflight = false;
+    let skillhubInstallInflight = false;
+    let smitheryCliRequestInflight = false;
     let skillhubInstallJobState = {
+        jobId: '',
+        pollTimer: null,
+        active: false,
+        startedAt: 0,
+        modal: null,
+    };
+    let smitheryInstallJobState = {
         jobId: '',
         pollTimer: null,
         active: false,
@@ -3589,6 +3630,35 @@
             info: (msg) => console.info('ℹ ' + msg)
         };
     }
+
+    // 某些环境下 toastr 已加载但内部依赖(jQuery)异常，这里统一兜底并在首次失败后熔断，避免控制台刷屏。
+    let toastrBroken = false;
+    let toastrFallbackNotified = false;
+    ['success', 'error', 'warning', 'info'].forEach((level) => {
+        const original = (window.toastr && typeof window.toastr[level] === 'function') ? window.toastr[level].bind(window.toastr) : null;
+        window.toastr[level] = (msg) => {
+            if (!toastrBroken) {
+                try {
+                    if (original) {
+                        return original(msg);
+                    }
+                } catch (e) {
+                    toastrBroken = true;
+                    if (!toastrFallbackNotified) {
+                        toastrFallbackNotified = true;
+                        console.warn('toastr unavailable, switch to console fallback:', e && e.message ? e.message : e);
+                    }
+                }
+            }
+
+            const text = String(msg || '');
+            if (level === 'error') console.error('✗ ' + text);
+            else if (level === 'warning') console.warn('! ' + text);
+            else if (level === 'success') console.log('✓ ' + text);
+            else console.info('ℹ ' + text);
+            return null;
+        };
+    });
 
     function pluginApi(path) {
         return path;
@@ -4227,7 +4297,7 @@
             const installAction = `installMcpMarketItem('${escapeHtml(item.id || '')}')`;
             const actionBtn = !installable
                 ? `<a class="btn btn-sm btn-outline-secondary" href="${registryUrl}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt me-1"></i>浏览</a>`
-                : `<button class="btn btn-sm ${installed ? 'btn-outline-success' : 'btn-primary'}" onclick="${installAction}" ${installed ? 'disabled' : ''} title="${item.user_config_required ? '需要手动配置连接参数' : ''}"><i class="fas ${installed ? 'fa-check' : 'fa-gears'} me-1"></i>${installed ? '已接入' : '查看配置'}</button>`;
+                : `<button class="btn btn-sm ${installed ? 'btn-outline-success' : 'btn-primary'}" onclick="${installAction}" ${installed ? 'disabled' : ''} title="${item.user_config_required ? '可能需要授权或额外配置' : ''}"><i class="fas ${installed ? 'fa-check' : 'fa-bolt'} me-1"></i>${installed ? '已接入' : '安装并接入'}</button>`;
             
             return `
                 <div class="col-xl-4 col-md-6">
@@ -4297,6 +4367,11 @@
     }
 
     async function loadSkillMarketCocoloop(showToast = true) {
+        if (skillMarketSyncInflight) {
+            if (showToast) toastr.info('skill 商店同步进行中，请稍候...');
+            return;
+        }
+        skillMarketSyncInflight = true;
         try {
             const query = encodeURIComponent(skillMarketPageState.query || '');
             const page = Number(skillMarketPageState.page || 1);
@@ -4317,6 +4392,8 @@
             if (showToast) toastr.success(`已同步 ${skillMarketSource === 'skillhub' ? 'SkillHub 商店' : 'GitHub Skill 市场'}条目：${skillMarketCache.length}`);
         } catch (e) {
             if (showToast) toastr.error(`同步${skillMarketSource === 'skillhub' ? 'SkillHub 商店' : 'GitHub Skill 市场'}失败: ` + e.message);
+        } finally {
+            skillMarketSyncInflight = false;
         }
     }
 
@@ -4400,17 +4477,27 @@
     }
 
     async function installSkillhubCli() {
+        if (skillhubCliRequestInflight) {
+            toastr.info('正在检查或安装 SkillHub CLI，请稍候...');
+            return;
+        }
+        skillhubCliRequestInflight = true;
         try {
             const st = await fetchJsonSafe('/api/skills/market/skillhub/status');
             if (st.success && st.installed) {
                 toastr.success(`SkillHub CLI 已安装${st.version ? '：' + st.version : ''}`);
                 return;
             }
+            if (st.success && st.mode === 'npx-fallback') {
+                toastr.info('检测到 npx 可用，正在执行官方 SkillHub CLI 安装...');
+            }
             const data = await fetchJsonSafe('/api/skills/market/skillhub/cli/install', {method: 'POST'});
             if (!data.success) throw new Error(data.error || 'install failed');
             openSkillhubInstallModal(data);
         } catch (e) {
             toastr.error('安装 SkillHub CLI 失败: ' + e.message);
+        } finally {
+            skillhubCliRequestInflight = false;
         }
     }
 
@@ -4528,10 +4615,15 @@
     }
 
     async function installSkillhubSkill(skillId, fallbackName = '') {
+        if (skillhubInstallInflight) {
+            toastr.info('Skill 安装进行中，请稍候...');
+            return;
+        }
         if (!skillId) {
             toastr.warning('无效的 SkillHub skill ID');
             return;
         }
+        skillhubInstallInflight = true;
         try {
             const data = await fetchJsonSafe('/api/skills/market/skillhub/install', {
                 method: 'POST',
@@ -4543,6 +4635,8 @@
             await loadSkillStatus();
         } catch (e) {
             toastr.error('SkillHub 安装失败: ' + e.message);
+        } finally {
+            skillhubInstallInflight = false;
         }
     }
 
@@ -5424,8 +5518,7 @@
             const mcpPageSize = Number(mcpMarketPageState.pageSize || 24);
             const settled = await Promise.allSettled([
                 fetch('/api/systems/mcp/servers'),
-                fetch('/api/systems/mcp/market'),
-                fetch(`/api/systems/mcp/market/registry?page=${mcpPage}&page_size=${mcpPageSize}&query=${query}`)
+                fetch(`/api/systems/mcp/market/smithery/search?page=${mcpPage}&page_size=${mcpPageSize}&query=${query}`)
             ]);
 
             async function safeJsonFromSettled(item, fallback = {}) {
@@ -5444,17 +5537,15 @@
             }
 
             const data = await safeJsonFromSettled(settled[0], {code: 1, data: []});
-            const marketData = await safeJsonFromSettled(settled[1], {code: 1, data: []});
-            const marketCnData = await safeJsonFromSettled(settled[2], {code: 1, data: []});
+            const marketCnData = await safeJsonFromSettled(settled[1], {code: 1, data: []});
             const servers = (data.code === 0 && Array.isArray(data.data)) ? data.data : [];
-            const marketItemsLocal = (marketData.code === 0 && Array.isArray(marketData.data)) ? marketData.data : [];
             const marketItemsCn = (marketCnData.code === 0 && Array.isArray(marketCnData.data)) ? marketCnData.data : [];
             mcpMarketPageState.page = Number(marketCnData.page || mcpPage);
             mcpMarketPageState.pageSize = Number(marketCnData.page_size || mcpPageSize);
             mcpMarketPageState.total = Number(marketCnData.total || marketItemsCn.length || 0);
             mcpMarketPageState.hasMore = !!marketCnData.has_more;
             mcpMarketPageState.data = marketItemsCn;
-            const marketItems = [...marketItemsLocal, ...marketItemsCn];
+            const marketItems = [...marketItemsCn];
             const body = document.getElementById('mcp-body');
             const badge = document.getElementById('mcp-count-badge');
             const marketBadge = document.getElementById('mcp-market-count-badge');
@@ -5535,10 +5626,147 @@
     async function syncMcpRegistryMarket() {
         try {
             await loadMcpManager();
-            toastr.success('已同步 MCP Registry 元数据');
+            toastr.success('已同步 Smithery MCP 商店');
         } catch (e) {
-            toastr.error('同步 MCP Registry 失败: ' + e.message);
+            toastr.error('同步 Smithery MCP 商店失败: ' + e.message);
         }
+    }
+
+    async function installSmitheryCli() {
+        if (smitheryCliRequestInflight) {
+            toastr.info('正在检查或安装 Smithery CLI，请稍候...');
+            return;
+        }
+        smitheryCliRequestInflight = true;
+        try {
+            const stRes = await fetch('/api/systems/mcp/market/smithery/status');
+            const stData = await stRes.json();
+            if (stData.code === 0 && stData.data && stData.data.installed) {
+                toastr.success(`Smithery CLI 已安装${stData.data.version ? '：' + stData.data.version : ''}`);
+                return;
+            }
+            if (stData.code === 0 && stData.data && stData.data.mode === 'npx-fallback') {
+                toastr.info('检测到 npx 可用，正在安装全局 Smithery CLI...');
+            }
+
+            const res = await fetch('/api/systems/mcp/market/smithery/cli/install', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) {
+                throw new Error(data.message || '安装失败');
+            }
+            openSmitheryInstallModal(data.data || {});
+        } catch (e) {
+            toastr.error('安装 Smithery CLI 失败: ' + e.message);
+        } finally {
+            smitheryCliRequestInflight = false;
+        }
+    }
+
+    function _smitheryInstallStatusMeta(status) {
+        const value = String(status || '').toLowerCase();
+        if (value === 'success') return {text: '安装完成', className: 'bg-success'};
+        if (value === 'error') return {text: '安装失败', className: 'bg-danger'};
+        if (value === 'running') return {text: '正在安装', className: 'bg-primary'};
+        if (value === 'queued') return {text: '排队中', className: 'bg-secondary'};
+        return {text: '等待开始', className: 'bg-secondary'};
+    }
+
+    function _smitheryInstallRenderLogs(lines) {
+        const logEl = document.getElementById('smithery-install-log');
+        if (!logEl) return;
+        const list = Array.isArray(lines) ? lines : [];
+        logEl.textContent = list.length ? list.join('\n') : '尚未开始安装...';
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function _smitheryInstallUpdateModal(job) {
+        if (!job) return;
+        const badge = document.getElementById('smithery-install-status-badge');
+        const cmd = document.getElementById('smithery-install-command-label');
+        const jobId = document.getElementById('smithery-install-job-id');
+        const meta = _smitheryInstallStatusMeta(job.status);
+        if (badge) {
+            badge.textContent = meta.text;
+            badge.className = `badge ${meta.className}`;
+        }
+        if (cmd) {
+            cmd.textContent = job.command_display || 'npm install -g @smithery/cli@latest';
+        }
+        if (jobId) {
+            jobId.textContent = job.job_id ? `Job: ${job.job_id}` : '';
+        }
+        _smitheryInstallRenderLogs(job.logs || []);
+    }
+
+    function _smitheryInstallStopPolling() {
+        if (smitheryInstallJobState.pollTimer) {
+            clearInterval(smitheryInstallJobState.pollTimer);
+            smitheryInstallJobState.pollTimer = null;
+        }
+    }
+
+    async function _smitheryInstallPollJob() {
+        const jobId = smitheryInstallJobState.jobId;
+        if (!jobId) return;
+        try {
+            const res = await fetch(`/api/systems/mcp/market/smithery/cli/install/jobs/${encodeURIComponent(jobId)}`);
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) throw new Error(data.message || 'poll failed');
+            const job = data.data || {};
+            _smitheryInstallUpdateModal(job);
+            if (job.status === 'success') {
+                _smitheryInstallStopPolling();
+                smitheryInstallJobState.active = false;
+                toastr.success(job.message || 'Smithery CLI 安装完成');
+            } else if (job.status === 'error') {
+                _smitheryInstallStopPolling();
+                smitheryInstallJobState.active = false;
+                toastr.error(job.message || 'Smithery CLI 安装失败');
+            }
+        } catch (e) {
+            const badge = document.getElementById('smithery-install-status-badge');
+            if (badge) {
+                badge.textContent = '轮询失败';
+                badge.className = 'badge bg-warning text-dark';
+            }
+        }
+    }
+
+    function openSmitheryInstallModal(data) {
+        const modalEl = document.getElementById('smithery-install-modal');
+        if (!modalEl) return;
+        smitheryInstallJobState.jobId = data.job_id || '';
+        smitheryInstallJobState.startedAt = Date.now();
+        smitheryInstallJobState.active = true;
+        _smitheryInstallUpdateModal(data);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl, {backdrop: true, keyboard: true});
+        smitheryInstallJobState.modal = modal;
+        modal.show();
+        _smitheryInstallStopPolling();
+        smitheryInstallJobState.pollTimer = setInterval(_smitheryInstallPollJob, 1000);
+        _smitheryInstallPollJob();
+    }
+
+    function closeSmitheryInstallToBackground() {
+        const modalEl = document.getElementById('smithery-install-modal');
+        if (!modalEl) return;
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        _smitheryInstallStopPolling();
+        smitheryInstallJobState.active = false;
+        toastr.info('Smithery CLI 仍在后台安装，可稍后重新打开查看日志');
+    }
+
+    const smitheryInstallModalEl = document.getElementById('smithery-install-modal');
+    if (smitheryInstallModalEl) {
+        smitheryInstallModalEl.addEventListener('hidden.bs.modal', () => {
+            _smitheryInstallStopPolling();
+            smitheryInstallJobState.active = false;
+        });
     }
 
     async function installMcpMarketCnItem(url, fallbackName = '') {
@@ -5586,20 +5814,25 @@
                 toastr.error('未找到该 MCP 服务器信息');
                 return;
             }
-            
-            // 调用后端获取元数据和配置指导
-            const res = await fetch('/api/systems/mcp/market/registry/install', {
+
+            // 直接通过 Smithery CLI 安装/接入
+            const res = await fetch('/api/systems/mcp/market/smithery/install', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({server_id: itemId, name: item.name})
+                body: JSON.stringify({
+                    server_id: itemId,
+                    id: item.id,
+                    name: item.name,
+                    connection_url: item.connection_url || '',
+                    registry_url: item.registry_url || item.url || ''
+                })
             });
             const data = await res.json();
-            if (data.code !== 0) throw new Error(data.message || '获取配置信息失败');
-            
-            // 显示配置指导模态框
-            showMcpConfigModal(item, data.data);
+            if (!res.ok || data.code !== 0) throw new Error(data.message || '接入失败');
+            toastr.success(data.message || `MCP 接入完成: ${item.name || item.id}`);
+            await loadMcpManager();
         } catch (e) {
-            toastr.error('获取 MCP 配置信息失败: ' + e.message);
+            toastr.error('MCP 接入失败: ' + e.message);
         }
     }
     

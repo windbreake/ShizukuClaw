@@ -10,6 +10,11 @@ import re
 import requests
 import shlex
 import time
+import os
+import shutil
+import subprocess
+import threading
+import uuid
 from html import unescape
 
 # 导入各个系统
@@ -32,6 +37,13 @@ systems_bp = Blueprint('systems', __name__, url_prefix='/api/systems')
 MCP_REGISTRY_API = 'https://mcp.run/api/servers'
 MCP_REGISTRY_CACHE = {'ts': 0.0, 'data': []}
 MCP_REGISTRY_CACHE_TTL = 3600  # 1 小时缓存
+MCP_SMITHERY_CACHE = {'entries': {}}
+MCP_SMITHERY_CACHE_TTL = 900
+MCP_SMITHERY_STATUS_CACHE = {'ts': 0.0, 'data': None}
+MCP_SMITHERY_STATUS_CACHE_TTL = 15
+MCP_SMITHERY_INSTALL_JOBS = {}
+MCP_SMITHERY_INSTALL_JOBS_LOCK = threading.Lock()
+MCP_SMITHERY_INSTALL_JOB_TTL = 3600
 
 # 本地官方 MCP 示例（如果 Smithery 不可用）
 MCP_MARKET_CATALOG = [
@@ -72,6 +84,378 @@ MCP_MARKET_CATALOG = [
         'tags': ['database', 'sqlite']
     }
 ]
+
+
+def _load_smithery_config():
+    base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    config_path = os.path.join(base_path, 'data', 'config.json')
+    if not os.path.exists(config_path):
+        return {}
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            cfg = json.load(f) or {}
+        market_cfg = cfg.get('mcp_market', {}) or {}
+        return market_cfg.get('smithery', {}) or {}
+    except Exception:
+        return {}
+
+
+def _smithery_runner():
+    cfg = _load_smithery_config()
+    configured_bin = str(cfg.get('cli_bin') or '').strip()
+    candidate_bins = []
+    if configured_bin:
+        candidate_bins.append(configured_bin)
+    candidate_bins.extend(['smithery'])
+
+    seen = set()
+    for b in candidate_bins:
+        if not b or b in seen:
+            continue
+        seen.add(b)
+        full = shutil.which(b)
+        if full:
+            return [full]
+
+    npx = shutil.which('npx')
+    if npx:
+        return [npx, '-y', '@smithery/cli@latest']
+    return []
+
+
+def _smithery_runner_info():
+    cfg = _load_smithery_config()
+    configured_bin = str(cfg.get('cli_bin') or '').strip()
+
+    if configured_bin:
+        full = shutil.which(configured_bin)
+        if full:
+            return {
+                'runner': [full],
+                'installed': True,
+                'mode': 'configured',
+                'cli': full,
+            }
+
+    global_bin = shutil.which('smithery')
+    if global_bin:
+        return {
+            'runner': [global_bin],
+            'installed': True,
+            'mode': 'global',
+            'cli': global_bin,
+        }
+
+    npx = shutil.which('npx')
+    if npx:
+        return {
+            'runner': [npx, '-y', '@smithery/cli@latest'],
+            'installed': False,
+            'mode': 'npx-fallback',
+            'cli': f'{npx} -y @smithery/cli@latest',
+        }
+
+    return {
+        'runner': [],
+        'installed': False,
+        'mode': 'missing',
+        'cli': '',
+    }
+
+
+def _find_smithery_cli():
+    info = _smithery_runner_info()
+    return str(info.get('cli') or '').strip()
+
+
+def _run_smithery_cli(args, timeout=45):
+    info = _smithery_runner_info()
+    runner = list(info.get('runner') or [])
+    if not runner:
+        raise RuntimeError('Smithery CLI 未安装，请先点击“安装 Smithery CLI”')
+    cmd = list(runner) + list(args or [])
+    proc = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+        timeout=max(5, int(timeout or 45)),
+        cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    )
+    return {
+        'ok': proc.returncode == 0,
+        'code': int(proc.returncode),
+        'stdout': str(proc.stdout or ''),
+        'stderr': str(proc.stderr or ''),
+        'cmd': cmd,
+    }
+
+
+def _extract_json_from_text(text):
+    raw = str(text or '').strip()
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        pass
+
+    s1 = raw.find('[')
+    s2 = raw.find('{')
+    starts = [x for x in [s1, s2] if x >= 0]
+    if not starts:
+        return None
+    start = min(starts)
+
+    for end in range(len(raw), start, -1):
+        chunk = raw[start:end].strip()
+        if not chunk:
+            continue
+        try:
+            return json.loads(chunk)
+        except Exception:
+            continue
+    return None
+
+
+def _clean_smithery_text(value):
+    text = str(value or '')
+    text = text.replace('\r', ' ').replace('\n', ' ')
+    text = re.sub(r'[│┆┊|]+', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    if not text:
+        return ''
+    lowered = text.lower()
+    if lowered in {'custom', 'unknown', 'undefined', 'null', '-', '---', '...', '....'}:
+        return ''
+    if not re.search(r'[\w\u4e00-\u9fff]', text):
+        return ''
+    return text
+
+
+def _normalize_smithery_mcp_items(payload):
+    rows = []
+    if isinstance(payload, list):
+        rows = payload
+    elif isinstance(payload, dict):
+        for k in ('items', 'data', 'list', 'servers', 'results'):
+            v = payload.get(k)
+            if isinstance(v, list):
+                rows = v
+                break
+
+    out = []
+    for it in rows:
+        if not isinstance(it, dict):
+            continue
+        sid = str(it.get('qualifiedName') or it.get('id') or it.get('slug') or it.get('name') or '').strip()
+        if not sid:
+            continue
+
+        name = _clean_smithery_text(it.get('name') or sid) or sid
+        description = _clean_smithery_text(it.get('description') or '')
+        author = _clean_smithery_text(it.get('author') or it.get('owner') or it.get('namespace') or '')
+        tags = []
+        for tag in list(it.get('tags') or it.get('keywords') or it.get('topics') or []):
+            cleaned = _clean_smithery_text(tag)
+            if cleaned:
+                tags.append(cleaned)
+
+        connection_url = str(it.get('connectionUrl') or it.get('connection_url') or '').strip()
+        registry_url = str(it.get('registry_url') or it.get('url') or '').strip()
+        if not registry_url:
+            registry_url = f'https://smithery.ai/servers/{sid}'
+
+        out.append({
+            'id': sid,
+            'name': name,
+            'description': description,
+            'author': author,
+            'version': _clean_smithery_text(it.get('version') or ''),
+            'keywords': tags,
+            'tags': tags,
+            'type': _clean_smithery_text(it.get('type') or it.get('protocol') or 'remote') or 'remote',
+            'homepage': str(it.get('homepage') or ''),
+            'repository': str(it.get('repository') or ''),
+            'documentation': str(it.get('documentation') or ''),
+            'registry_url': registry_url,
+            'connection_url': connection_url,
+            'protocol_version': _clean_smithery_text(it.get('protocol_version') or '1.0') or '1.0',
+            'implementation': _clean_smithery_text(it.get('implementation') or ''),
+            'source': 'smithery',
+            'installable': True,
+            'user_config_required': False,
+            'stars': int(it.get('useCount') or it.get('stars') or 0),
+        })
+    return out
+
+
+def _mcp_smithery_cache_key(query: str, extra: str = ''):
+    return f"{str(query or '').strip().lower()}|{str(extra or '').strip().lower()}"
+
+
+def _mcp_smithery_cache_get(key: str):
+    now = time.time()
+    entry = MCP_SMITHERY_CACHE.get('entries', {}).get(key)
+    if not entry:
+        return None
+    if (now - float(entry.get('ts') or 0.0)) > MCP_SMITHERY_CACHE_TTL:
+        return None
+    return dict(entry)
+
+
+def _mcp_smithery_cache_set(key: str, items, diag: dict = None):
+    MCP_SMITHERY_CACHE.setdefault('entries', {})[key] = {
+        'ts': time.time(),
+        'items': list(items or []),
+        'diag': dict(diag or {}),
+    }
+
+
+def _smithery_install_job_prune_locked(now=None):
+    now = now or time.time()
+    stale_ids = []
+    for job_id, job in list(MCP_SMITHERY_INSTALL_JOBS.items()):
+        updated_at = float(job.get('updated_at') or job.get('created_at') or 0.0)
+        if job.get('status') in ('running', 'queued'):
+            continue
+        if (now - updated_at) > MCP_SMITHERY_INSTALL_JOB_TTL:
+            stale_ids.append(job_id)
+    for job_id in stale_ids:
+        MCP_SMITHERY_INSTALL_JOBS.pop(job_id, None)
+
+
+def _smithery_install_job_snapshot(job_id: str):
+    with MCP_SMITHERY_INSTALL_JOBS_LOCK:
+        _smithery_install_job_prune_locked()
+        job = MCP_SMITHERY_INSTALL_JOBS.get(job_id)
+        if not job:
+            return None
+        return {
+            'job_id': job.get('job_id', job_id),
+            'status': job.get('status', 'queued'),
+            'created_at': job.get('created_at'),
+            'updated_at': job.get('updated_at'),
+            'command_display': job.get('command_display', ''),
+            'returncode': job.get('returncode'),
+            'message': job.get('message', ''),
+            'logs': list(job.get('logs') or []),
+            'installed': bool(job.get('status') == 'success'),
+        }
+
+
+def _smithery_install_job_append(job_id: str, line: str):
+    text = str(line or '').replace('\r', '').rstrip('\n')
+    if not text.strip():
+        return
+    log_line = text.strip('\n')
+    now = time.time()
+    with MCP_SMITHERY_INSTALL_JOBS_LOCK:
+        job = MCP_SMITHERY_INSTALL_JOBS.get(job_id)
+        if not job:
+            return
+        logs = list(job.get('logs') or [])
+        logs.append(log_line)
+        if len(logs) > 400:
+            logs = logs[-400:]
+        job['logs'] = logs
+        job['updated_at'] = now
+    print(f"[Smithery CLI][{job_id}] {log_line}")
+
+
+def _smithery_install_job_finish(job_id: str, status: str, message: str, returncode: int = None):
+    now = time.time()
+    with MCP_SMITHERY_INSTALL_JOBS_LOCK:
+        job = MCP_SMITHERY_INSTALL_JOBS.get(job_id)
+        if not job:
+            return
+        job['status'] = status
+        job['message'] = str(message or '')
+        job['updated_at'] = now
+        if returncode is not None:
+            job['returncode'] = int(returncode)
+        job['logs'] = list(job.get('logs') or [])
+    print(f"[Smithery CLI][{job_id}] {status.upper()}: {message}")
+
+
+def _start_smithery_install_job():
+    npm = shutil.which('npm')
+    if not npm:
+        raise RuntimeError('未找到 npm，请先安装 Node.js 20+')
+
+    base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    command = [npm, 'install', '-g', '@smithery/cli@latest']
+    command_display = 'npm install -g @smithery/cli@latest'
+    job_id = uuid.uuid4().hex
+    now = time.time()
+
+    with MCP_SMITHERY_INSTALL_JOBS_LOCK:
+        _smithery_install_job_prune_locked(now)
+        MCP_SMITHERY_INSTALL_JOBS[job_id] = {
+            'job_id': job_id,
+            'status': 'queued',
+            'created_at': now,
+            'updated_at': now,
+            'command_display': command_display,
+            'returncode': None,
+            'message': '准备启动 Smithery CLI 安装',
+            'logs': [
+                '准备安装 Smithery CLI',
+                f'命令: {command_display}',
+            ],
+        }
+
+    def _runner():
+        process = None
+        try:
+            with MCP_SMITHERY_INSTALL_JOBS_LOCK:
+                job = MCP_SMITHERY_INSTALL_JOBS.get(job_id)
+                if job:
+                    job['status'] = 'running'
+                    job['updated_at'] = time.time()
+
+            _smithery_install_job_append(job_id, f'工作目录: {base_path}')
+            _smithery_install_job_append(job_id, f'开始执行: {command_display}')
+
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                bufsize=1,
+                cwd=base_path,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
+            )
+
+            if process.stdout:
+                for raw_line in iter(process.stdout.readline, ''):
+                    if raw_line == '':
+                        break
+                    _smithery_install_job_append(job_id, raw_line)
+
+            returncode = process.wait()
+            if returncode == 0:
+                cli = _find_smithery_cli()
+                _smithery_install_job_append(job_id, f'检测到 CLI: {cli or "未检测到"}')
+                _smithery_install_job_finish(job_id, 'success', 'Smithery CLI 安装完成', returncode)
+            else:
+                _smithery_install_job_append(job_id, f'安装命令退出码: {returncode}')
+                _smithery_install_job_finish(job_id, 'error', 'Smithery CLI 安装失败，请查看日志', returncode)
+        except Exception as exc:
+            _smithery_install_job_append(job_id, f'安装异常: {exc}')
+            _smithery_install_job_finish(job_id, 'error', str(exc), -1)
+        finally:
+            try:
+                if process and process.stdout:
+                    process.stdout.close()
+            except Exception:
+                pass
+
+    threading.Thread(target=_runner, daemon=True).start()
+    return _smithery_install_job_snapshot(job_id)
 
 
 
@@ -494,10 +878,11 @@ def install_mcp_market_item():
         return jsonify({'code': 400, 'message': str(e)}), 400
 
 
+@systems_bp.route('/mcp/market/smithery/search', methods=['GET'])
 @systems_bp.route('/mcp/market/registry', methods=['GET'])
 @systems_bp.route('/mcp/market/mcpmarket', methods=['GET'])
 def list_mcpmarket_items():
-    """官方 MCP Registry 条目列表（仅元数据）。"""
+    """Smithery CLI 驱动的 MCP 商店检索（兼容旧路由）。"""
     try:
         page = request.args.get('page', 1, type=int)
         page_size = request.args.get('page_size', 30, type=int)
@@ -506,104 +891,265 @@ def list_mcpmarket_items():
         page = max(1, int(page or 1))
         page_size = max(5, min(100, int(page_size or 30)))
 
-        fetch_limit = min(200, page * page_size + page_size)
-        items = _fetch_mcpmarket_trending(limit=max(1, fetch_limit))
+        cli = _find_smithery_cli()
+        if not cli:
+            return jsonify({
+                'code': 0,
+                'message': 'success',
+                'data': [],
+                'count': 0,
+                'page': page,
+                'page_size': page_size,
+                'total': 0,
+                'has_more': False,
+                'query': query,
+                'mode': 'smithery_cli',
+                'cli_installed': False,
+                'warning': 'Smithery CLI 未安装，请先安装后再同步商店'
+            })
 
-        if query:
-            filtered = []
-            for item in items:
-                qsrc = ' '.join([
-                    str(item.get('name', '')).lower(),
-                    str(item.get('description', '')).lower(),
-                    str(item.get('external_url', '')).lower(),
-                    ' '.join([str(t).lower() for t in (item.get('tags') or [])])
-                ])
-                if query in qsrc:
-                    filtered.append(item)
-            items = filtered
+        cache_key = _mcp_smithery_cache_key(query, f'{cli}|p{page}|ps{page_size}')
+        cached = _mcp_smithery_cache_get(cache_key)
+        if cached and cached.get('items'):
+            items = list(cached.get('items') or [])
+            diag = dict(cached.get('diag') or {})
+            diag.update({'cached': True, 'mode': 'smithery_cli', 'cli': cli})
+            return jsonify({
+                'code': 0,
+                'message': 'success',
+                'data': items,
+                'count': len(items),
+                'page': page,
+                'page_size': page_size,
+                'total': int(diag.get('total') or len(items)),
+                'has_more': bool(diag.get('has_more')),
+                'query': query,
+                'mode': 'smithery_cli',
+                'cli_installed': True,
+                'diagnostics': diag,
+            })
 
-        start = (page - 1) * page_size
-        end = start + page_size
-        paged = items[start:end]
+        effective_query = query or 'github'
+        attempts = []
+        attempts.extend([
+            ['--json', 'mcp', 'search', effective_query, '--page', str(page)],
+            ['mcp', 'search', effective_query, '--page', str(page)],
+            ['--json', 'mcp', 'search', effective_query],
+            ['mcp', 'search', effective_query],
+        ])
+
+        payload = None
+        text_rows = []
+        errors = []
+        for args in attempts:
+            result = _run_smithery_cli(args, timeout=45)
+            if not result.get('ok'):
+                errors.append((result.get('stderr') or result.get('stdout') or '').strip()[:300])
+                continue
+
+            out = result.get('stdout') or ''
+            parsed = _extract_json_from_text(out)
+            if parsed is not None:
+                payload = parsed
+                break
+
+            for line in out.splitlines():
+                line = _clean_smithery_text(line)
+                if not line:
+                    continue
+                text_rows.append(line)
+            if text_rows:
+                break
+
+        items = _normalize_smithery_mcp_items(payload) if payload is not None else []
+        has_more = bool((payload or {}).get('hasMore')) if isinstance(payload, dict) else False
+        total = (page - 1) * page_size + len(items) + (1 if has_more else 0)
+        if not items and text_rows:
+            for i, line in enumerate(text_rows, start=1):
+                if query and query not in line.lower():
+                    continue
+                sid = f'smithery-{i}'
+                items.append({
+                    'id': sid,
+                    'name': line[:80],
+                    'description': line,
+                    'author': '',
+                    'version': '',
+                    'keywords': [],
+                    'tags': [],
+                    'type': 'remote',
+                    'homepage': '',
+                    'repository': '',
+                    'documentation': '',
+                    'registry_url': '',
+                    'connection_url': '',
+                    'protocol_version': '1.0',
+                    'implementation': '',
+                    'source': 'smithery',
+                    'installable': True,
+                    'user_config_required': False,
+                })
+            has_more = False
+            total = (page - 1) * page_size + len(items)
+
+        _mcp_smithery_cache_set(cache_key, items, {
+            'mode': 'smithery_cli',
+            'errors': errors[:5],
+            'cli': cli,
+            'cached': False,
+            'has_more': has_more,
+            'total': total,
+            'effective_query': effective_query,
+        })
+
         return jsonify({
             'code': 0,
             'message': 'success',
-            'data': paged,
-            'count': len(paged),
+            'data': items,
+            'count': len(items),
             'page': page,
             'page_size': page_size,
-            'total': len(items),
-            'has_more': end < len(items),
+            'total': total,
+            'has_more': has_more,
             'query': query,
-            'mode': 'official_only',
+            'mode': 'smithery_cli',
+            'cli_installed': True,
+            'diagnostics': {
+                'mode': 'smithery_cli',
+                'errors': errors[:5],
+                'cli': cli,
+                'cached': False,
+                'effective_query': effective_query,
+            }
         })
     except Exception as e:
-        fallback = []
         return jsonify({
-            'code': 0,
-            'message': 'success',
-            'data': fallback,
-            'count': len(fallback),
+            'code': 502,
+            'message': str(e),
+            'data': [],
+            'count': 0,
             'page': 1,
-            'page_size': len(fallback),
-            'total': len(fallback),
+            'page_size': max(5, min(100, int(request.args.get('page_size', 30) or 30))),
+            'total': 0,
             'has_more': False,
             'query': str(request.args.get('query', '') or '').strip().lower(),
-            'warning': str(e),
-            'mode': 'registry_metadata_only',
-        })
+            'mode': 'smithery_cli',
+        }), 502
 
 
 @systems_bp.route('/mcp/market/registry/install', methods=['POST'])
 @systems_bp.route('/mcp/market/mcpmarket/install', methods=['POST'])
 def install_mcpmarket_item_from_url():
-    """获取 MCP 元数据和安装指导（用户需要自己配置参数）。"""
+    """兼容旧路由：代理到 Smithery CLI 安装。"""
+    return install_mcp_smithery_item()
+
+
+@systems_bp.route('/mcp/market/smithery/status', methods=['GET'])
+def mcp_smithery_status():
+    """Smithery CLI 状态。"""
     try:
-        data = request.json or {}
-        server_id = str(data.get('server_id', '')).strip()
-        server_name = str(data.get('name', '')).strip()
-        
-        if not server_id or not server_name:
-            return jsonify({'code': 400, 'message': 'server_id and name are required'}), 400
-        
-        # 从官方 Registry 获取完整的服务器列表
-        servers = _fetch_official_mcp_registry(limit=200)
-        target_server = None
-        for srv in servers:
-            if srv['id'] == server_id or srv['name'].lower() == server_name.lower():
-                target_server = srv
-                break
-        
-        if not target_server:
-            return jsonify({'code': 400, 'message': f'Server {server_id} not found in MCP Registry'}), 400
-        
-        # 返回元数据和配置指导（类似 VSCode MCP 那样）
+        now = time.time()
+        cached_data = MCP_SMITHERY_STATUS_CACHE.get('data')
+        cached_ts = float(MCP_SMITHERY_STATUS_CACHE.get('ts') or 0.0)
+        if cached_data is not None and (now - cached_ts) <= MCP_SMITHERY_STATUS_CACHE_TTL:
+            return jsonify({'code': 0, 'message': 'success', 'data': dict(cached_data)})
+
+        info = _smithery_runner_info()
+        cli = str(info.get('cli') or '').strip()
+        installed = bool(info.get('installed'))
+        mode = str(info.get('mode') or '')
+        if not cli:
+            data = {'installed': False, 'cli': '', 'version': '', 'mode': 'missing'}
+            MCP_SMITHERY_STATUS_CACHE['ts'] = now
+            MCP_SMITHERY_STATUS_CACHE['data'] = dict(data)
+            return jsonify({'code': 0, 'message': 'success', 'data': data})
+
+        version = ''
+        for args in (['--version'], ['version']):
+            try:
+                r = _run_smithery_cli(args, timeout=10)
+                if r.get('ok'):
+                    text = (r.get('stdout') or '').strip()
+                    version = text.splitlines()[0] if text else ''
+                    break
+            except Exception:
+                continue
+        data = {'installed': installed, 'cli': cli, 'version': version, 'mode': mode}
+        MCP_SMITHERY_STATUS_CACHE['ts'] = now
+        MCP_SMITHERY_STATUS_CACHE['data'] = dict(data)
+        return jsonify({'code': 0, 'message': 'success', 'data': data})
+    except Exception as e:
+        return jsonify({'code': 500, 'message': str(e)}), 500
+
+
+@systems_bp.route('/mcp/market/smithery/cli/install', methods=['POST'])
+def install_mcp_smithery_cli():
+    """后台安装 Smithery CLI，并返回可轮询的 job。"""
+    try:
+        job = _start_smithery_install_job()
         return jsonify({
             'code': 0,
-            'message': 'MCP Server metadata and setup instructions',
+            'message': 'Smithery CLI 安装已在后台启动',
             'data': {
-                'server_info': target_server,
-                'setup_instructions': {
-                    'description': '该 MCP 服务器需要手动配置。请查看以下资源进行设置：',
-                    'links': [
-                        {'title': '官方注册表页面', 'url': target_server.get('registry_url', '')},
-                        {'title': '文档', 'url': target_server.get('documentation', '')},
-                        {'title': '项目主页', 'url': target_server.get('homepage', '')},
-                        {'title': '源代码仓库', 'url': target_server.get('repository', '')},
-                    ],
-                    'config_fields': [
-                        'protocol',
-                        'endpoint/command',
-                        'authentication_params',
-                        'environment_variables'
-                    ],
-                    'note': '请查看官方文档了解具体的连接参数和配置方法。不同的服务器有不同的配置要求。'
-                },
-                'editing_tips': {
-                    'vscode_style': '类似于 VSCode 的 MCP 配置，在 settings.json 中编辑 mcpServers 对象',
-                    'required_fields': ['name', 'type', 'command 或 url'],
-                    'optional_fields': ['env', 'args', 'disabled', 'alwaysAllow']
-                }
+                'installed': False,
+                'job_id': job.get('job_id'),
+                'status': job.get('status', 'queued'),
+                'command': job.get('command_display', ''),
+                'logs': list(job.get('logs') or []),
+                'status_url': f"/api/systems/mcp/market/smithery/cli/install/jobs/{job.get('job_id')}",
+            }
+        })
+    except Exception as e:
+        return jsonify({'code': 500, 'message': str(e)}), 500
+
+
+@systems_bp.route('/mcp/market/smithery/cli/install/jobs/<job_id>', methods=['GET'])
+def mcp_smithery_install_job(job_id):
+    """查询 Smithery CLI 安装任务状态和实时日志。"""
+    try:
+        job = _smithery_install_job_snapshot(str(job_id).strip())
+        if not job:
+            return jsonify({'code': 404, 'message': 'job not found'}), 404
+        return jsonify({'code': 0, 'message': 'success', 'data': job})
+    except Exception as e:
+        return jsonify({'code': 500, 'message': str(e)}), 500
+
+
+@systems_bp.route('/mcp/market/smithery/install', methods=['POST'])
+def install_mcp_smithery_item():
+    """通过 Smithery CLI 安装/接入 MCP。"""
+    try:
+        data = request.json or {}
+        target = str(data.get('server_id') or data.get('id') or data.get('name') or '').strip()
+        connection_url = str(data.get('connection_url') or '').strip()
+        target_url = str(data.get('registry_url') or data.get('url') or '').strip()
+        target_ref = connection_url or target_url or target
+
+        if not target_ref:
+            return jsonify({'code': 400, 'message': 'server_id/url is required'}), 400
+
+        attempts = [
+            ['mcp', 'add', target_ref],
+        ]
+        errors = []
+        ok_result = None
+        for args in attempts:
+            r = _run_smithery_cli(args, timeout=120)
+            if r.get('ok'):
+                ok_result = r
+                break
+            errors.append((r.get('stderr') or r.get('stdout') or '').strip()[:500])
+
+        if not ok_result:
+            return jsonify({'code': 500, 'message': 'Smithery MCP 接入失败', 'details': errors}), 500
+
+        return jsonify({
+            'code': 0,
+            'message': f'Smithery MCP 接入完成: {target_ref}',
+            'data': {
+                'target': target_ref,
+                'stdout': (ok_result.get('stdout') or '')[-1200:],
+                'cli': _find_smithery_cli(),
             }
         })
     except Exception as e:

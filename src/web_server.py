@@ -775,12 +775,53 @@ def run_web_server():
             return [npx, '-y', 'skills']
         return []
 
+    def _skillhub_runner_info():
+        cfg = _load_skillhub_config()
+        configured_bin = str(cfg.get('cli_bin') or '').strip()
+
+        if configured_bin:
+            full = shutil.which(configured_bin)
+            if full:
+                return {
+                    'runner': [full],
+                    'installed': True,
+                    'mode': 'configured',
+                    'cli': full,
+                }
+
+        for b in ['skills', 'skillhub', 'skillhub-cli']:
+            full = shutil.which(b)
+            if full:
+                return {
+                    'runner': [full],
+                    'installed': True,
+                    'mode': 'global',
+                    'cli': full,
+                }
+
+        npx = shutil.which('npx')
+        if npx:
+            return {
+                'runner': [npx, '-y', 'skills'],
+                'installed': False,
+                'mode': 'npx-fallback',
+                'cli': f'{npx} -y skills',
+            }
+
+        return {
+            'runner': [],
+            'installed': False,
+            'mode': 'missing',
+            'cli': '',
+        }
+
     def _find_skillhub_cli():
-        runner = _skillhub_runner()
-        return ' '.join(runner) if runner else ''
+        info = _skillhub_runner_info()
+        return str(info.get('cli') or '').strip()
 
     def _run_skillhub_cli(args, timeout=45):
-        runner = _skillhub_runner()
+        info = _skillhub_runner_info()
+        runner = list(info.get('runner') or [])
         if not runner:
             raise RuntimeError('SkillHub CLI 未安装，请先点击“安装 SkillHub CLI”')
         cmd = list(runner) + list(args or [])
@@ -1597,9 +1638,12 @@ def run_web_server():
     @app.route('/api/skills/market/skillhub/status', methods=['GET'])
     def api_skills_market_skillhub_status():
         try:
-            cli = _find_skillhub_cli()
+            info = _skillhub_runner_info()
+            cli = str(info.get('cli') or '').strip()
+            installed = bool(info.get('installed'))
+            mode = str(info.get('mode') or '')
             if not cli:
-                return jsonify({'success': True, 'installed': False, 'cli': '', 'version': ''})
+                return jsonify({'success': True, 'installed': False, 'cli': '', 'version': '', 'mode': 'missing'})
 
             version = ''
             for args in (['--version'], ['version']):
@@ -1610,7 +1654,7 @@ def run_web_server():
                         break
                 except Exception:
                     continue
-            return jsonify({'success': True, 'installed': True, 'cli': cli, 'version': version})
+            return jsonify({'success': True, 'installed': installed, 'cli': cli, 'version': version, 'mode': mode})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
