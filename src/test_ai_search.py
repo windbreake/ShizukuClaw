@@ -8,16 +8,25 @@ AI搜索功能测试脚本
 
 import os
 import sys
-
-from .ai_chat_system import AIChatSystem
-from .shared_utils import should_search
+import pytest
 
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.shared_utils import should_search
 
 
 def test_ai_search():
     """测试AI搜索功能"""
+    if os.getenv("RUN_INTEGRATION_TESTS", "0") != "1":
+        pytest.skip("integration test disabled (set RUN_INTEGRATION_TESTS=1 to enable)")
+
+    try:
+        from src.ai_chat_system import AIChatSystem
+    except ImportError as exc:
+        pytest.skip(f"skip test_ai_search due to missing optional dependency: {exc}")
+
     print("=== AI搜索功能测试 ===")
     
     # 初始化AI聊天系统

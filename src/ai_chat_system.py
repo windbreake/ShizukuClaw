@@ -146,6 +146,10 @@ class AIChatSystem:
         """Write a plugin runtime config to its project directory."""
         return self.plugin_manager.update_plugin_runtime_config(plugin_name, config_data)
 
+    def delete_plugin(self, plugin_name):
+        """Delete an external plugin project and unregister it."""
+        return self.plugin_manager.delete_plugin_project(plugin_name)
+
     def run_plugin_command(self, command_text, is_admin=True, frontend_source='control_panel'):
         """Execute a plugin command directly (e.g. /plugins reload, /kemono_crawl ...)."""
         context = PluginContext(
@@ -185,6 +189,10 @@ class AIChatSystem:
     def update_skill_policy(self, skill_id, policy):
         """Update skill policy and return normalized policy."""
         return self.skill_manager.update_skill_policy(skill_id, policy, persist=True)
+
+    def delete_skill(self, skill_id):
+        """Delete a skill project directory and unregister it."""
+        return self.skill_manager.delete_skill_project(skill_id)
 
     def _ensure_realtime_storage_files(self):
         if not os.path.exists(self.realtime_subscriptions_path):

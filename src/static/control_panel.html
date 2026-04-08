@@ -33,6 +33,60 @@
         .gateway-console-card {
             height: 560px;
         }
+
+        .h-300 { height: 300px; }
+        .h-250 { height: 250px; }
+        .h-100 { height: 100px; }
+        .text-truncate-80 { max-width: 80px; }
+        .sandbox-chat-card { min-height: 600px; }
+        .chat-box-body { flex: 1; min-height: 400px; border-radius: 0.5rem; }
+        .typing-indicator-hidden { display: none; }
+        .emoji-picker-popover { bottom: 80px; left: 10px; width: 300px; z-index: 1050; }
+        .emoji-list-scroll { max-height: 200px; overflow-y: auto; }
+        .sql-result-box {
+            min-height: 80px;
+            max-height: 300px;
+            overflow: auto;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85em;
+        }
+        .mono-editor-soft { font-size: 0.85em; background-color: #f8f9fa; }
+        .plan-viewer-box { min-height: 360px; white-space: pre-wrap; }
+        .minw-240 { min-width: 240px; }
+        .realtime-stream-box { min-height: 460px; max-height: 650px; overflow: auto; }
+        .install-log-box {
+            min-height: 320px;
+            max-height: 52vh;
+            overflow: auto;
+            white-space: pre-wrap;
+            font-family: Consolas, 'Cascadia Mono', monospace;
+            font-size: 0.9rem;
+        }
+        .maxw-560 { max-width: 560px; }
+        .log-output-box {
+            height: 600px;
+            overflow: auto;
+            color: #d4d4d4;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+        }
+        .merged-log-line { margin-bottom: 2px; }
+        .merged-log-line .log-ts { color: #8fa6c1; }
+        .merged-log-line.level-command { color: #7ecbff; }
+        .merged-log-line.level-info { color: #d4d4d4; }
+        .merged-log-line.level-chat-user { color: #93c5fd; }
+        .merged-log-line.level-chat-bot { color: #c4b5fd; }
+        .merged-log-line.level-success { color: #4ade80; }
+        .merged-log-line.level-warning { color: #facc15; }
+        .merged-log-line.level-error { color: #f87171; }
+        .terminal-card-body { height: 600px; }
+        .term-output-box {
+            overflow-y: auto;
+            color: #0f0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+        }
+        .onebot-ws-url { font-weight: 500; color: #0d6efd; }
     </style>
 </head>
 <body>
@@ -41,16 +95,16 @@
     <div class="brand">
         <i class="fas fa-cat fa-lg me-2"></i> Shizuku
     </div>
-    <div class="nav flex-column nav-pills" id="v-pills-tab" role="tablist" aria-orientation="vertical">
-        <a class="nav-link active" id="v-dashboard-tab" data-bs-toggle="pill" data-bs-target="#v-dashboard" type="button" role="tab">
+    <div class="nav flex-column nav-pills" id="v-pills-tab">
+        <a class="nav-link active" id="v-dashboard-tab" data-bs-toggle="pill" data-bs-target="#v-dashboard" type="button">
             <i class="fas fa-tachometer-alt fa-fw"></i> 仪表盘
         </a>
-        <a class="nav-link" id="v-sandbox-tab" data-bs-toggle="pill" data-bs-target="#v-sandbox" type="button" role="tab">
+        <a class="nav-link" id="v-sandbox-tab" data-bs-toggle="pill" data-bs-target="#v-sandbox" type="button">
             <i class="fas fa-comments fa-fw"></i> 沙箱对话
         </a>
         <div class="nav-group" id="agent-nav-group">
             <div class="nav-group-header">
-                <a class="nav-link" id="v-agent-tab" data-bs-toggle="pill" data-bs-target="#v-agent" type="button" role="tab" onclick="fetchAgentStatus()">
+                <a class="nav-link" id="v-agent-tab" data-bs-toggle="pill" data-bs-target="#v-agent" type="button" onclick="fetchAgentStatus()">
                     <i class="fas fa-robot fa-fw"></i> Agent 状态
                 </a>
                 <button class="nav-submenu-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#agent-submenu" aria-expanded="false" aria-controls="agent-submenu" title="展开/收起 Agent 子导航">
@@ -58,19 +112,19 @@
                 </button>
             </div>
             <div class="collapse nav-submenu" id="agent-submenu">
-                <a class="nav-link nav-sub-link" id="v-tasks-tab" data-bs-toggle="pill" data-bs-target="#v-tasks" type="button" role="tab" onclick="loadTaskManager()">
+                <a class="nav-link nav-sub-link" id="v-tasks-tab" data-bs-toggle="pill" data-bs-target="#v-tasks" type="button" onclick="loadTaskManager()">
                     <i class="fas fa-calendar-check fa-fw"></i> 定时任务
                 </a>
-                <a class="nav-link nav-sub-link" id="v-realtime-tab" data-bs-toggle="pill" data-bs-target="#v-realtime" type="button" role="tab" onclick="loadRealtimeSearchPanel()">
+                <a class="nav-link nav-sub-link" id="v-realtime-tab" data-bs-toggle="pill" data-bs-target="#v-realtime" type="button" onclick="loadRealtimeSearchPanel()">
                     <i class="fas fa-broadcast-tower fa-fw"></i> 实时搜索
                 </a>
-                <a class="nav-link nav-sub-link" id="v-mcp-tab" data-bs-toggle="pill" data-bs-target="#v-mcp" type="button" role="tab" onclick="loadMcpManager()">
+                <a class="nav-link nav-sub-link" id="v-mcp-tab" data-bs-toggle="pill" data-bs-target="#v-mcp" type="button" onclick="loadMcpManager()">
                     <i class="fas fa-plug fa-fw"></i> MCP 系统
                 </a>
-                <a class="nav-link nav-sub-link" id="v-knowledge-tab" data-bs-toggle="pill" data-bs-target="#v-knowledge" type="button" role="tab" onclick="loadKnowledgeManager()">
+                <a class="nav-link nav-sub-link" id="v-knowledge-tab" data-bs-toggle="pill" data-bs-target="#v-knowledge" type="button" onclick="loadKnowledgeManager()">
                     <i class="fas fa-book fa-fw"></i> 知识库
                 </a>
-                <a class="nav-link nav-sub-link" id="v-instructions-tab" data-bs-toggle="pill" data-bs-target="#v-instructions" type="button" role="tab" onclick="loadInstructionManager()">
+                <a class="nav-link nav-sub-link" id="v-instructions-tab" data-bs-toggle="pill" data-bs-target="#v-instructions" type="button" onclick="loadInstructionManager()">
                     <i class="fas fa-pen-nib fa-fw"></i> 指令中心
                 </a>
             </div>
@@ -85,13 +139,13 @@
                 </button>
             </div>
             <div class="collapse nav-submenu" id="extensions-submenu">
-                <a class="nav-link nav-sub-link" id="v-plugins-tab" data-bs-toggle="pill" data-bs-target="#v-plugins" type="button" role="tab" onclick="loadPluginStatus()">
+                <a class="nav-link nav-sub-link" id="v-plugins-tab" data-bs-toggle="pill" data-bs-target="#v-plugins" type="button" onclick="loadPluginStatus()">
                     <i class="fas fa-puzzle-piece fa-fw"></i> 插件管理
                 </a>
-                <a class="nav-link nav-sub-link" id="v-skills-tab" data-bs-toggle="pill" data-bs-target="#v-skills" type="button" role="tab" onclick="loadSkillStatus()">
+                <a class="nav-link nav-sub-link" id="v-skills-tab" data-bs-toggle="pill" data-bs-target="#v-skills" type="button" onclick="loadSkillStatus()">
                     <i class="fas fa-toolbox fa-fw"></i> skill 管理
                 </a>
-                <a class="nav-link nav-sub-link" id="v-persona-tab" data-bs-toggle="pill" data-bs-target="#v-persona" type="button" role="tab">
+                <a class="nav-link nav-sub-link" id="v-persona-tab" data-bs-toggle="pill" data-bs-target="#v-persona" type="button">
                     <i class="fas fa-face-smile-beam fa-fw"></i> 人格设定
                 </a>
             </div>
@@ -106,22 +160,19 @@
                 </button>
             </div>
             <div class="collapse nav-submenu" id="ops-submenu">
-                <a class="nav-link nav-sub-link" id="v-config-tab" data-bs-toggle="pill" data-bs-target="#v-config" type="button" role="tab" onclick="loadConfig()">
+                <a class="nav-link nav-sub-link" id="v-config-tab" data-bs-toggle="pill" data-bs-target="#v-config" type="button" onclick="loadConfig()">
                     <i class="fas fa-sliders-h fa-fw"></i> 系统配置
                 </a>
-                <a class="nav-link nav-sub-link" id="v-system-tab" data-bs-toggle="pill" data-bs-target="#v-system" type="button" role="tab">
+                <a class="nav-link nav-sub-link" id="v-system-tab" data-bs-toggle="pill" data-bs-target="#v-system" type="button">
                     <i class="fas fa-server fa-fw"></i> 系统监控
                 </a>
-                <a class="nav-link nav-sub-link" id="v-database-tab" data-bs-toggle="pill" data-bs-target="#v-database" type="button" role="tab" onclick="refreshRecords()">
+                <a class="nav-link nav-sub-link" id="v-database-tab" data-bs-toggle="pill" data-bs-target="#v-database" type="button" onclick="refreshRecords()">
                     <i class="fas fa-database fa-fw"></i> 数据库
                 </a>
-                <a class="nav-link nav-sub-link" id="v-logs-tab" data-bs-toggle="pill" data-bs-target="#v-logs" type="button" role="tab" onclick="refreshLog()">
-                    <i class="fas fa-terminal fa-fw"></i> 系统日志
+                <a class="nav-link nav-sub-link" id="v-logs-tab" data-bs-toggle="pill" data-bs-target="#v-logs" type="button" onclick="refreshLog()">
+                    <i class="fas fa-terminal fa-fw"></i> 日志与终端
                 </a>
-                <a class="nav-link nav-sub-link" id="v-terminal-tab" data-bs-toggle="pill" data-bs-target="#v-terminal" type="button" role="tab" onclick="initTerminal()">
-                    <i class="fas fa-code fa-fw"></i> 终端命令行
-                </a>
-                <a class="nav-link nav-sub-link" id="v-gateway-tab" data-bs-toggle="pill" data-bs-target="#v-gateway" type="button" role="tab">
+                <a class="nav-link nav-sub-link" id="v-gateway-tab" data-bs-toggle="pill" data-bs-target="#v-gateway" type="button">
                     <i class="fas fa-network-wired fa-fw"></i> 网关控制台
                 </a>
             </div>
@@ -181,6 +232,33 @@
                          </div>
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="card text-center h-100 py-3 pointer" onclick="document.getElementById('v-mcp-tab').click()">
+                         <div class="card-body">
+                            <i class="fas fa-cube fa-3x text-danger mb-3"></i>
+                            <h5 class="card-title text-dark">MCP 系统</h5>
+                            <p class="card-text text-muted small">管理模型上下文协议</p>
+                         </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center h-100 py-3 pointer" onclick="document.getElementById('v-persona-tab').click()">
+                         <div class="card-body">
+                            <i class="fas fa-face-smile-beam fa-3x text-warning mb-3"></i>
+                            <h5 class="card-title text-dark">人格设定</h5>
+                            <p class="card-text text-muted small">管理角色卡和人设</p>
+                         </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center h-100 py-3 pointer" onclick="document.getElementById('v-config-tab').click(); loadConfig()">
+                         <div class="card-body">
+                            <i class="fas fa-sliders-h fa-3x text-cyan mb-3"></i>
+                            <h5 class="card-title text-dark">系统配置</h5>
+                            <p class="card-text text-muted small">修改核心参数和策略</p>
+                         </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Charts -->
@@ -192,7 +270,7 @@
                             <span class="badge bg-success rounded-pill" id="sys-status-badge">Running</span>
                         </div>
                         <div class="card-body">
-                            <div style="height: 300px;">
+                            <div class="h-300">
                                 <canvas id="mainChart"></canvas>
                             </div>
                         </div>
@@ -218,25 +296,25 @@
                             </ul>
 
                             <div class="row align-items-center g-0 bg-light rounded p-2 mb-3">
-                                <div class="col-5 position-relative text-center" style="height: 100px;">
+                                  <div class="col-5 position-relative text-center h-100">
                                      <canvas id="diskChart"></canvas>
                                 </div>
                                 <div class="col-7 ps-3 border-start">
                                     <div class="d-flex justify-content-between small mb-1">
                                         <span class="text-muted">OS:</span>
-                                        <span id="sys-platform" class="text-dark fw-bold text-truncate" style="max-width: 80px;">-</span>
+                                        <span id="sys-platform" class="text-dark fw-bold text-truncate text-truncate-80" title="-" style="cursor: help; border-bottom: 1px dotted #ccc;">-</span>
                                     </div>
                                     <div class="d-flex justify-content-between small mb-1">
                                         <span class="text-muted">Python:</span>
-                                        <span id="sys-python" class="text-dark fw-bold">-</span>
+                                        <span id="sys-python" class="text-dark fw-bold" title="-" style="cursor: help; border-bottom: 1px dotted #ccc;">-</span>
                                     </div>
                                     <div class="d-flex justify-content-between small mb-1">
                                         <span class="text-muted"><i class="fas fa-upload text-success me-1"></i>Sent:</span>
-                                        <span id="net-sent" class="text-dark">-</span>
+                                        <span id="net-sent" class="text-dark" title="-" style="cursor: help; border-bottom: 1px dotted #ccc;">-</span>
                                     </div>
                                     <div class="d-flex justify-content-between small">
                                         <span class="text-muted"><i class="fas fa-download text-primary me-1"></i>Recv:</span>
-                                        <span id="net-recv" class="text-dark">-</span>
+                                        <span id="net-recv" class="text-dark" title="-" style="cursor: help; border-bottom: 1px dotted #ccc;">-</span>
                                     </div>
                                 </div>
                             </div>
@@ -268,7 +346,7 @@
                     <div class="row g-2 align-items-center">
                         <div class="col-md-6">
                             <label class="form-label small mb-1">当前角色卡</label>
-                            <select id="sandbox-persona-select" class="form-select form-select-sm" onchange="onSandboxPersonaChange()">
+                            <select id="sandbox-persona-select" class="form-select form-select-sm" onchange="onSandboxPersonaChange()" title="选择当前角色卡" aria-label="选择当前角色卡">
                                 <option value="">加载中...</option>
                             </select>
                         </div>
@@ -290,8 +368,8 @@
                     </div>
                 </div>
             </div>
-            <div class="card h-100 shadow-sm border-0 d-flex flex-column" style="min-height: 600px;">
-                <div id="chat-box" class="card-body bg-light overflow-auto p-4" style="flex: 1; min-height: 400px; border-radius: 0.5rem;">
+            <div class="card h-100 shadow-sm border-0 d-flex flex-column sandbox-chat-card">
+                <div id="chat-box" class="card-body bg-light overflow-auto p-4 chat-box-body">
                     <div class="chat-row bot-row" data-message-id="msg-initial-bot">
                         <div class="message bot-message">喵~我是小雫，有什么可以帮你的吗？</div>
                         <div class="message-meta">
@@ -306,7 +384,7 @@
                     <div id="file-preview-area" class="mb-2 d-flex flex-wrap gap-2"></div>
                     
                     <!-- Typing Indicator -->
-                    <div id="typing-indicator" class="text-muted small mb-2" style="display: none;">
+                    <div id="typing-indicator" class="text-muted small mb-2 typing-indicator-hidden">
                         <i class="fas fa-pen-nib fa-spin me-1 text-primary"></i> 小雫正在输入...
                     </div>
 
@@ -317,7 +395,7 @@
                         <button class="btn btn-outline-secondary" type="button" onclick="toggleEmojiPicker()" title="Emoji">
                             <i class="far fa-smile"></i>
                         </button>
-                        <input type="file" id="file-upload" class="d-none" multiple>
+                        <input type="file" id="file-upload" class="d-none" multiple title="上传文件" aria-label="上传文件">
                         <textarea id="chat-input" class="form-control" placeholder="输入消息...（Enter 发送，Shift+Enter 换行）" autocomplete="off" lang="zh-CN" spellcheck="false" rows="2"></textarea>
                         <button class="btn btn-primary px-4" type="button" onclick="sendChat()">
                             <i class="fas fa-paper-plane me-1"></i> 发送
@@ -325,13 +403,13 @@
                     </div>
 
                     <!-- Emoji Picker Popover -->
-                    <div id="emoji-picker" class="d-none card position-absolute shadow-lg" style="bottom: 80px; left: 10px; width: 300px; z-index: 1050;">
+                    <div id="emoji-picker" class="d-none card position-absolute shadow-lg emoji-picker-popover">
                         <div class="card-header bg-light py-2 small fw-bold d-flex justify-content-between align-items-center">
                             <span>Emoji Picker</span>
-                            <button type="button" class="btn-close btn-close-sm" onclick="toggleEmojiPicker()"></button>
+                            <button type="button" class="btn-close btn-close-sm" onclick="toggleEmojiPicker()" title="关闭表情面板" aria-label="关闭表情面板"></button>
                         </div>
                         <div class="card-body p-2">
-                            <div id="emoji-list" class="d-flex flex-wrap gap-1 justify-content-center" style="max-height: 200px; overflow-y: auto;">
+                            <div id="emoji-list" class="d-flex flex-wrap gap-1 justify-content-center emoji-list-scroll">
                                 <!-- Emojis injected via JS -->
                             </div>
                         </div>
@@ -358,7 +436,7 @@
             </div>
 
             <div class="config-shell shadow-sm">
-                <div class="config-sidebar list-group" id="config-sidebar" role="tablist">
+                <div class="config-sidebar list-group" id="config-sidebar">
                     <button class="list-group-item list-group-item-action active" type="button" data-config-section="general">
                         <i class="fas fa-key me-2"></i> 通用 &amp; API密钥
                     </button>
@@ -374,6 +452,12 @@
                     <button class="list-group-item list-group-item-action" type="button" data-config-section="comm">
                         <i class="fas fa-network-wired me-2"></i> 通信协议
                     </button>
+                    <button class="list-group-item list-group-item-action" type="button" data-config-section="market">
+                        <i class="fas fa-store me-2"></i> 商店管理
+                    </button>
+                    <button class="list-group-item list-group-item-action" type="button" data-config-section="cli">
+                        <i class="fas fa-terminal me-2"></i> CLI 管理
+                    </button>
                 </div>
                 <div class="config-content flex-grow-1">
                     <section class="config-section active" data-section="general">
@@ -385,8 +469,8 @@
                                         <label class="form-label">API 服务密钥配置</label>
                                         <div class="row g-2 mb-2">
                                             <div class="col-md-6">
-                                                <label class="form-label small mb-1">Coder API Provider</label>
-                                                <select id="coder-provider" class="form-select form-select-sm">
+                                                <label class="form-label small mb-1" for="coder-provider">Coder API Provider</label>
+                                                <select id="coder-provider" class="form-select form-select-sm" title="选择 Coder API Provider" aria-label="选择 Coder API Provider">
                                                     <option value="kimi">Kimi Coder</option>
                                                     <option value="minimax">MiniMax Coder</option>
                                                     <option value="claude">Claude Coder</option>
@@ -472,7 +556,7 @@
                                     <div class="row g-2 mb-3">
                                         <div class="col-md-6">
                                             <label class="form-label small">当前人格</label>
-                                            <select id="chat-settings-persona-select" class="form-select form-select-sm">
+                                            <select id="chat-settings-persona-select" class="form-select form-select-sm" title="选择聊天人格" aria-label="选择聊天人格">
                                                 <option value="">加载中...</option>
                                             </select>
                                         </div>
@@ -488,7 +572,7 @@
                                     <div class="row g-2">
                                         <div class="col-md-4">
                                             <label class="form-label small">群聊触发方式</label>
-                                            <select id="wm-reply-group-mode" class="form-select form-select-sm">
+                                            <select id="wm-reply-group-mode" class="form-select form-select-sm" title="群聊触发方式" aria-label="群聊触发方式">
                                                 <option value="mention_or_keyword">@ 或关键词</option>
                                                 <option value="mention_only">仅 @</option>
                                                 <option value="keyword_only">仅关键词</option>
@@ -497,7 +581,7 @@
                                         </div>
                                         <div class="col-md-4">
                                             <label class="form-label small">私聊触发方式</label>
-                                            <select id="wm-reply-private-mode" class="form-select form-select-sm">
+                                            <select id="wm-reply-private-mode" class="form-select form-select-sm" title="私聊触发方式" aria-label="私聊触发方式">
                                                 <option value="always">总是回复</option>
                                                 <option value="keyword_only">仅关键词</option>
                                                 <option value="mention_only">仅 @</option>
@@ -540,8 +624,8 @@
 
                                 <div class="row g-3 mb-3">
                                     <div class="col-md-4">
-                                        <label class="form-label small">Web 端口</label>
-                                        <input type="number" class="form-control form-control-sm" id="server_port" min="1" max="65535">
+                                        <label class="form-label small" for="server_port">Web 端口</label>
+                                        <input type="number" class="form-control form-control-sm" id="server_port" min="1" max="65535" title="Web 端口">
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small">启动页面</label>
@@ -597,7 +681,7 @@
                                     <div class="row g-3 align-items-end">
                                         <div class="col-md-4 col-lg-3">
                                             <label class="form-label">数据库类型</label>
-                                            <select class="form-select" name="db_engine" id="db_engine" onchange="applySuggestedDbPortForEngine()">
+                                            <select class="form-select" name="db_engine" id="db_engine" onchange="applySuggestedDbPortForEngine()" title="数据库类型" aria-label="数据库类型">
                                                 <option value="mysql">MySQL</option>
                                                 <option value="postgresql">PostgreSQL</option>
                                             </select>
@@ -610,20 +694,20 @@
                                     </div>
                                     <div class="row g-3 align-items-end">
                                         <div class="col-md-3">
-                                            <label class="form-label">Host</label>
-                                            <input type="text" class="form-control" name="db_host" id="db_host">
+                                            <label class="form-label" for="db_host">Host</label>
+                                            <input type="text" class="form-control" name="db_host" id="db_host" title="数据库主机">
                                         </div>
                                         <div class="col-md-3">
-                                            <label class="form-label">User</label>
-                                            <input type="text" class="form-control" name="db_user" id="db_user">
+                                            <label class="form-label" for="db_user">User</label>
+                                            <input type="text" class="form-control" name="db_user" id="db_user" title="数据库用户">
                                         </div>
                                         <div class="col-md-3">
-                                            <label class="form-label">Password</label>
-                                            <input type="password" class="form-control" name="db_password" id="db_password">
+                                            <label class="form-label" for="db_password">Password</label>
+                                            <input type="password" class="form-control" name="db_password" id="db_password" title="数据库密码">
                                         </div>
                                         <div class="col-md-3">
-                                            <label class="form-label">Database Name</label>
-                                            <input type="text" class="form-control" name="db_name" id="db_name">
+                                            <label class="form-label" for="db_name">Database Name</label>
+                                            <input type="text" class="form-control" name="db_name" id="db_name" title="数据库名称">
                                         </div>
                                     </div>
                                     <div class="mt-3 d-flex gap-2 flex-wrap">
@@ -638,7 +722,7 @@
                                         <textarea class="form-control font-monospace bg-light" id="sql-query-input" rows="3" placeholder="SELECT * FROM character_info LIMIT 1."></textarea>
                                     </div>
                                     <button type="button" class="btn btn-primary btn-sm" onclick="runSqlQuery()">执行查询 (Execute)</button>
-                                    <div class="mt-2 bg-dark text-white p-2 rounded" id="sql-result-area" style="min-height: 80px; max-height: 300px; overflow: auto; font-family: 'Consolas', monospace; font-size: 0.85em;">
+                                    <div class="mt-2 bg-dark text-white p-2 rounded sql-result-box" id="sql-result-area">
                                         <span class="text-muted opacity-50">Query results will appear here...</span>
                                     </div>
                                 </form>
@@ -653,7 +737,7 @@
                                 <form id="comm-config-form">
                                     <div class="mb-3">
                                         <label class="form-label">核心协议 (Protocol)</label>
-                                        <select class="form-select" id="comm_protocol">
+                                        <select class="form-select" id="comm_protocol" title="核心协议" aria-label="核心协议">
                                             <option value="unified">Unified API Gateway (Standard)</option>
                                             <option value="onebot">WebSocket模式 (NapCat / Client)</option>
                                         </select>
@@ -684,6 +768,138 @@
                             </div>
                         </div>
                     </section>
+
+                    <section class="config-section" data-section="market">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div>
+                                        <h5 class="card-title mb-1"><i class="fas fa-store me-2"></i>商店管理</h5>
+                                        <div class="small text-muted">统一管理 MCP 商店、Skill 商店和 Dify 模板市场。</div>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="refreshUnifiedMarketStatus()"><i class="fas fa-sync me-1"></i>刷新状态</button>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-lg-4">
+                                        <div class="card h-100 border-light">
+                                            <div class="card-body d-flex flex-column">
+                                                <h6 class="mb-1">MCP 商店（Smithery）</h6>
+                                                <div class="small text-muted mb-3">搜索 MCP 服务并一键接入。</div>
+                                                <div class="d-flex gap-2 mt-auto flex-wrap">
+                                                    <button class="btn btn-sm btn-primary" type="button" onclick="openMcpMarketFromConfig()">打开面板</button>
+                                                    <button class="btn btn-sm btn-outline-primary" type="button" onclick="syncMcpRegistryMarket()">同步</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <div class="card h-100 border-light">
+                                            <div class="card-body d-flex flex-column">
+                                                <h6 class="mb-1">Skill 商店（GitHub / SkillHub）</h6>
+                                                <div class="small text-muted mb-3">同步开源 Skill 条目并执行安装。</div>
+                                                <div class="d-flex gap-2 mt-auto flex-wrap">
+                                                    <button class="btn btn-sm btn-success" type="button" onclick="openSkillMarketFromConfig()">打开面板</button>
+                                                    <button class="btn btn-sm btn-outline-success" type="button" onclick="syncGithubSkillMarket(true, true)">同步 GitHub</button>
+                                                    <button class="btn btn-sm btn-outline-success" type="button" onclick="syncSkillhubMarket(true, true)">同步 SkillHub</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <div class="card h-100 border-light">
+                                            <div class="card-body d-flex flex-column">
+                                                <h6 class="mb-1">Dify 模板市场</h6>
+                                                <div class="small text-muted mb-3">官方模板目录，便于快速生成插件骨架。</div>
+                                                <div class="d-flex gap-2 mt-auto flex-wrap">
+                                                    <button class="btn btn-sm btn-info text-white" type="button" onclick="openDifyMarketFromConfig()">打开面板</button>
+                                                    <button class="btn btn-sm btn-outline-info" type="button" onclick="loadDifyMarket(true)">同步模板</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="config-section" data-section="cli">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div>
+                                        <h5 class="card-title mb-1"><i class="fas fa-terminal me-2"></i>CLI 管理</h5>
+                                        <div class="small text-muted">统一入口管理 Smithery、SkillHub、Dify、Kimi CLI 与 MiniMax Codex CLI。</div>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="refreshCliManagerStatus()"><i class="fas fa-sync me-1"></i>检测全部</button>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-lg-6">
+                                        <div class="card h-100 border-light">
+                                            <div class="card-body d-flex flex-column">
+                                                <h6 class="mb-1">Smithery CLI</h6>
+                                                <div id="cli-status-smithery" class="small text-muted mb-3">状态：未检测</div>
+                                                <div class="d-flex gap-2 mt-auto flex-wrap">
+                                                    <button class="btn btn-sm btn-primary" type="button" onclick="installSmitheryCli()">安装</button>
+                                                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="checkSmitheryCliStatus(true)">检测</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="card h-100 border-light">
+                                            <div class="card-body d-flex flex-column">
+                                                <h6 class="mb-1">SkillHub CLI</h6>
+                                                <div id="cli-status-skillhub" class="small text-muted mb-3">状态：未检测</div>
+                                                <div class="d-flex gap-2 mt-auto flex-wrap">
+                                                    <button class="btn btn-sm btn-success" type="button" onclick="installSkillhubCli()">安装</button>
+                                                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="checkSkillhubCliStatus(true)">检测</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="card h-100 border-light">
+                                            <div class="card-body d-flex flex-column">
+                                                <h6 class="mb-1">Dify CLI</h6>
+                                                <div id="cli-status-dify" class="small text-muted mb-3">状态：未检测</div>
+                                                <div class="d-flex gap-2 mt-auto flex-wrap">
+                                                    <button class="btn btn-sm btn-info text-white" type="button" onclick="installDifyCliOneClick()">安装</button>
+                                                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="checkDifyCliStatus(true)">检测</button>
+                                                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="openCliGuideByName('dify')">文档</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="card h-100 border-light">
+                                            <div class="card-body d-flex flex-column">
+                                                <h6 class="mb-1">Kimi CLI</h6>
+                                                <div id="cli-status-kimi" class="small text-muted mb-3">状态：文档引导安装</div>
+                                                <div class="d-flex gap-2 mt-auto flex-wrap">
+                                                    <button class="btn btn-sm btn-warning text-dark" type="button" onclick="installExtraCliOneClick('kimi')">安装</button>
+                                                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="checkExtraCliStatus('kimi', true)">检测</button>
+                                                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="openCliGuideByName('kimi')">文档</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="card h-100 border-light">
+                                            <div class="card-body d-flex flex-column">
+                                                <h6 class="mb-1">MiniMax Codex CLI</h6>
+                                                <div id="cli-status-minimax" class="small text-muted mb-3">状态：文档引导安装</div>
+                                                <div class="d-flex gap-2 mt-auto flex-wrap">
+                                                    <button class="btn btn-sm btn-dark" type="button" onclick="installExtraCliOneClick('minimax')">安装</button>
+                                                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="checkExtraCliStatus('minimax', true)">检测</button>
+                                                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="openCliGuideByName('minimax')">文档</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </div>
 
@@ -710,7 +926,7 @@
                         <div class="col-md-6">
                             <div class="input-group">
                                 <span class="input-group-text">当前人格</span>
-                                <select class="form-select" id="persona-select" onchange="loadSelectedPersona()">
+                                <select class="form-select" id="persona-select" onchange="loadSelectedPersona()" title="当前人格" aria-label="当前人格">
                                     <option value="" disabled selected>Loading...</option>
                                 </select>
                                 <button class="btn btn-outline-secondary" type="button" onclick="refreshPersonas()" title="Refresh List"><i class="fas fa-sync"></i></button>
@@ -723,7 +939,7 @@
                                 <button class="btn btn-sm btn-outline-secondary" onclick="previewPersonaPrompt()"><i class="fas fa-eye"></i> 预览提示词</button>
                                 <button class="btn btn-sm btn-danger" onclick="deleteCurrentPersona()"><i class="fas fa-trash"></i> 删除</button>
                                 <button class="btn btn-sm btn-info text-white" onclick="document.getElementById('import-persona-input').click()"><i class="fas fa-file-import"></i> 导入</button>
-                                <input type="file" id="import-persona-input" accept=".json" style="display: none;" onchange="importPersona(this)">
+                                <input type="file" id="import-persona-input" accept=".json" class="d-none" onchange="importPersona(this)" title="导入人格文件" aria-label="导入人格文件">
                             </div>
                         </div>
                     </div>
@@ -731,33 +947,33 @@
                         <input type="hidden" id="current-persona-filename">
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="form-label">角色名称 (Name)</label>
-                                <input type="text" class="form-control" name="char_name" id="char_name">
+                                <label class="form-label" for="char_name">角色名称 (Name)</label>
+                                <input type="text" class="form-control" name="char_name" id="char_name" title="角色名称">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">哥哥QQ号 (Reference ID)</label>
-                                <input type="text" class="form-control" name="brother_qqid" id="brother_qqid">
+                                <label class="form-label" for="brother_qqid">哥哥QQ号 (Reference ID)</label>
+                                <input type="text" class="form-control" name="brother_qqid" id="brother_qqid" title="哥哥QQ号">
                             </div>
                             <div class="col-12">
-                                <label class="form-label">性格特征 (Personality)</label>
-                                <textarea class="form-control" name="char_persona" id="char_persona" rows="2"></textarea>
+                                <label class="form-label" for="char_persona">性格特征 (Personality)</label>
+                                <textarea class="form-control" name="char_persona" id="char_persona" rows="2" title="性格特征"></textarea>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">身高 (Height)</label>
-                                <input type="text" class="form-control" name="char_height" id="char_height">
+                                <label class="form-label" for="char_height">身高 (Height)</label>
+                                <input type="text" class="form-control" name="char_height" id="char_height" title="身高">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">体重 (Weight)</label>
-                                <input type="text" class="form-control" name="char_weight" id="char_weight">
+                                <label class="form-label" for="char_weight">体重 (Weight)</label>
+                                <input type="text" class="form-control" name="char_weight" id="char_weight" title="体重">
                             </div>
                             <div class="col-12">
-                                <label class="form-label">口癖/口头禅 (Catchphrases - Comma separated)</label>
-                                <input type="text" class="form-control" name="char_catchphrases" id="char_catchphrases">
+                                <label class="form-label" for="char_catchphrases">口癖/口头禅 (Catchphrases - Comma separated)</label>
+                                <input type="text" class="form-control" name="char_catchphrases" id="char_catchphrases" title="口癖/口头禅">
                             </div>
                             <div class="col-12">
-                                <label class="form-label">系统提示词模板 (System Prompt Template)</label>
+                                <label class="form-label" for="system_prompt_template">系统提示词模板 (System Prompt Template)</label>
                                 <div class="form-text mb-1">使用 {name}, {personality} 等占位符。留空则使用默认。</div>
-                                <textarea class="form-control font-monospace" name="system_prompt_template" id="system_prompt_template" rows="6" style="font-size: 0.85em; background-color: #f8f9fa;"></textarea>
+                                <textarea class="form-control font-monospace mono-editor-soft" name="system_prompt_template" id="system_prompt_template" rows="6" title="系统提示词模板"></textarea>
                             </div>
 
                             <div class="col-12"><hr class="my-2"></div>
@@ -767,7 +983,7 @@
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">聊天界面风格 (ui_theme)</label>
-                                <select class="form-select" name="chat_ui_theme" id="chat_ui_theme">
+                                <select class="form-select" name="chat_ui_theme" id="chat_ui_theme" title="聊天界面风格" aria-label="聊天界面风格">
                                     <option value="default">默认</option>
                                     <option value="cute">可爱粉系</option>
                                     <option value="cool">冷调蓝系</option>
@@ -775,8 +991,8 @@
                                 </select>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">状态切换概率 (state_probability)</label>
-                                <input type="number" class="form-control" name="state_probability" id="state_probability" step="0.05" min="0" max="1" value="0.3">
+                                <label class="form-label" for="state_probability">状态切换概率 (state_probability)</label>
+                                <input type="number" class="form-control" name="state_probability" id="state_probability" step="0.05" min="0" max="1" value="0.3" title="状态切换概率">
                             </div>
                             <div class="col-md-8">
                                 <label class="form-label">多状态列表 (states，每行一条)</label>
@@ -810,8 +1026,8 @@
                                 <textarea class="form-control" name="behavior_rules_text" id="behavior_rules_text" rows="3" placeholder="避免每句都同一种口癖&#10;优先承接上下文"></textarea>
                             </div>
                             <div class="col-12">
-                                <label class="form-label">系统提示词预览</label>
-                                <textarea class="form-control font-monospace" id="persona_prompt_preview" rows="10" style="font-size: 0.85em; background-color: #f8f9fa;" readonly placeholder="点击上方“预览提示词”后显示..." ></textarea>
+                                <label class="form-label" for="persona_prompt_preview">系统提示词预览</label>
+                                <textarea class="form-control font-monospace mono-editor-soft" id="persona_prompt_preview" rows="10" readonly placeholder="点击上方“预览提示词”后显示..." title="系统提示词预览" ></textarea>
                             </div>
                         </div>
                     </form>
@@ -827,7 +1043,7 @@
                     <h3 class="mb-1">🧭 系统中枢</h3>
                     <p class="text-muted small mb-0">这里汇总 Agent 状态以及 MCP、知识库、任务和指令系统的入口，保持当前控制面板风格不变。</p>
                 </div>
-                <button class="btn btn-sm btn-outline-secondary" onclick="loadSystemCenterStatus()"><i class="fas fa-sync me-1"></i> 刷新</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadSystemCenterStatus()" title="刷新系统中枢"><i class="fas fa-sync me-1"></i> 刷新</button>
             </div>
             <div class="row g-3 mb-4">
                 <div class="col-md-3"><div class="card h-100 shadow-sm border-0"><div class="card-body text-center"><div class="text-primary fw-semibold">定时任务</div><div class="display-6 fw-bold" id="sys-task-count">0</div><button class="btn btn-sm btn-outline-primary mt-2" onclick="document.getElementById('v-tasks-tab').click()">打开</button></div></div></div>
@@ -838,10 +1054,10 @@
             <div class="card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
                      <span><i class="fas fa-robot me-2"></i>Agent 状态</span>
-                     <button class="btn btn-sm btn-light" onclick="loadSystemCenterStatus()"><i class="fas fa-sync"></i></button>
+                     <button class="btn btn-sm btn-light" onclick="loadSystemCenterStatus()" title="刷新 Agent 状态" aria-label="刷新 Agent 状态"><i class="fas fa-sync"></i></button>
                 </div>
                 <div class="card-body bg-light">
-                    <div id="plan-viewer" class="bg-white p-3 border rounded" style="min-height: 360px; white-space: pre-wrap;"></div>
+                    <div id="plan-viewer" class="bg-white p-3 border rounded plan-viewer-box"></div>
                 </div>
             </div>
         </div>
@@ -908,7 +1124,7 @@
                             </div>
                             <div class="mb-3">
                                 <label class="form-label small">刷新间隔（秒，最小 30）</label>
-                                <input id="realtime-interval" class="form-control form-control-sm" type="number" min="30" value="120">
+                                <input id="realtime-interval" class="form-control form-control-sm" type="number" min="30" value="120" title="刷新间隔（秒）">
                             </div>
                             <div class="d-grid gap-2">
                                 <button class="btn btn-primary btn-sm" onclick="createRealtimeSubscription()"><i class="fas fa-bell me-1"></i> 创建订阅</button>
@@ -939,13 +1155,13 @@
                             </div>
                             <div class="d-flex align-items-center gap-2">
                                 <label class="small text-muted mb-0">当前订阅</label>
-                                <select id="realtime-sub-select" class="form-select form-select-sm" style="min-width: 240px;" onchange="onRealtimeSubscriptionSelected()">
+                                <select id="realtime-sub-select" class="form-select form-select-sm minw-240" onchange="onRealtimeSubscriptionSelected()" title="选择当前订阅" aria-label="选择当前订阅">
                                     <option value="">全部订阅</option>
                                 </select>
                                 <button class="btn btn-sm btn-outline-secondary" onclick="pollRealtimeUpdates(true)"><i class="fas fa-download me-1"></i> 拉取</button>
                             </div>
                         </div>
-                        <div class="card-body bg-light" style="min-height: 460px; max-height: 650px; overflow: auto;" id="realtime-stream-box">
+                        <div class="card-body bg-light realtime-stream-box" id="realtime-stream-box">
                             <div class="text-muted small">暂无更新，创建订阅后会自动显示最新变化。</div>
                         </div>
                     </div>
@@ -989,7 +1205,7 @@
                                     <span class="badge bg-secondary" id="smithery-install-status-badge">等待开始</span>
                                     <span class="small text-muted" id="smithery-install-job-id"></span>
                                 </div>
-                                <div class="border rounded bg-dark text-light p-3" style="min-height: 320px; max-height: 52vh; overflow: auto; white-space: pre-wrap; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 0.9rem;" id="smithery-install-log">尚未开始安装...</div>
+                                <div class="border rounded bg-dark text-light p-3 install-log-box" id="smithery-install-log">尚未开始安装...</div>
                                 <div class="small text-muted mt-2">安装日志会同步显示在后端控制台，关闭弹窗后仍会继续在后台运行。</div>
                             </div>
                             <div class="modal-footer">
@@ -1017,7 +1233,7 @@
                                     <input id="mcp-market-search" class="form-control form-control-sm" placeholder="搜索名称/描述/标签..." oninput="onMcpMarketSearchInput()">
                                 </div>
                                 <div class="col-md-4">
-                                    <select id="mcp-market-tag-filter" class="form-select form-select-sm" onchange="loadMcpManager()">
+                                    <select id="mcp-market-tag-filter" class="form-select form-select-sm" onchange="loadMcpManager()" title="MCP 标签筛选" aria-label="MCP 标签筛选">
                                         <option value="">全部标签</option>
                                         <option value="official">official</option>
                                         <option value="database">database</option>
@@ -1046,7 +1262,7 @@
                                     <button class="btn btn-sm btn-outline-primary" type="button" onclick="syncMcpRegistryMarket()">
                                         <i class="fas fa-store me-1"></i>同步 Smithery MCP 商店
                                     </button>
-                                    <div class="input-group input-group-sm" style="max-width: 560px;">
+                                    <div class="input-group input-group-sm maxw-560">
                                         <span class="input-group-text">Smithery MCP ID / URL</span>
                                         <input id="mcpmarket-url-input" class="form-control" placeholder="例如: notion 或 https://server.smithery.ai/github">
                                         <button class="btn btn-primary" type="button" onclick="importMcpRegistryItem()">安装并接入</button>
@@ -1068,8 +1284,8 @@
                         </div>
                         <div class="card-body p-0 table-responsive">
                             <table class="table table-hover mb-0 align-middle">
-                                <thead class="table-light"><tr><th>名称</th><th>类型</th><th>状态</th><th>说明</th></tr></thead>
-                                <tbody id="mcp-body"><tr><td colspan="4" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+                                <thead class="table-light"><tr><th>名称</th><th>类型</th><th>状态</th><th>说明</th><th class="text-end">操作</th></tr></thead>
+                                <tbody id="mcp-body"><tr><td colspan="5" class="text-center text-muted py-4">Loading...</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -1088,7 +1304,7 @@
             </div>
             <div class="row g-4">
                 <div class="col-lg-4">
-                    <div class="card shadow-sm border-0 h-100">
+                    <div class="card shadow-sm border-0 mb-3">
                         <div class="card-header bg-white"><i class="fas fa-plus-circle me-2 text-success"></i>快速新增条目</div>
                         <div class="card-body">
                             <div class="mb-2"><input id="kb-title" class="form-control form-control-sm" placeholder="标题"></div>
@@ -1097,18 +1313,69 @@
                             <button class="btn btn-success btn-sm w-100" onclick="createQuickKnowledge()"><i class="fas fa-save me-1"></i> 保存条目</button>
                         </div>
                     </div>
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white"><i class="fas fa-file-import me-2 text-primary"></i>导入知识库</div>
+                        <div class="card-body">
+                            <div class="small text-muted mb-2">支持 JSON（数组或 {"entries": [...] }）以及 Markdown 标题分段导入。</div>
+                            <div class="mb-2">
+                                <label class="form-label small mb-1">去重策略</label>
+                                <select id="kb-import-dedup-mode" class="form-select form-select-sm" title="知识库导入去重策略" aria-label="知识库导入去重策略">
+                                    <option value="title_content" selected>按 标题+内容 去重（推荐）</option>
+                                    <option value="title">仅按 标题 去重</option>
+                                    <option value="none">不去重</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <textarea id="kb-import-payload" class="form-control form-control-sm" rows="6" placeholder='粘贴 JSON 或 Markdown 内容，点击“导入知识库”'></textarea>
+                            </div>
+                            <input id="kb-import-file" type="file" class="d-none" accept=".json,.md,.markdown,.txt" onchange="handleKnowledgeImportFile(this)" title="导入知识库文件" aria-label="导入知识库文件">
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-secondary btn-sm flex-fill" onclick="document.getElementById('kb-import-file').click()"><i class="fas fa-folder-open me-1"></i> 选择文件</button>
+                                <button class="btn btn-primary btn-sm flex-fill" onclick="importKnowledgePayload()"><i class="fas fa-file-import me-1"></i> 导入知识库</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="col-lg-8">
-                    <div class="card shadow-sm border-0">
+                    <div class="card shadow-sm border-0 mb-3">
                         <div class="card-header bg-white d-flex justify-content-between align-items-center">
                             <span><i class="fas fa-layer-group me-2 text-success"></i>知识条目</span>
                             <span class="badge bg-success" id="kb-count-badge">0</span>
                         </div>
                         <div class="card-body p-0 table-responsive">
                             <table class="table table-hover mb-0 align-middle">
-                                <thead class="table-light"><tr><th>标题</th><th>分类</th><th>类型</th><th>预览</th></tr></thead>
-                                <tbody id="kb-body"><tr><td colspan="4" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+                                <thead class="table-light"><tr><th>标题</th><th>分类</th><th>类型</th><th>预览</th><th class="text-end">操作</th></tr></thead>
+                                <tbody id="kb-body"><tr><td colspan="5" class="text-center text-muted py-4">Loading...</td></tr></tbody>
                             </table>
+                        </div>
+                    </div>
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-compass me-2 text-info"></i>Dify 知识库市场</span>
+                            <span class="badge bg-info" id="kb-dify-market-count">0</span>
+                        </div>
+                        <div class="card-body border-bottom py-2">
+                            <div class="row g-2 align-items-center">
+                                <div class="col-md-5">
+                                    <input id="kb-dify-market-search" class="form-control form-control-sm" placeholder="搜索 Dify 官方模板..." oninput="onKnowledgeDifyMarketSearchInput()">
+                                </div>
+                                <div class="col-md-7 d-flex gap-2 flex-wrap">
+                                    <button class="btn btn-sm btn-info text-white" type="button" onclick="loadKnowledgeDifyMarket(true)"><i class="fas fa-sync me-1"></i>同步模板</button>
+                                    <button class="btn btn-sm btn-outline-primary" type="button" onclick="installDifyCliOneClick()"><i class="fas fa-download me-1"></i>安装 Dify CLI</button>
+                                </div>
+                                <div class="col-12 d-flex align-items-center justify-content-between mt-1">
+                                    <div class="small text-muted" id="kb-dify-market-page-label">第 1 页</div>
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="kb dify market pager">
+                                        <button id="kb-dify-market-prev-btn" class="btn btn-outline-secondary" type="button" onclick="changeKnowledgeDifyMarketPage(-1)"><i class="fas fa-angle-left me-1"></i>上一页</button>
+                                        <button id="kb-dify-market-next-btn" class="btn btn-outline-secondary" type="button" onclick="changeKnowledgeDifyMarketPage(1)">下一页<i class="fas fa-angle-right ms-1"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="kb-dify-market-cards" class="row g-3">
+                                <div class="col-12 text-muted">点击“同步模板”加载 Dify 官方模板...</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1253,7 +1520,7 @@
                             <button class="btn btn-sm btn-outline-secondary" type="button" onclick="loadSkillMarketDiagnostics()">
                                 <i class="fas fa-stethoscope me-1"></i>市场诊断
                             </button>
-                            <div class="input-group input-group-sm" style="max-width: 560px;">
+                            <div class="input-group input-group-sm maxw-560">
                                 <span class="input-group-text">SkillHub ID / 仓库链接</span>
                                 <input id="cocoloop-skill-url-input" class="form-control" placeholder="例如: skill-name 或 https://github.com/owner/repo">
                                 <button class="btn btn-success" type="button" onclick="installCocoloopSkillByInput()">安装或配置</button>
@@ -1277,6 +1544,59 @@
                 </div>
             </div>
 
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2">
+                        <span><i class="fas fa-compass me-2 text-primary"></i>Dify CLI 官方模板市场</span>
+                        <span class="badge bg-primary" id="dify-market-count-badge">0</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#dify-market-collapse" aria-expanded="false" aria-controls="dify-market-collapse">
+                        <i class="fas fa-chevron-down me-1"></i>展开/收起
+                    </button>
+                </div>
+                <div id="dify-market-collapse" class="collapse">
+                <div class="card-body border-bottom py-2">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-4">
+                            <input id="dify-market-search" class="form-control form-control-sm" placeholder="搜索 Dify 官方模板..." oninput="onDifyMarketSearchInput()">
+                        </div>
+                        <div class="col-md-8 d-flex gap-2 flex-wrap">
+                            <button class="btn btn-sm btn-primary" type="button" onclick="loadDifyMarket(true)">
+                                <i class="fas fa-store me-1"></i>同步官方模板
+                            </button>
+                            <button class="btn btn-sm btn-outline-info" type="button" onclick="installDifyCliOneClick()">
+                                <i class="fas fa-download me-1"></i>安装 Dify CLI
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary" type="button" onclick="checkDifyCliStatus(true)">
+                                <i class="fas fa-terminal me-1"></i>检测 Dify CLI
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" onclick="showDifyCliInstallGuide()">
+                                <i class="fas fa-book me-1"></i>官方安装指引
+                            </button>
+                            <div class="input-group input-group-sm maxw-560">
+                                <span class="input-group-text">模板 ID</span>
+                                <input id="dify-template-id-input" class="form-control" placeholder="例如: tool / agent-strategy / llm">
+                                <button class="btn btn-success" type="button" onclick="applyDifyTemplateByInput()">使用模板</button>
+                            </div>
+                        </div>
+                        <div class="col-12 d-flex align-items-center justify-content-between mt-1">
+                            <div class="small text-muted" id="dify-market-page-label">第 1 页</div>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="dify market pager">
+                                <button id="dify-market-prev-btn" class="btn btn-outline-secondary" type="button" onclick="changeDifyMarketPage(-1)"><i class="fas fa-angle-left me-1"></i>上一页</button>
+                                <button id="dify-market-next-btn" class="btn btn-outline-secondary" type="button" onclick="changeDifyMarketPage(1)">下一页<i class="fas fa-angle-right ms-1"></i></button>
+                            </div>
+                        </div>
+                        <div class="col-12 small text-muted" id="dify-cli-status-text">Dify CLI 状态：未检测</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="dify-market-cards" class="row g-3">
+                        <div class="col-12 text-muted">点击“同步官方模板”加载 Dify 官方模板列表...</div>
+                    </div>
+                </div>
+                </div>
+            </div>
+
             <div class="modal fade" id="skillhub-install-modal" tabindex="-1" aria-labelledby="skillhub-install-modal-label" aria-hidden="true">
                 <div class="modal-dialog modal-lg modal-dialog-scrollable">
                     <div class="modal-content border-0 shadow">
@@ -1292,12 +1612,64 @@
                                 <span class="badge bg-secondary" id="skillhub-install-status-badge">等待开始</span>
                                 <span class="small text-muted" id="skillhub-install-job-id"></span>
                             </div>
-                            <div class="border rounded bg-dark text-light p-3" style="min-height: 320px; max-height: 52vh; overflow: auto; white-space: pre-wrap; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 0.9rem;" id="skillhub-install-log">尚未开始安装...</div>
+                            <div class="border rounded bg-dark text-light p-3 install-log-box" id="skillhub-install-log">尚未开始安装...</div>
                             <div class="small text-muted mt-2">安装日志会同步显示在后端控制台与日志文件中，关闭弹窗后仍会继续在后台运行。</div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
                             <button type="button" class="btn btn-primary" onclick="closeSkillhubInstallToBackground()">关闭并转到后台</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal fade" id="dify-install-modal" tabindex="-1" aria-labelledby="dify-install-modal-label" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content border-0 shadow">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title mb-1" id="dify-install-modal-label">Dify CLI 安装</h5>
+                                <div class="small text-muted" id="dify-install-command-label">准备启动一键安装</div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                                <span class="badge bg-secondary" id="dify-install-status-badge">等待开始</span>
+                                <span class="small text-muted" id="dify-install-job-id"></span>
+                            </div>
+                            <div class="border rounded bg-dark text-light p-3 install-log-box" id="dify-install-log">尚未开始安装...</div>
+                            <div class="small text-muted mt-2">安装日志会同步显示在后端控制台，关闭弹窗后仍会继续在后台运行。</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+                            <button type="button" class="btn btn-primary" onclick="closeDifyInstallToBackground()">关闭并转到后台</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal fade" id="extra-cli-install-modal" tabindex="-1" aria-labelledby="extra-cli-install-modal-label" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content border-0 shadow">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title mb-1" id="extra-cli-install-modal-label">CLI 安装</h5>
+                                <div class="small text-muted" id="extra-cli-install-command-label">准备启动一键安装</div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                                <span class="badge bg-secondary" id="extra-cli-install-status-badge">等待开始</span>
+                                <span class="small text-muted" id="extra-cli-install-job-id"></span>
+                            </div>
+                            <div class="border rounded bg-dark text-light p-3 install-log-box" id="extra-cli-install-log">尚未开始安装...</div>
+                            <div class="small text-muted mt-2">安装日志会同步显示在后端控制台，关闭弹窗后仍会继续在后台运行。</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+                            <button type="button" class="btn btn-primary" onclick="closeExtraCliInstallToBackground()">关闭并转到后台</button>
                         </div>
                     </div>
                 </div>
@@ -1316,7 +1688,7 @@
             </div>
         </div>
 
-        <input id="skills-upload-input" type="file" class="d-none" accept=".zip" onchange="handleSkillUploadInput(this)">
+        <input id="skills-upload-input" type="file" class="d-none" accept=".zip" onchange="handleSkillUploadInput(this)" title="上传技能压缩包" aria-label="上传技能压缩包">
 
         <div class="modal fade" id="skillsUploadModal" tabindex="-1" aria-labelledby="skillsUploadModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
@@ -1409,7 +1781,7 @@
                     <div class="card h-100 shadow-sm border-0">
                         <div class="card-header bg-white"><i class="fas fa-microchip me-2 text-warning"></i> CPU History</div>
                         <div class="card-body">
-                             <div style="height: 250px;"><canvas id="detailCpuChart"></canvas></div>
+                             <div class="h-250"><canvas id="detailCpuChart"></canvas></div>
                         </div>
                     </div>
                 </div>
@@ -1417,7 +1789,7 @@
                     <div class="card h-100 shadow-sm border-0">
                         <div class="card-header bg-white"><i class="fas fa-memory me-2 text-info"></i> Memory History</div>
                         <div class="card-body">
-                             <div style="height: 250px;"><canvas id="detailMemChart"></canvas></div>
+                             <div class="h-250"><canvas id="detailMemChart"></canvas></div>
                         </div>
                     </div>
                 </div>
@@ -1462,34 +1834,24 @@
 
         <!-- Logs Tab -->
         <div class="tab-pane fade" id="v-logs" role="tabpanel">
-            <h3 class="mb-4">📋 系统终端日志</h3>
+            <h3 class="mb-4">📋 日志与终端</h3>
             <div class="card bg-dark text-light border-0">
                 <div class="card-header bg-secondary border-0 d-flex justify-content-between align-items-center">
-                    <span>Console Output</span>
-                    <button class="btn btn-sm btn-dark" onclick="refreshLog()">Refresh</button>
+                    <span>Merged Console Output</span>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-dark" onclick="refreshLog()">Refresh</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="exportMergedLog()">Export Log</button>
+                        <button class="btn btn-sm btn-outline-light" onclick="clearMergedConsole()">Clear</button>
+                    </div>
                 </div>
                 <div class="card-body p-0">
-                    <pre id="log-output" class="m-0 p-3" style="height: 600px; overflow: auto; color: #d4d4d4; font-family: 'Consolas', monospace; font-size: 0.9rem;"></pre>
+                    <pre id="log-output" class="m-0 p-3 log-output-box"></pre>
                 </div>
-            </div>
-        </div>
-
-        <!-- Terminal Tab -->
-        <div class="tab-pane fade" id="v-terminal" role="tabpanel">
-            <h3 class="mb-4">💻 终端命令行</h3>
-            <div class="card bg-dark text-light border-0 shadow">
-                <div class="card-header border-bottom border-secondary d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-terminal me-2"></i>System Shell</span>
-                    <span class="badge bg-secondary">Caution</span>
-                </div>
-                <div class="card-body p-0 d-flex flex-column" style="height: 600px;">
-                    <pre id="term-output" class="flex-grow-1 m-0 p-3" style="overflow-y: auto; color: #0f0; font-family: 'Consolas', monospace; font-size: 0.9rem;"></pre>
-                    <div class="p-2 border-top border-secondary bg-secondary bg-opacity-25">
-                        <div class="input-group">
-                            <span class="input-group-text bg-transparent text-light border-0">$</span>
-                            <input type="text" id="term-input" class="form-control bg-transparent text-light border-0 shadow-none" placeholder="Enter command..." autocomplete="off">
-                            <button class="btn btn-primary" onclick="execCmd()">Execute</button>
-                        </div>
+                <div class="card-footer border-top border-secondary bg-secondary bg-opacity-25">
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent text-light border-0">$</span>
+                        <input type="text" id="log-term-input" class="form-control bg-transparent text-light border-0 shadow-none" placeholder="在这里执行命令，输出会与系统日志合并显示" autocomplete="off">
+                        <button class="btn btn-primary" onclick="execCmdMerged()">Execute</button>
                     </div>
                 </div>
             </div>
@@ -1507,7 +1869,7 @@
                                 <span class="badge bg-primary">可作为 Agent API</span>
                             </div>
                             <p class="mb-2">基础地址：<span id="adapter-base-url">http://localhost:5000/v1</span></p>
-                            <p class="mb-2">文档：<a id="adapter-docs-link" href="http://localhost:5000/docs" target="_blank">/docs</a></p>
+                            <p class="mb-2">文档：<a id="adapter-docs-link" href="http://localhost:5000/docs" target="_blank" rel="noopener">/docs</a></p>
                             <p class="mb-2">聊天接口：<code>/v1/chat/completions</code> (POST)</p>
                             <p class="text-muted small mb-0">支持 OpenAI Chat Completion 兼容参数，可被 NapCat / AstrBot / NoneBot 等前端直连。</p>
                         </div>
@@ -1522,7 +1884,7 @@
                             </div>
                             <p class="mb-2"><i class="fas fa-globe me-1"></i> HTTP: <span id="onebot-http-url">未配置</span>
                                 <button class="btn btn-sm btn-link ms-2" onclick="copyToClipboard('onebot-http-url')" title="复制HTTP地址"><i class="fas fa-copy"></i> 复制</button></p>
-                            <p class="mb-2"><i class="fas fa-wave-square me-1"></i> WebSocket: <span id="onebot-ws-url" style="font-weight: 500; color: #0d6efd;">未配置</span>
+                            <p class="mb-2"><i class="fas fa-wave-square me-1"></i> WebSocket: <span id="onebot-ws-url" class="onebot-ws-url">未配置</span>
                                 <button class="btn btn-sm btn-link ms-2" onclick="copyToClipboard('onebot-ws-url')" title="复制WebSocket地址"><i class="fas fa-copy"></i> 复制</button></p>
                             <p class="mb-0 text-muted"><i class="fas fa-undo me-1"></i> 反向 WebSocket：<span id="onebot-reverse-url">未配置</span>
                                 <button class="btn btn-sm btn-link ms-2" onclick="copyToClipboard('onebot-reverse-url')" title="复制反向WS地址"><i class="fas fa-copy"></i> 复制</button></p>
@@ -2253,16 +2615,35 @@
     // 2. Config Logic
     
     // --- API & General ---
+    function getApiServiceDisplayName(keyName) {
+        const k = String(keyName || '').trim().toLowerCase();
+        const nameMap = {
+            deepseek_chat: '聊天 API (ChatAPI)',
+            search: '搜索 API (SearchAPI)',
+            image_recognition: '图像识别 API (VisionAPI)',
+            image_generation: '图像生成 API (ImageGenAPI)',
+            video_generation: '视频生成 API (VideoGenAPI)',
+            speech_to_text: '语音转文本 API (STT API)',
+            text_to_speech: '文本转语音 API (TTS API)',
+            coder: '代码助手 API (CoderAPI)',
+            kimi_coder: '代码助手 API (CoderAPI · Kimi 方案)',
+            minimax_coder: '代码助手 API (CoderAPI · MiniMax 方案)',
+            claude_coder: '代码助手 API (CoderAPI · Claude 方案)'
+        };
+        return nameMap[k] || keyName;
+    }
+
     function createApiKeySlot(keyName, config = {key: '', base_url: '', model: ''}) {
+        const displayName = getApiServiceDisplayName(keyName);
         const div = document.createElement('div');
         div.className = 'card mb-2 api-key-card border-light shadow-sm';
         div.innerHTML = `
             <div class="card-body p-2">
                 <div class="row align-items-center g-2">
                     <div class="col-md-2">
-                        <input type="text" class="form-control form-control-sm border-0 fw-bold text-primary" 
-                               value="${keyName}" placeholder="Service Name" 
-                               onchange="this.dataset.keyname = this.value; this.setAttribute('value', this.value);">
+                        <div class="fw-bold text-primary">${displayName}</div>
+                        <div class="small text-muted">${keyName}</div>
+                        <input type="hidden" class="api-service-key" value="${keyName}">
                     </div>
                     <div class="col-md-3">
                         <input type="password" class="form-control form-control-sm api-key" placeholder="API Key" value="${config.key || ''}">
@@ -2479,6 +2860,175 @@
         const panel = document.querySelector(`.config-section[data-section="${target}"]`);
         if(button) button.classList.add('active');
         if(panel) panel.classList.add('active');
+        if (target === 'cli') {
+            refreshCliManagerStatus();
+        } else if (target === 'market') {
+            refreshUnifiedMarketStatus();
+        }
+    }
+
+    function openMcpMarketFromConfig() {
+        const tab = document.getElementById('v-mcp-tab');
+        if (tab) tab.click();
+        setTimeout(() => loadMcpManager(), 0);
+    }
+
+    function openSkillMarketFromConfig() {
+        const tab = document.getElementById('v-skills-tab');
+        if (tab) tab.click();
+        setTimeout(() => loadSkillStatus(), 0);
+    }
+
+    function openDifyMarketFromConfig() {
+        const tab = document.getElementById('v-skills-tab');
+        if (tab) tab.click();
+        setTimeout(() => loadDifyMarket(true), 0);
+    }
+
+    async function refreshUnifiedMarketStatus() {
+        try {
+            await Promise.all([
+                loadMcpManager(),
+                loadSkillMarketCocoloop(false),
+                loadDifyMarket(false)
+            ]);
+            toastr.success('商店状态已刷新');
+        } catch (e) {
+            toastr.error('刷新商店状态失败: ' + e.message);
+        }
+    }
+
+    async function checkSmitheryCliStatus(showToast = false) {
+        const statusEl = document.getElementById('cli-status-smithery');
+        try {
+            const res = await fetch('/api/systems/mcp/market/smithery/status');
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) throw new Error(data.message || 'status failed');
+            const cliData = data.data || {};
+            const installed = !!cliData.installed;
+            const txt = installed
+                ? `状态：已安装${cliData.version ? ' (' + cliData.version + ')' : ''}`
+                : '状态：未安装';
+            if (statusEl) statusEl.textContent = txt;
+            if (showToast) toastr[installed ? 'success' : 'warning'](installed ? 'Smithery CLI 已安装' : 'Smithery CLI 未安装');
+            return cliData;
+        } catch (e) {
+            if (statusEl) statusEl.textContent = `状态：检测失败 - ${e.message}`;
+            if (showToast) toastr.error('检测 Smithery CLI 失败: ' + e.message);
+            return null;
+        }
+    }
+
+    async function checkSkillhubCliStatus(showToast = false) {
+        const statusEl = document.getElementById('cli-status-skillhub');
+        try {
+            const data = await fetchJsonSafe('/api/skills/market/skillhub/status');
+            if (!data.success) throw new Error(data.error || 'status failed');
+            const installed = !!data.installed;
+            const txt = installed
+                ? `状态：已安装${data.version ? ' (' + data.version + ')' : ''}`
+                : '状态：未安装';
+            if (statusEl) statusEl.textContent = txt;
+            if (showToast) toastr[installed ? 'success' : 'warning'](installed ? 'SkillHub CLI 已安装' : 'SkillHub CLI 未安装');
+            return data;
+        } catch (e) {
+            if (statusEl) statusEl.textContent = `状态：检测失败 - ${e.message}`;
+            if (showToast) toastr.error('检测 SkillHub CLI 失败: ' + e.message);
+            return null;
+        }
+    }
+
+    async function refreshCliManagerStatus() {
+        await Promise.all([
+            checkSmitheryCliStatus(false),
+            checkSkillhubCliStatus(false),
+            checkDifyCliStatus(false),
+            checkExtraCliStatus('kimi', false),
+            checkExtraCliStatus('minimax', false)
+        ]);
+    }
+
+    async function openKnowledgeDifyMarketPanel() {
+        const tab = document.getElementById('v-skills-tab');
+        if (tab) tab.click();
+        setTimeout(() => {
+            const collapseEl = document.getElementById('dify-market-collapse');
+            if (collapseEl) {
+                const ins = bootstrap.Collapse.getOrCreateInstance(collapseEl, {toggle: false});
+                ins.show();
+            }
+            loadDifyMarket(true);
+        }, 0);
+    }
+
+    function _extraCliLabel(cliName) {
+        const key = String(cliName || '').trim().toLowerCase();
+        if (key === 'kimi') return 'Kimi CLI';
+        if (key === 'minimax') return 'MiniMax Codex CLI';
+        return key || 'CLI';
+    }
+
+    async function checkExtraCliStatus(cliName, showToast = false) {
+        const key = String(cliName || '').trim().toLowerCase();
+        const statusEl = document.getElementById(`cli-status-${key}`);
+        const label = _extraCliLabel(key);
+        if (!key) return null;
+        try {
+            const encoded = encodeURIComponent(key);
+            const data = await fetchJsonSafeWithFallback([
+                `/api/systems/cli/${encoded}/status`,
+                `/api/systems/market/cli/${encoded}/status`
+            ], {timeoutMs: 8000});
+            if (data.code !== 0) throw new Error(data.message || 'status failed');
+            const cliData = data.data || {};
+            const installed = !!cliData.installed;
+            const txt = installed
+                ? `状态：已安装${cliData.version ? ' (' + cliData.version + ')' : ''}`
+                : '状态：未安装';
+            if (statusEl) statusEl.textContent = txt;
+            if (showToast) toastr[installed ? 'success' : 'warning'](installed ? `${label} 已安装` : `${label} 未安装`);
+            return cliData;
+        } catch (e) {
+            if (statusEl) statusEl.textContent = `状态：检测失败 - ${e.message}`;
+            if (showToast) toastr.error(`检测 ${label} 失败: ` + e.message);
+            return null;
+        }
+    }
+
+    async function openCliGuideByName(cliName) {
+        const key = String(cliName || '').trim().toLowerCase();
+        if (!key) return;
+
+        if (key === 'dify') {
+            await showDifyCliInstallGuide();
+            return;
+        }
+
+        const guideMap = {
+            'kimi': {
+                title: 'Kimi CLI 安装指引',
+                summary: '请按 Kimi 官方文档安装（Windows PowerShell 推荐命令见文档）。',
+                docs: 'https://www.kimi.com/code/docs/en/kimi-cli/guides/getting-started.html'
+            },
+            'minimax': {
+                title: 'MiniMax Codex CLI 安装指引',
+                summary: '请按 MiniMax 官方 Codex CLI 文档安装与配置（建议 0.57.0 版本）。',
+                docs: 'https://platform.minimaxi.com/docs/token-plan/codex-cli'
+            }
+        };
+
+        const guide = guideMap[key];
+        if (!guide) return;
+
+        const ok = await showUnifiedActionModal({
+            title: guide.title,
+            message: `${guide.summary}\n\n官方文档：${guide.docs}`,
+            level: 'info',
+            confirmText: '打开文档',
+            cancelText: '取消',
+            confirmClass: 'btn-primary'
+        });
+        if (ok) window.open(guide.docs, '_blank', 'noopener');
     }
 
     function setupConfigSidebarNavigation() {
@@ -2585,7 +3135,7 @@
         previewEl.value = blocks.join('\n\n');
     }
 
-    async function refreshPersonas() {
+    async function refreshPersonas(preferredFilename = '') {
         const select = document.getElementById('persona-select');
         select.innerHTML = '<option disabled>Loading...</option>';
         try {
@@ -2600,19 +3150,25 @@
                 if(p.is_active) opt.selected = true;
                 select.appendChild(opt);
             });
-            
-            // If active returned separately or relying on select
-            if(data.active) {
+
+            const normalizedPreferred = String(preferredFilename || '').trim();
+            const hasPreferred = normalizedPreferred
+                && Array.from(select.options).some(opt => String(opt.value) === normalizedPreferred);
+
+            if (hasPreferred) {
+                select.value = normalizedPreferred;
+                currentPersonaFile = normalizedPreferred;
+            } else if(data.active && Array.from(select.options).some(opt => String(opt.value) === String(data.active))) {
                 select.value = data.active;
                 currentPersonaFile = data.active;
             } else if(select.options.length > 0) {
-                 select.selectedIndex = 0;
-                 currentPersonaFile = select.value;
+                select.selectedIndex = 0;
+                currentPersonaFile = select.value;
             }
-            
+
             // Load details of selected
-            loadSelectedPersona();
-            loadSandboxPersonas();
+            await loadSelectedPersona();
+            await loadSandboxPersonas();
             
         } catch(e) {
             select.innerHTML = '<option disabled>Error loading list</option>';
@@ -2769,37 +3325,88 @@
             },
             inputRequired: true
         });
-        if(name) {
-            currentPersonaFile = name.endsWith('.json') ? name : name+'.json';
-            currentPersonaData = {
-                meta: {
-                    name: '',
-                    description: 'Created via Control Panel',
-                    version: '1.0',
-                    author: 'User',
-                    ui_theme: 'default'
-                },
-                character: {},
-                system_prompt: { template: '' },
-                reply_style: '',
-                states: [],
-                state_probability: 0.3,
-                plan_style: '',
-                plan_style_private: '',
-                plan_style_group: '',
-                state_weights: [],
-                enable_expression_learning: true,
-                behavior_rules: []
-            };
-            // Clear form
-            document.getElementById('persona-form').reset();
-            const form = document.getElementById('persona-form');
-            if (form.elements['state_probability']) form.elements['state_probability'].value = 0.3;
-            // User fills and hits save
+        if (!name) return;
+
+        const raw = String(name).trim();
+        const normalized = raw.endsWith('.json') ? raw : `${raw}.json`;
+        if (!normalized || /[\\/]/.test(normalized)) {
             await showUnifiedActionModal({
-                title: '已创建',
-                message: `已创建上下文：${currentPersonaFile}，请填写内容后点击保存。`,
+                title: '文件名无效',
+                message: '文件名不能包含路径分隔符（/ 或 \\）。',
+                level: 'warning'
+            });
+            return;
+        }
+
+        const displayName = normalized.replace(/\.json$/i, '');
+        const defaultPersona = {
+            meta: {
+                name: displayName,
+                description: 'Created via Control Panel',
+                version: '1.0',
+                author: 'User',
+                ui_theme: 'default'
+            },
+            character: {
+                name: displayName,
+                personality: '',
+                brother_qqid: '',
+                height: '',
+                weight: '',
+                catchphrases: ''
+            },
+            system_prompt: {template: ''},
+            reply_style: '',
+            states: [],
+            state_probability: 0.3,
+            plan_style: '',
+            plan_style_private: '',
+            plan_style_group: '',
+            state_weights: [],
+            enable_expression_learning: true,
+            behavior_rules: []
+        };
+
+        try {
+            const listRes = await fetch('/api/personas');
+            const listData = await listRes.json();
+            const exists = Array.isArray(listData.personas)
+                && listData.personas.some(p => String(p.filename || '').toLowerCase() === normalized.toLowerCase());
+            if (exists) {
+                const overwrite = await showUnifiedActionModal({
+                    title: '文件已存在',
+                    message: `人格文件 ${normalized} 已存在，是否覆盖？`,
+                    level: 'warning',
+                    confirmText: '覆盖',
+                    cancelText: '取消',
+                    confirmClass: 'btn-warning'
+                });
+                if (!overwrite) return;
+            }
+
+            const res = await fetch('/api/personas', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename: normalized, content: defaultPersona})
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || '创建失败');
+            }
+
+            currentPersonaFile = normalized;
+            currentPersonaData = defaultPersona;
+            await refreshPersonas(normalized);
+            await showUnifiedActionModal({
+                title: '创建成功',
+                message: `已创建人格文件：${normalized}`,
                 level: 'success'
+            });
+        } catch (e) {
+            await showUnifiedActionModal({
+                title: '创建失败',
+                message: `新建人格失败: ${e.message || e}`,
+                level: 'danger'
             });
         }
     }
@@ -3106,12 +3713,14 @@
             // 3. API Keys
             const apiKeys = {};
             document.querySelectorAll('#api-keys-container .card').forEach(card => {
+                const keyNameInput = card.querySelector('input.api-service-key');
                 const nameInput = card.querySelector('input[placeholder="Service Name"]');
                 const keyInput = card.querySelector('input.api-key');
                 const urlInput = card.querySelector('input.api-url');
                 const modelInput = card.querySelector('input.api-model');
-                if(nameInput && nameInput.value) {
-                     apiKeys[nameInput.value] = { 
+                const resolvedName = (keyNameInput && keyNameInput.value) || (nameInput && nameInput.value) || '';
+                if (resolvedName) {
+                     apiKeys[resolvedName] = {
                          key: keyInput.value, 
                          base_url: urlInput.value,
                          model: modelInput ? modelInput.value : ''
@@ -3591,6 +4200,8 @@
     let skillhubCliRequestInflight = false;
     let skillhubInstallInflight = false;
     let smitheryCliRequestInflight = false;
+    let difyCliRequestInflight = false;
+    let extraCliRequestInflight = { kimi: false, minimax: false };
     let skillhubInstallJobState = {
         jobId: '',
         pollTimer: null,
@@ -3605,6 +4216,22 @@
         startedAt: 0,
         modal: null,
     };
+    let difyInstallJobState = {
+        jobId: '',
+        pollTimer: null,
+        active: false,
+        startedAt: 0,
+        modal: null,
+    };
+    let extraCliInstallJobState = {
+        cliName: '',
+        cliLabel: '',
+        jobId: '',
+        pollTimer: null,
+        active: false,
+        startedAt: 0,
+        modal: null,
+    };
     let mcpMarketPageState = {
         page: 1,
         pageSize: 24,
@@ -3612,6 +4239,22 @@
         total: 0,
         query: '',
         data: []
+    };
+    let mcpServersCache = [];
+    let difyMarketCache = [];
+    let difyMarketPageState = {
+        page: 1,
+        pageSize: 24,
+        hasMore: false,
+        total: 0,
+        query: ''
+    };
+    let knowledgeDifyMarketPageState = {
+        page: 1,
+        pageSize: 8,
+        hasMore: false,
+        total: 0,
+        query: ''
     };
     let skillMarketPageState = {
         page: 1,
@@ -3665,7 +4308,24 @@
     }
 
     async function fetchJsonSafe(url, options = {}) {
-        const res = await fetch(url, options);
+        const timeoutMs = Number(options.timeoutMs || 0);
+        const fetchOptions = {...options};
+        delete fetchOptions.timeoutMs;
+
+        let ctl = null;
+        let timer = null;
+        if (timeoutMs > 0 && !fetchOptions.signal) {
+            ctl = new AbortController();
+            fetchOptions.signal = ctl.signal;
+            timer = setTimeout(() => ctl.abort(), timeoutMs);
+        }
+
+        let res;
+        try {
+            res = await fetch(url, fetchOptions);
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
         const text = await res.text();
         let data = null;
         try {
@@ -3677,10 +4337,30 @@
         if (res.status === 404 && String(url).includes('/api/plugins/')) {
             throw new Error('插件接口未找到（404）。请重启控制面板后端：运行 main.py 5 或 start_control_panel.bat。');
         }
+        if (res.status === 404 && (String(url).includes('/api/systems/cli/') || String(url).includes('/api/systems/market/cli/'))) {
+            throw new Error('CLI 接口未找到（404）。请重启控制面板后端，使新路由生效。');
+        }
         if (!res.ok) {
             throw new Error((data && data.error) ? data.error : `HTTP ${res.status}`);
         }
         return data;
+    }
+
+    async function fetchJsonSafeWithFallback(urls, options = {}) {
+        const list = Array.isArray(urls) ? urls.filter(Boolean) : [urls].filter(Boolean);
+        let lastErr = null;
+        for (const url of list) {
+            try {
+                return await fetchJsonSafe(url, options);
+            } catch (e) {
+                lastErr = e;
+                const msg = String(e && e.message ? e.message : '');
+                if (!/\b404\b/.test(msg)) {
+                    throw e;
+                }
+            }
+        }
+        throw (lastErr || new Error('请求失败'));
     }
 
     function showPluginSettingsForm(show) {
@@ -3724,6 +4404,7 @@
         filtered.forEach(p => {
             const depsCount = (p.dependencies || []).length;
             const hookCount = Object.values(p.hooks || {}).reduce((n, v) => n + Number(v || 0), 0);
+            const canDelete = !!p.project_path && !String(p.name || '').toLowerCase().startsWith('builtin.');
             const card = document.createElement('div');
             card.className = 'col-xl-4 col-md-6';
             card.innerHTML = `
@@ -3742,7 +4423,7 @@
                                 </div>
                             </div>
                             <div class="d-flex align-items-center gap-2 ms-2">
-                                <span class="plugin-ban-icon" title="策略控制"><i class="far fa-ban"></i></span>
+                                ${canDelete ? `<button type="button" class="btn btn-sm btn-link text-danger p-0 plugin-delete-btn" data-plugin-name="${p.name}" title="删除插件 ${p.name}"><i class="far fa-trash-can"></i></button>` : ''}
                                 <div class="form-check form-switch m-0">
                                     <input class="form-check-input plugin-card-toggle" type="checkbox" role="switch" ${p.policy && p.policy.enabled ? 'checked' : ''} data-plugin-name="${p.name}" title="启用/禁用插件 ${p.name}">
                                 </div>
@@ -3761,7 +4442,7 @@
                 </div>
             `;
             card.querySelector('.plugin-card').addEventListener('click', (ev) => {
-                if (ev.target.closest('.plugin-settings-btn') || ev.target.closest('.plugin-card-toggle')) {
+                if (ev.target.closest('.plugin-settings-btn') || ev.target.closest('.plugin-card-toggle') || ev.target.closest('.plugin-delete-btn')) {
                     return;
                 }
                 currentPluginName = p.name;
@@ -3775,8 +4456,72 @@
                     togglePluginEnabled(p.name, !!target.checked);
                 });
             }
+            const deleteEl = card.querySelector('.plugin-delete-btn');
+            if (deleteEl) {
+                deleteEl.addEventListener('click', async (ev) => {
+                    ev.stopPropagation();
+                    await deletePluginFromCard(p.name);
+                });
+            }
             cards.appendChild(card);
         });
+    }
+
+    async function deletePluginFromCard(pluginName) {
+        const name = String(pluginName || '').trim();
+        if (!name) return;
+
+        const typed = await showUnifiedActionModal({
+            title: '删除插件',
+            message: `此操作将删除插件目录并卸载插件。为防误删，请输入插件名确认：${name}`,
+            level: 'danger',
+            confirmText: '下一步',
+            cancelText: '取消',
+            confirmClass: 'btn-danger',
+            input: {
+                value: '',
+                type: 'text',
+                placeholder: `请输入 ${name}`,
+                errorText: '请输入插件名后再继续'
+            },
+            inputRequired: true
+        });
+
+        if (!typed) return;
+        if (typed !== name) {
+            await showUnifiedActionModal({
+                title: '名称不匹配',
+                message: '输入的插件名与目标不一致，已取消删除。',
+                level: 'warning',
+                confirmText: '知道了',
+                confirmClass: 'btn-warning'
+            });
+            return;
+        }
+
+        const finalOk = await showUnifiedActionModal({
+            title: '最终确认',
+            message: `确认彻底删除插件 ${name} 吗？如果只是临时停用，请点击取消并使用右上角开关。`,
+            level: 'danger',
+            confirmText: '确认删除',
+            cancelText: '取消',
+            confirmClass: 'btn-danger'
+        });
+        if (!finalOk) return;
+
+        try {
+            const data = await fetchJsonSafe(pluginApi('/api/plugins/delete'), {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({plugin_name: name, confirm_name: name})
+            });
+            if (!data.success) throw new Error(data.error || 'delete failed');
+            toastr.success(`插件已删除：${name}`);
+            await loadPluginStatus();
+            closePluginSettingsModal();
+        } catch (e) {
+            toastr.error('删除插件失败: ' + e.message);
+        }
     }
 
     async function togglePluginEnabled(pluginName, enabled) {
@@ -4133,8 +4878,12 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="form-check form-switch m-0 ms-2">
-                                <input class="form-check-input skill-card-toggle" type="checkbox" role="switch" ${s.policy && s.policy.enabled ? 'checked' : ''} data-skill-id="${s.skill_id}" title="启用/禁用 skill ${s.skill_id}">
+                            <div class="d-flex align-items-center gap-2 ms-2">
+                                <button type="button" class="btn btn-sm btn-link text-primary p-0 skill-settings-btn" data-skill-id="${s.skill_id}" title="设置 skill ${s.skill_id}"><i class="fas fa-cog"></i></button>
+                                <button type="button" class="btn btn-sm btn-link text-danger p-0 skill-delete-btn" data-skill-id="${s.skill_id}" title="删除 skill ${s.skill_id}"><i class="far fa-trash-can"></i></button>
+                                <div class="form-check form-switch m-0">
+                                    <input class="form-check-input skill-card-toggle" type="checkbox" role="switch" ${s.policy && s.policy.enabled ? 'checked' : ''} data-skill-id="${s.skill_id}" title="启用/禁用 skill ${s.skill_id}">
+                                </div>
                             </div>
                         </div>
                         <div class="small text-muted mb-3 plugin-desc">${s.description || '无描述'}</div>
@@ -4152,8 +4901,134 @@
                     toggleSkillEnabled(s.skill_id, !!ev.target.checked);
                 });
             }
+            const settingsEl = card.querySelector('.skill-settings-btn');
+            if (settingsEl) {
+                settingsEl.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    openSkillSettingsModal(s.skill_id);
+                });
+            }
+            const deleteEl = card.querySelector('.skill-delete-btn');
+            if (deleteEl) {
+                deleteEl.addEventListener('click', async (ev) => {
+                    ev.stopPropagation();
+                    await deleteSkillById(s.skill_id);
+                });
+            }
             cards.appendChild(card);
         });
+    }
+
+    function getSkillById(skillId) {
+        const status = skillStatusCache || {};
+        const skills = status.skills || [];
+        return skills.find(s => String(s.skill_id) === String(skillId));
+    }
+
+    async function openSkillSettingsModal(skillId) {
+        const skill = getSkillById(skillId);
+        if (!skill) {
+            toastr.error('未找到对应 skill');
+            return;
+        }
+
+        const allowModelNow = !!(skill.policy && skill.policy.allow_model_invocation);
+        const enabledNow = !!(skill.policy && skill.policy.enabled);
+        const confirm = await showUnifiedActionModal({
+            title: `Skill 设置: ${skillId}`,
+            message: `当前状态：enabled=${enabledNow ? 'Y' : 'N'}，allow_model_invocation=${allowModelNow ? 'Y' : 'N'}。\n\n输入 yes 开启模型调用，输入 no 关闭模型调用。`,
+            level: 'info',
+            confirmText: '保存设置',
+            cancelText: '取消',
+            confirmClass: 'btn-primary',
+            input: {
+                value: allowModelNow ? 'yes' : 'no',
+                type: 'text',
+                placeholder: 'yes / no',
+                errorText: '请输入 yes 或 no'
+            },
+            inputRequired: true
+        });
+        if (!confirm) return;
+
+        const normalized = String(confirm || '').trim().toLowerCase();
+        if (!['yes', 'no', 'y', 'n', 'true', 'false', '1', '0'].includes(normalized)) {
+            toastr.warning('请输入 yes 或 no');
+            return;
+        }
+
+        const allowModel = ['yes', 'y', 'true', '1'].includes(normalized);
+        try {
+            const data = await fetchJsonSafe('/api/skills/policy', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    skill_id: skillId,
+                    policy: {
+                        enabled: enabledNow,
+                        allow_model_invocation: allowModel
+                    }
+                })
+            });
+            if (!data.success) throw new Error(data.error || 'save failed');
+            toastr.success(`skill ${skillId} 设置已更新`);
+            await loadSkillStatus();
+        } catch (e) {
+            toastr.error('保存 skill 设置失败: ' + e.message);
+        }
+    }
+
+    async function deleteSkillById(skillId) {
+        const skill = getSkillById(skillId);
+        if (!skill) {
+            toastr.error('未找到要删除的 skill');
+            return;
+        }
+
+        const sid = String(skill.skill_id || '').trim();
+        const typed = await showUnifiedActionModal({
+            title: '删除 skill',
+            message: `该操作会删除 skill 目录并不可恢复。为防误删，请输入 skill ID：${sid}`,
+            level: 'danger',
+            confirmText: '下一步',
+            cancelText: '取消',
+            confirmClass: 'btn-danger',
+            input: {
+                value: '',
+                type: 'text',
+                placeholder: `请输入 ${sid}`,
+                errorText: '请输入 skill ID'
+            },
+            inputRequired: true
+        });
+        if (!typed) return;
+        if (typed !== sid) {
+            toastr.warning('输入的 skill ID 不匹配，已取消删除');
+            return;
+        }
+
+        const ok = await showUnifiedActionModal({
+            title: '最终确认',
+            message: `确认删除 skill ${sid} 吗？`,
+            level: 'danger',
+            confirmText: '确认删除',
+            cancelText: '取消',
+            confirmClass: 'btn-danger'
+        });
+        if (!ok) return;
+
+        try {
+            const data = await fetchJsonSafe('/api/skills/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({skill_id: sid, confirm_name: sid})
+            });
+            if (!data.success) throw new Error(data.error || 'delete failed');
+            toastr.success(`skill 已删除：${sid}`);
+            await loadSkillStatus();
+        } catch (e) {
+            toastr.error('删除 skill 失败: ' + e.message);
+        }
     }
 
     async function toggleSkillEnabled(skillId, enabled) {
@@ -4190,9 +5065,505 @@
 
             renderSkillCards(skills);
             await loadSkillMarketCocoloop(false);
+            await loadDifyMarket(false);
         } catch (e) {
             if (cards) cards.innerHTML = `<div class="col-12 text-danger">${e.message}</div>`;
         }
+    }
+
+    function renderDifyMarketCards(items) {
+        const wrap = document.getElementById('dify-market-cards');
+        const badge = document.getElementById('dify-market-count-badge');
+        if (!wrap) return;
+
+        const list = items || [];
+        if (badge) badge.textContent = String(list.length);
+        if (!list.length) {
+            wrap.innerHTML = '<div class="col-12 text-muted">暂无可显示的 Dify 模板</div>';
+            return;
+        }
+
+        wrap.innerHTML = list.map(item => {
+            const templateId = String(item.id || '').trim();
+            const name = String(item.name || templateId || 'Dify Template');
+            const desc = String(item.description || 'Dify 官方模板').trim();
+            return `
+            <div class="col-xl-4 col-md-6">
+                <div class="card h-100 plugin-card plugin-entry-card">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="d-flex align-items-start gap-2 flex-grow-1 plugin-title-wrap">
+                                <div class="plugin-icon"><i class="fas fa-compass"></i></div>
+                                <div class="plugin-title-meta">
+                                    <h6 class="mb-1 plugin-name" title="${escapeHtml(name)}">${escapeHtml(name)}</h6>
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        <span class="badge text-bg-primary plugin-mini-badge">Dify Official</span>
+                                        <span class="badge text-bg-light plugin-mini-badge">${escapeHtml(templateId)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="small text-muted mb-3 plugin-desc">${escapeHtml(desc)}</div>
+                        <div class="small plugin-policy-line mt-auto">
+                            <span>模板标识：${escapeHtml(templateId || '-')}</span>
+                        </div>
+                        <div class="plugin-action-row mt-3 d-flex gap-2 flex-wrap">
+                            <button class="btn btn-sm btn-success" onclick="applyDifyTemplate('${escapeForAttr(templateId)}')"><i class="fas fa-wand-magic-sparkles me-1"></i>使用模板</button>
+                            <a class="btn btn-sm btn-outline-secondary" href="https://docs.dify.ai/zh/develop-plugin/getting-started/cli" target="_blank" rel="noopener"><i class="fas fa-book me-1"></i>官方文档</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+        }).join('');
+
+        updateDifyMarketPagerUI();
+    }
+
+    function updateDifyMarketPagerUI() {
+        const label = document.getElementById('dify-market-page-label');
+        const prevBtn = document.getElementById('dify-market-prev-btn');
+        const nextBtn = document.getElementById('dify-market-next-btn');
+        const st = difyMarketPageState || {page: 1, pageSize: 24, hasMore: false, total: 0};
+
+        if (label) {
+            const approxTotalPages = Math.max(st.page, Math.ceil((Number(st.total || 0) || 1) / (Number(st.pageSize || 24) || 24)));
+            label.textContent = `第 ${st.page} / ${approxTotalPages} 页 · 共 ${st.total || 0} 条`;
+        }
+        if (prevBtn) prevBtn.disabled = st.page <= 1;
+        if (nextBtn) nextBtn.disabled = !st.hasMore;
+    }
+
+    async function changeDifyMarketPage(delta) {
+        const nextPage = Math.max(1, (difyMarketPageState.page || 1) + Number(delta || 0));
+        if (nextPage === difyMarketPageState.page) return;
+        difyMarketPageState.page = nextPage;
+        await loadDifyMarket(false);
+    }
+
+    function onDifyMarketSearchInput() {
+        const query = (document.getElementById('dify-market-search')?.value || '').trim();
+        difyMarketPageState.query = query;
+        difyMarketPageState.page = 1;
+        loadDifyMarket(false);
+    }
+
+    async function checkDifyCliStatus(showToast = false) {
+        const statusEl = document.getElementById('dify-cli-status-text');
+        const managerStatusEl = document.getElementById('cli-status-dify');
+        try {
+            const data = await fetchJsonSafe(`/api/systems/dify/market/cli/status`, {timeoutMs: 8000});
+            if (data.code !== 0) throw new Error(data.message || 'status failed');
+
+            const cliData = data.data || {};
+            const installed = !!cliData.installed;
+            const cliPath = String(cliData.cli || '').trim();
+            const version = String(cliData.version || '').trim();
+            if (statusEl) {
+                statusEl.textContent = installed
+                    ? `Dify CLI 状态：已安装 ${version ? '(' + version + ')' : ''} ${cliPath}`
+                    : 'Dify CLI 状态：未安装（请查看官方安装指引）';
+            }
+            if (managerStatusEl) {
+                managerStatusEl.textContent = installed
+                    ? `状态：已安装${version ? ' (' + version + ')' : ''}${cliPath ? ' · ' + cliPath : ''}`
+                    : '状态：未安装';
+            }
+            if (showToast) {
+                toastr[installed ? 'success' : 'warning'](installed ? 'Dify CLI 已安装' : 'Dify CLI 未安装');
+            }
+            return cliData;
+        } catch (e) {
+            if (statusEl) statusEl.textContent = `Dify CLI 状态：检测失败 - ${e.message}`;
+            if (managerStatusEl) managerStatusEl.textContent = `状态：检测失败 - ${e.message}`;
+            if (showToast) toastr.error('检测 Dify CLI 失败: ' + e.message);
+            return null;
+        }
+    }
+
+    async function showDifyCliInstallGuide() {
+        try {
+            const res = await fetch('/api/systems/dify/market/cli/install', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({}) });
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) throw new Error(data.message || 'guide failed');
+
+            const guide = data.data || {};
+            const commands = Array.isArray(guide.commands) ? guide.commands.join('\n') : 'brew tap langgenius/dify\nbrew install dify\ndify version';
+            const ok = await showUnifiedActionModal({
+                title: 'Dify CLI 官方安装指引',
+                message: `建议按以下步骤安装并验证：\n\n${commands}\n\n官方文档：${guide.docs_url || 'https://docs.dify.ai/zh/develop-plugin/getting-started/cli'}`,
+                level: 'info',
+                confirmText: '打开官方文档',
+                cancelText: '关闭',
+                confirmClass: 'btn-primary'
+            });
+            if (ok) {
+                window.open(guide.docs_url || 'https://docs.dify.ai/zh/develop-plugin/getting-started/cli', '_blank', 'noopener');
+            }
+        } catch (e) {
+            toastr.error('获取 Dify CLI 指引失败: ' + e.message);
+        }
+    }
+
+    function _difyInstallStatusMeta(status) {
+        const value = String(status || '').toLowerCase();
+        if (value === 'success') return {text: '安装完成', className: 'bg-success'};
+        if (value === 'error') return {text: '安装失败', className: 'bg-danger'};
+        if (value === 'running') return {text: '正在安装', className: 'bg-primary'};
+        if (value === 'queued') return {text: '排队中', className: 'bg-secondary'};
+        return {text: '等待开始', className: 'bg-secondary'};
+    }
+
+    function _difyInstallRenderLogs(lines) {
+        const logEl = document.getElementById('dify-install-log');
+        if (!logEl) return;
+        const list = Array.isArray(lines) ? lines : [];
+        logEl.textContent = list.length ? list.join('\n') : '尚未开始安装...';
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function _difyInstallUpdateModal(job) {
+        if (!job) return;
+        const badge = document.getElementById('dify-install-status-badge');
+        const cmd = document.getElementById('dify-install-command-label');
+        const jobId = document.getElementById('dify-install-job-id');
+        const meta = _difyInstallStatusMeta(job.status);
+        if (badge) {
+            badge.textContent = meta.text;
+            badge.className = `badge ${meta.className}`;
+        }
+        if (cmd) {
+            cmd.textContent = job.command || job.command_display || '正在准备安装命令';
+        }
+        if (jobId) {
+            jobId.textContent = job.job_id ? `Job: ${job.job_id}` : '';
+        }
+        _difyInstallRenderLogs(job.logs || []);
+    }
+
+    function _difyInstallStopPolling() {
+        if (difyInstallJobState.pollTimer) {
+            clearInterval(difyInstallJobState.pollTimer);
+            difyInstallJobState.pollTimer = null;
+        }
+    }
+
+    async function _difyInstallPollJob() {
+        const jobId = difyInstallJobState.jobId;
+        if (!jobId) return;
+        try {
+            const ctl = new AbortController();
+            const timer = setTimeout(() => ctl.abort(), 8000);
+            const res = await fetch(`/api/systems/dify/market/cli/install/jobs/${encodeURIComponent(jobId)}`, {signal: ctl.signal});
+            clearTimeout(timer);
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) throw new Error(data.message || 'poll failed');
+            const job = data.data || {};
+            _difyInstallUpdateModal(job);
+            if (job.status === 'success') {
+                _difyInstallStopPolling();
+                difyInstallJobState.active = false;
+                toastr.success(job.message || 'Dify CLI 安装完成');
+                await checkDifyCliStatus(false);
+            } else if (job.status === 'error') {
+                _difyInstallStopPolling();
+                difyInstallJobState.active = false;
+                toastr.error(job.message || 'Dify CLI 安装失败');
+            }
+        } catch (e) {
+            const badge = document.getElementById('dify-install-status-badge');
+            if (badge) {
+                badge.textContent = '轮询失败';
+                badge.className = 'badge bg-warning text-dark';
+            }
+        }
+    }
+
+    function openDifyInstallModal(data) {
+        const modalEl = document.getElementById('dify-install-modal');
+        if (!modalEl) return;
+        difyInstallJobState.jobId = data.job_id || '';
+        difyInstallJobState.startedAt = Date.now();
+        difyInstallJobState.active = true;
+        _difyInstallUpdateModal(data);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl, {backdrop: true, keyboard: true});
+        difyInstallJobState.modal = modal;
+        modal.show();
+        _difyInstallStopPolling();
+        difyInstallJobState.pollTimer = setInterval(_difyInstallPollJob, 1000);
+        _difyInstallPollJob();
+    }
+
+    function closeDifyInstallToBackground() {
+        const modalEl = document.getElementById('dify-install-modal');
+        if (!modalEl) return;
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        _difyInstallStopPolling();
+        difyInstallJobState.active = false;
+        toastr.info('Dify CLI 仍在后台安装，可稍后重新打开查看日志');
+    }
+
+    const difyInstallModalEl = document.getElementById('dify-install-modal');
+    if (difyInstallModalEl) {
+        difyInstallModalEl.addEventListener('hidden.bs.modal', () => {
+            _difyInstallStopPolling();
+            difyInstallJobState.active = false;
+        });
+    }
+
+    async function installDifyCliOneClick() {
+        if (difyCliRequestInflight) {
+            toastr.info('正在检查或安装 Dify CLI，请稍候...');
+            return;
+        }
+        difyCliRequestInflight = true;
+        try {
+            const st = await checkDifyCliStatus(false);
+            if (st && st.installed) {
+                toastr.success(`Dify CLI 已安装${st.version ? '：' + st.version : ''}`);
+                return;
+            }
+
+            const ctl = new AbortController();
+            const timer = setTimeout(() => ctl.abort(), 12000);
+            const res = await fetch('/api/systems/dify/market/cli/install', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({auto_install: true}),
+                signal: ctl.signal
+            });
+            clearTimeout(timer);
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) throw new Error(data.message || 'install failed');
+            if (String(data?.data?.mode || '').toLowerCase() !== 'one_click_install') {
+                await showDifyCliInstallGuide();
+                return;
+            }
+            openDifyInstallModal(data.data || {});
+        } catch (e) {
+            toastr.error('Dify CLI 一键安装失败: ' + e.message);
+            await showDifyCliInstallGuide();
+        } finally {
+            difyCliRequestInflight = false;
+        }
+    }
+
+    function _extraCliInstallStatusMeta(status) {
+        const value = String(status || '').toLowerCase();
+        if (value === 'success') return {text: '安装完成', className: 'bg-success'};
+        if (value === 'error') return {text: '安装失败', className: 'bg-danger'};
+        if (value === 'running') return {text: '正在安装', className: 'bg-primary'};
+        if (value === 'queued') return {text: '排队中', className: 'bg-secondary'};
+        return {text: '等待开始', className: 'bg-secondary'};
+    }
+
+    function _extraCliInstallRenderLogs(lines) {
+        const logEl = document.getElementById('extra-cli-install-log');
+        if (!logEl) return;
+        const list = Array.isArray(lines) ? lines : [];
+        logEl.textContent = list.length ? list.join('\n') : '尚未开始安装...';
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function _extraCliInstallUpdateModal(job) {
+        if (!job) return;
+        const titleEl = document.getElementById('extra-cli-install-modal-label');
+        const badge = document.getElementById('extra-cli-install-status-badge');
+        const cmd = document.getElementById('extra-cli-install-command-label');
+        const jobId = document.getElementById('extra-cli-install-job-id');
+        const meta = _extraCliInstallStatusMeta(job.status);
+        if (titleEl) titleEl.textContent = `${extraCliInstallJobState.cliLabel || _extraCliLabel(extraCliInstallJobState.cliName)} 安装`;
+        if (badge) {
+            badge.textContent = meta.text;
+            badge.className = `badge ${meta.className}`;
+        }
+        if (cmd) {
+            cmd.textContent = job.command || job.command_display || '正在准备安装命令';
+        }
+        if (jobId) {
+            jobId.textContent = job.job_id ? `Job: ${job.job_id}` : '';
+        }
+        _extraCliInstallRenderLogs(job.logs || []);
+    }
+
+    function _extraCliInstallStopPolling() {
+        if (extraCliInstallJobState.pollTimer) {
+            clearInterval(extraCliInstallJobState.pollTimer);
+            extraCliInstallJobState.pollTimer = null;
+        }
+    }
+
+    async function _extraCliInstallPollJob() {
+        const jobId = extraCliInstallJobState.jobId;
+        const cliName = extraCliInstallJobState.cliName;
+        if (!jobId || !cliName) return;
+        try {
+            const encodedName = encodeURIComponent(cliName);
+            const encodedJobId = encodeURIComponent(jobId);
+            const data = await fetchJsonSafeWithFallback([
+                `/api/systems/cli/${encodedName}/install/jobs/${encodedJobId}`,
+                `/api/systems/market/cli/${encodedName}/install/jobs/${encodedJobId}`
+            ], {timeoutMs: 10000});
+            if (data.code !== 0) throw new Error(data.message || 'poll failed');
+            const job = data.data || {};
+            _extraCliInstallUpdateModal(job);
+            if (job.status === 'success') {
+                _extraCliInstallStopPolling();
+                extraCliInstallJobState.active = false;
+                toastr.success(job.message || `${_extraCliLabel(cliName)} 安装完成`);
+                await checkExtraCliStatus(cliName, false);
+            } else if (job.status === 'error') {
+                _extraCliInstallStopPolling();
+                extraCliInstallJobState.active = false;
+                toastr.error(job.message || `${_extraCliLabel(cliName)} 安装失败`);
+            }
+        } catch (e) {
+            const badge = document.getElementById('extra-cli-install-status-badge');
+            if (badge) {
+                badge.textContent = '轮询失败';
+                badge.className = 'badge bg-warning text-dark';
+            }
+        }
+    }
+
+    function openExtraCliInstallModal(cliName, cliLabel, data) {
+        const modalEl = document.getElementById('extra-cli-install-modal');
+        if (!modalEl) return;
+        extraCliInstallJobState.cliName = String(cliName || '').trim().toLowerCase();
+        extraCliInstallJobState.cliLabel = String(cliLabel || _extraCliLabel(cliName));
+        extraCliInstallJobState.jobId = data.job_id || '';
+        extraCliInstallJobState.startedAt = Date.now();
+        extraCliInstallJobState.active = true;
+        _extraCliInstallUpdateModal(data);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl, {backdrop: true, keyboard: true});
+        extraCliInstallJobState.modal = modal;
+        modal.show();
+        _extraCliInstallStopPolling();
+        extraCliInstallJobState.pollTimer = setInterval(_extraCliInstallPollJob, 1000);
+        _extraCliInstallPollJob();
+    }
+
+    function closeExtraCliInstallToBackground() {
+        const modalEl = document.getElementById('extra-cli-install-modal');
+        if (!modalEl) return;
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        _extraCliInstallStopPolling();
+        extraCliInstallJobState.active = false;
+        toastr.info(`${extraCliInstallJobState.cliLabel || 'CLI'} 仍在后台安装，可稍后重新打开查看日志`);
+    }
+
+    const extraCliInstallModalEl = document.getElementById('extra-cli-install-modal');
+    if (extraCliInstallModalEl) {
+        extraCliInstallModalEl.addEventListener('hidden.bs.modal', () => {
+            _extraCliInstallStopPolling();
+            extraCliInstallJobState.active = false;
+        });
+    }
+
+    async function installExtraCliOneClick(cliName) {
+        const key = String(cliName || '').trim().toLowerCase();
+        if (!key) return;
+        const label = _extraCliLabel(key);
+        if (extraCliRequestInflight[key]) {
+            toastr.info(`正在检查或安装 ${label}，请稍候...`);
+            return;
+        }
+        extraCliRequestInflight[key] = true;
+        try {
+            const st = await checkExtraCliStatus(key, false);
+            if (st && st.installed) {
+                toastr.success(`${label} 已安装${st.version ? '：' + st.version : ''}`);
+                return;
+            }
+
+            const encoded = encodeURIComponent(key);
+            const data = await fetchJsonSafeWithFallback([
+                `/api/systems/cli/${encoded}/install`,
+                `/api/systems/market/cli/${encoded}/install`
+            ], {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({auto_install: true}),
+                timeoutMs: 10000
+            });
+            if (data.code !== 0) throw new Error(data.message || 'install failed');
+            if (String(data?.data?.mode || '').toLowerCase() !== 'one_click_install') {
+                await openCliGuideByName(key);
+                return;
+            }
+            openExtraCliInstallModal(key, label, data.data || {});
+        } catch (e) {
+            toastr.error(`${label} 一键安装失败: ${e.message}`);
+            await openCliGuideByName(key);
+        } finally {
+            extraCliRequestInflight[key] = false;
+        }
+    }
+
+    async function loadDifyMarket(showToast = true) {
+        try {
+            const query = encodeURIComponent(difyMarketPageState.query || '');
+            const page = Number(difyMarketPageState.page || 1);
+            const pageSize = Number(difyMarketPageState.pageSize || 24);
+            const res = await fetch(`/api/systems/dify/market/search?page=${page}&page_size=${pageSize}&query=${query}`);
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) throw new Error(data.message || 'load failed');
+
+            difyMarketCache = Array.isArray(data.data) ? data.data : [];
+            difyMarketPageState.page = Number(data.page || page);
+            difyMarketPageState.pageSize = Number(data.page_size || pageSize);
+            difyMarketPageState.total = Number(data.total || difyMarketCache.length || 0);
+            difyMarketPageState.hasMore = !!data.has_more;
+            renderDifyMarketCards(difyMarketCache);
+            if (showToast) toastr.success(`已同步 Dify 官方模板：${difyMarketCache.length}`);
+            await checkDifyCliStatus(false);
+        } catch (e) {
+            const wrap = document.getElementById('dify-market-cards');
+            if (wrap) wrap.innerHTML = `<div class="col-12 text-danger">${escapeHtml(e.message)}</div>`;
+            if (showToast) toastr.error('同步 Dify 官方模板失败: ' + e.message);
+        }
+    }
+
+    async function applyDifyTemplate(templateId) {
+        const tid = String(templateId || '').trim();
+        if (!tid) {
+            toastr.warning('请提供模板 ID');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/systems/dify/market/install', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id: tid})
+            });
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) throw new Error(data.message || 'apply failed');
+
+            const nextSteps = ((data.data && data.data.next_steps) || []).join('\n');
+            const docsUrl = (data.data && data.data.docs_url) || 'https://docs.dify.ai/zh/develop-plugin/getting-started/cli';
+            await showUnifiedActionModal({
+                title: `模板已选择: ${tid}`,
+                message: `请按官方流程执行：\n\n${nextSteps}\n\n官方文档：${docsUrl}`,
+                level: 'success',
+                confirmText: '好的',
+                confirmClass: 'btn-success'
+            });
+        } catch (e) {
+            toastr.error('使用 Dify 模板失败: ' + e.message);
+        }
+    }
+
+    async function applyDifyTemplateByInput() {
+        const input = document.getElementById('dify-template-id-input');
+        const templateId = (input?.value || '').trim();
+        if (!templateId) {
+            toastr.warning('请先输入模板 ID');
+            return;
+        }
+        await applyDifyTemplate(templateId);
     }
 
     function renderSkillMarketCards(items) {
@@ -4352,11 +5723,19 @@
         if (nextBtn) nextBtn.disabled = !st.hasMore;
     }
 
-    function changeSkillMarketPage(delta) {
+    async function changeSkillMarketPage(delta) {
         const nextPage = Math.max(1, (skillMarketPageState.page || 1) + Number(delta || 0));
         if (nextPage === skillMarketPageState.page) return;
         skillMarketPageState.page = nextPage;
-        loadSkillMarketCocoloop(false);
+        if (Number(delta || 0) > 0) {
+            if (skillMarketSource === 'skillhub') {
+                await syncSkillhubMarket(false, true);
+            } else {
+                await syncGithubSkillMarket(false, true);
+            }
+            return;
+        }
+        await loadSkillMarketCocoloop(false);
     }
 
     function onSkillMarketSearchInput() {
@@ -4602,16 +5981,16 @@
         });
     }
 
-    async function syncGithubSkillMarket() {
+    async function syncGithubSkillMarket(resetPage = true, showToast = true) {
         skillMarketSource = 'github';
-        skillMarketPageState.page = 1;
-        await loadSkillMarketCocoloop(true);
+        if (resetPage) skillMarketPageState.page = 1;
+        await loadSkillMarketCocoloop(showToast);
     }
 
-    async function syncSkillhubMarket() {
+    async function syncSkillhubMarket(resetPage = true, showToast = true) {
         skillMarketSource = 'skillhub';
-        skillMarketPageState.page = 1;
-        await loadSkillMarketCocoloop(true);
+        if (resetPage) skillMarketPageState.page = 1;
+        await loadSkillMarketCocoloop(showToast);
     }
 
     async function installSkillhubSkill(skillId, fallbackName = '') {
@@ -4715,7 +6094,7 @@
 
     const AGENT_SUB_TAB_IDS = ['v-tasks-tab', 'v-mcp-tab', 'v-knowledge-tab', 'v-instructions-tab'];
     const EXTENSIONS_SUB_TAB_IDS = ['v-plugins-tab', 'v-skills-tab', 'v-persona-tab'];
-    const OPS_SUB_TAB_IDS = ['v-config-tab', 'v-system-tab', 'v-database-tab', 'v-logs-tab', 'v-terminal-tab', 'v-gateway-tab'];
+    const OPS_SUB_TAB_IDS = ['v-config-tab', 'v-system-tab', 'v-database-tab', 'v-logs-tab', 'v-gateway-tab'];
     let agentSubmenuCollapse = null;
     let extensionsSubmenuCollapse = null;
     let opsSubmenuCollapse = null;
@@ -4945,24 +6324,86 @@
             console.error("Initialization Error:", e);
         }
     });
-    // Terminal Logic
-    function initTerminal() {
-         document.getElementById('term-input').focus();
+    // Merged Logs & Terminal Logic
+    const mergedConsoleLines = [];
+
+    function escapeHtml(text) {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
     }
 
-    document.getElementById('term-input').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') execCmd();
-    });
+    function getLineLevel(text, fallback = 'info') {
+        const t = String(text || '').toLowerCase();
+        if (/(\$\s)|^\[cmd\]/i.test(text || '')) return 'command';
+        if (/(error|exception|traceback|failed|fatal|denied|refused|timeout)/.test(t)) return 'error';
+        if (/(warn|warning|deprecated|retry)/.test(t)) return 'warning';
+        if (/(success|succeed|done|completed|ok\b|passed)/.test(t)) return 'success';
+        return fallback;
+    }
 
-    async function execCmd() {
-        const input = document.getElementById('term-input');
-        const output = document.getElementById('term-output');
-        const cmd = input.value.trim();
-        if(!cmd) return;
+    function renderMergedConsole() {
+        const logOutput = document.getElementById('log-output');
+        if (!logOutput) return;
 
-        output.innerHTML += `<div class="text-white opacity-50">$ ${cmd}</div>`;
+        const html = mergedConsoleLines.map(item => {
+            const safeText = escapeHtml(item.text);
+            return `<div class="merged-log-line level-${item.level}"><span class="log-ts">[${item.ts}]</span> ${safeText}</div>`;
+        }).join('');
+
+        logOutput.innerHTML = html || '<div class="merged-log-line level-info"><span class="log-ts">[INFO]</span> 暂无日志</div>';
+        logOutput.scrollTop = logOutput.scrollHeight;
+    }
+
+    function appendMergedConsole(text, level = 'auto') {
+        const lineText = String(text ?? '');
+        const now = new Date().toLocaleTimeString();
+        const finalLevel = level === 'auto' ? getLineLevel(lineText, 'info') : level;
+
+        mergedConsoleLines.push({ ts: now, level: finalLevel, text: lineText });
+        if (mergedConsoleLines.length > 4000) {
+            mergedConsoleLines.splice(0, mergedConsoleLines.length - 4000);
+        }
+
+        renderMergedConsole();
+    }
+
+    function clearMergedConsole() {
+        mergedConsoleLines.length = 0;
+        renderMergedConsole();
+    }
+
+    function exportMergedLog() {
+        const lines = mergedConsoleLines.map(item => `[${item.ts}] [${item.level.toUpperCase()}] ${item.text}`);
+        const content = lines.join('\n') || '[INFO] Empty log';
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        a.href = url;
+        a.download = `merged-log-${stamp}.log`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        toastr.success('日志已导出');
+    }
+
+    const logTermInput = document.getElementById('log-term-input');
+    if (logTermInput) {
+        logTermInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') execCmdMerged();
+        });
+    }
+
+    async function execCmdMerged() {
+        const input = document.getElementById('log-term-input');
+        const cmd = (input.value || '').trim();
+        if (!cmd) return;
         input.value = '';
-        output.scrollTop = output.scrollHeight;
+
+        appendMergedConsole(`$ ${cmd}`, 'command');
 
         try {
             const res = await fetch('/api/exec_cmd', {
@@ -4971,17 +6412,48 @@
                 body: JSON.stringify({cmd: cmd})
             });
             const html = await res.text();
-            // Backend returns <pre>...</pre>, strip it if needed or just append
-            // But we want to preserve color/fmt if any.
-            // Since backend uses <pre>, we can append it directly but stripping the pre tag might be better for formatting consistency.
-            // Let's just append inner content.
             const temp = document.createElement('div');
             temp.innerHTML = html;
-            output.innerHTML += temp.innerText; // Basic text for now
-            output.scrollTop = output.scrollHeight;
-        } catch(e) {
-            output.innerHTML += `<div class="text-danger">Error: ${e}</div>`;
+            const text = (temp.innerText || '').trim();
+            if (text) {
+                text.split('\n').forEach(line => appendMergedConsole(line, 'auto'));
+            }
+            refreshLog();
+        } catch (e) {
+            appendMergedConsole(`Error: ${e}`, 'error');
         }
+    }
+
+    async function execCmd() {
+        return execCmdMerged();
+    }
+
+    function _normalizeRecordItem(row) {
+        if (Array.isArray(row)) {
+            return {
+                id: row[0],
+                userText: row[1] || '',
+                aiText: row[2] || '',
+                createdAt: row[4] || ''
+            };
+        }
+        return {
+            id: row.id,
+            userText: row.user_input || row.message || '',
+            aiText: row.ai_response || row.response || '',
+            createdAt: row.created_at || row.createdAt || ''
+        };
+    }
+
+    async function loadRecentChatsForLog(limit = 15) {
+        const res = await fetch(`/api/records?limit=${limit}`);
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        if (!Array.isArray(data)) return [];
+
+        return data.map(_normalizeRecordItem).reverse();
     }
 
     function runDiagnosis() {
@@ -5123,10 +6595,32 @@
 
                 // 2. Dashboard Disk Chart & Small Stats
                 if(data.system_info) {
-                    if(document.getElementById('sys-platform')) document.getElementById('sys-platform').innerText = data.system_info.platform;
-                    if(document.getElementById('sys-python')) document.getElementById('sys-python').innerText = data.system_info.python_version;
-                    if(document.getElementById('net-sent')) document.getElementById('net-sent').innerText = (data.system_info.net_bytes_sent/1024/1024).toFixed(1) + " MB";
-                    if(document.getElementById('net-recv')) document.getElementById('net-recv').innerText = (data.system_info.net_bytes_recv/1024/1024).toFixed(1) + " MB";
+                    if(document.getElementById('sys-platform')) {
+                        const platformEl = document.getElementById('sys-platform');
+                        const platformFull = data.system_info.platform || '-';
+                        platformEl.innerText = platformFull;
+                        platformEl.title = platformFull;
+                    }
+                    if(document.getElementById('sys-python')) {
+                        const pythonEl = document.getElementById('sys-python');
+                        const pythonFull = data.system_info.python_version || '-';
+                        pythonEl.innerText = pythonFull;
+                        pythonEl.title = pythonFull;
+                    }
+                    if(document.getElementById('net-sent')) {
+                        const sentEl = document.getElementById('net-sent');
+                        const sentFull = (data.system_info.net_bytes_sent/1024/1024).toFixed(1) + " MB";
+                        const sentKB = (data.system_info.net_bytes_sent/1024).toFixed(1);
+                        sentEl.innerText = sentFull;
+                        sentEl.title = sentFull + " (" + sentKB + " KB)";
+                    }
+                    if(document.getElementById('net-recv')) {
+                        const recvEl = document.getElementById('net-recv');
+                        const recvFull = (data.system_info.net_bytes_recv/1024/1024).toFixed(1) + " MB";
+                        const recvKB = (data.system_info.net_bytes_recv/1024).toFixed(1);
+                        recvEl.innerText = recvFull;
+                        recvEl.title = recvFull + " (" + recvKB + " KB)";
+                    }
                     
                     if(diskChart) {
                         const usedDisk = Number.isFinite(data.system_info.used_disk) ? data.system_info.used_disk : 0;
@@ -5539,6 +7033,7 @@
             const data = await safeJsonFromSettled(settled[0], {code: 1, data: []});
             const marketCnData = await safeJsonFromSettled(settled[1], {code: 1, data: []});
             const servers = (data.code === 0 && Array.isArray(data.data)) ? data.data : [];
+            mcpServersCache = servers;
             const marketItemsCn = (marketCnData.code === 0 && Array.isArray(marketCnData.data)) ? marketCnData.data : [];
             mcpMarketPageState.page = Number(marketCnData.page || mcpPage);
             mcpMarketPageState.pageSize = Number(marketCnData.page_size || mcpPageSize);
@@ -5579,7 +7074,7 @@
             renderMcpMarketCards(filteredMarket, existingNames);
 
             if (!servers.length) {
-                body.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">暂无 MCP 服务器</td></tr>';
+                body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">暂无 MCP 服务器</td></tr>';
                 return;
             }
             body.innerHTML = servers.map(server => `
@@ -5588,6 +7083,12 @@
                     <td><span class="badge bg-light text-dark border">${escapeHtml(server.type || '')}</span></td>
                     <td><span class="badge ${server.status === 'connected' ? 'bg-success' : server.status === 'error' ? 'bg-danger' : 'bg-secondary'}">${escapeHtml(server.status || '')}</span></td>
                     <td class="small text-muted">${escapeHtml(server.description || server.command || server.url || '-')}</td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm" role="group" aria-label="mcp actions">
+                            <button class="btn btn-outline-primary" type="button" title="设置" onclick="openMcpServerSettingsModal('${escapeForAttr(server.id)}')"><i class="fas fa-cog"></i></button>
+                            <button class="btn btn-outline-danger" type="button" title="删除" onclick="deleteMcpServerById('${escapeForAttr(server.id)}')"><i class="far fa-trash-can"></i></button>
+                        </div>
+                    </td>
                 </tr>
             `).join('');
         } catch (e) {
@@ -5609,11 +7110,15 @@
         if (nextBtn) nextBtn.disabled = !st.hasMore;
     }
 
-    function changeMcpMarketPage(delta) {
+    async function changeMcpMarketPage(delta) {
         const nextPage = Math.max(1, (mcpMarketPageState.page || 1) + Number(delta || 0));
         if (nextPage === mcpMarketPageState.page) return;
         mcpMarketPageState.page = nextPage;
-        loadMcpManager();
+        if (Number(delta || 0) > 0) {
+            await syncMcpRegistryMarket();
+            return;
+        }
+        await loadMcpManager();
     }
 
     function onMcpMarketSearchInput() {
@@ -5933,6 +7438,217 @@
         new bootstrap.Modal(modal).show();
     }
 
+    function getMcpServerById(serverId) {
+        return (mcpServersCache || []).find(s => String(s.id) === String(serverId));
+    }
+
+    function openMcpServerSettingsModal(serverId) {
+        const server = getMcpServerById(serverId);
+        if (!server) {
+            toastr.error('未找到对应 MCP 服务器');
+            return;
+        }
+
+        const currentType = String(server.type || 'stdio').toLowerCase();
+        const commandOrUrl = currentType === 'http' || currentType === 'sse'
+            ? (server.url || '')
+            : (server.command || '');
+        const argsText = Array.isArray(server.args) ? server.args.join(' ') : '';
+        const headersText = (() => {
+            try {
+                return JSON.stringify(server.headers || {}, null, 2);
+            } catch {
+                return '{}';
+            }
+        })();
+
+        let modal = document.getElementById('mcp-server-settings-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'mcp-server-settings-modal';
+            modal.className = 'modal fade';
+            modal.setAttribute('tabindex', '-1');
+            document.body.appendChild(modal);
+        }
+
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="fas fa-cog me-2"></i>MCP 服务器设置</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">名称</label>
+                                <input id="mcp-edit-name" class="form-control" value="${escapeHtml(server.name || '')}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">类型</label>
+                                <select id="mcp-edit-type" class="form-select">
+                                    <option value="stdio" ${currentType === 'stdio' ? 'selected' : ''}>stdio</option>
+                                    <option value="http" ${currentType === 'http' ? 'selected' : ''}>http</option>
+                                    <option value="sse" ${currentType === 'sse' ? 'selected' : ''}>sse</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">命令 / URL</label>
+                                <input id="mcp-edit-command" class="form-control" value="${escapeHtml(commandOrUrl)}" placeholder="stdio 填命令，http/sse 填 URL">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">参数（空格分隔）</label>
+                                <input id="mcp-edit-args" class="form-control" value="${escapeHtml(argsText)}" placeholder="例如: --token abc --mode prod">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Headers(JSON，可选)</label>
+                                <textarea id="mcp-edit-headers" class="form-control" rows="4" placeholder='{"Authorization":"Bearer ..."}'>${escapeHtml(headersText)}</textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">说明</label>
+                                <textarea id="mcp-edit-description" class="form-control" rows="3">${escapeHtml(server.description || '')}</textarea>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input id="mcp-edit-enabled" class="form-check-input" type="checkbox" ${server.enabled ? 'checked' : ''}>
+                                    <label class="form-check-label" for="mcp-edit-enabled">启用该服务器</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="saveMcpServerSettings('${escapeForAttr(server.id)}')">保存</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        new bootstrap.Modal(modal).show();
+    }
+
+    async function saveMcpServerSettings(serverId) {
+        const name = (document.getElementById('mcp-edit-name')?.value || '').trim();
+        const type = (document.getElementById('mcp-edit-type')?.value || 'stdio').trim();
+        const cmdOrUrl = (document.getElementById('mcp-edit-command')?.value || '').trim();
+        const argsRaw = (document.getElementById('mcp-edit-args')?.value || '').trim();
+        const headersRaw = (document.getElementById('mcp-edit-headers')?.value || '').trim();
+        const description = (document.getElementById('mcp-edit-description')?.value || '').trim();
+        const enabled = !!document.getElementById('mcp-edit-enabled')?.checked;
+
+        if (!name || !cmdOrUrl) {
+            toastr.warning('名称和命令/URL不能为空');
+            return;
+        }
+
+        let headers = {};
+        if (headersRaw) {
+            try {
+                headers = JSON.parse(headersRaw);
+            } catch {
+                toastr.error('Headers 必须是合法 JSON');
+                return;
+            }
+        }
+
+        const payload = {
+            name,
+            type,
+            description,
+            enabled,
+            args: argsRaw ? argsRaw.split(/\s+/).filter(Boolean) : [],
+            headers: (headers && typeof headers === 'object') ? headers : {}
+        };
+
+        if (type === 'http' || type === 'sse') {
+            payload.url = cmdOrUrl;
+            payload.command = '';
+        } else {
+            payload.command = cmdOrUrl;
+            payload.url = null;
+        }
+
+        try {
+            const res = await fetch(`/api/systems/mcp/servers/${encodeURIComponent(serverId)}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) {
+                throw new Error(data.message || '保存失败');
+            }
+            toastr.success('MCP 服务器设置已保存');
+            const modalEl = document.getElementById('mcp-server-settings-modal');
+            if (modalEl) {
+                const inst = bootstrap.Modal.getInstance(modalEl);
+                if (inst) inst.hide();
+            }
+            await loadMcpManager();
+        } catch (e) {
+            toastr.error('保存 MCP 设置失败: ' + e.message);
+        }
+    }
+
+    async function deleteMcpServerById(serverId) {
+        const server = getMcpServerById(serverId);
+        if (!server) {
+            toastr.error('未找到要删除的 MCP 服务器');
+            return;
+        }
+
+        const serverName = String(server.name || '').trim();
+        const typed = await showUnifiedActionModal({
+            title: '删除 MCP 服务器',
+            message: `该操作不可恢复。为防误删，请输入服务器名称确认：${serverName}`,
+            level: 'danger',
+            confirmText: '下一步',
+            cancelText: '取消',
+            confirmClass: 'btn-danger',
+            input: {
+                value: '',
+                type: 'text',
+                placeholder: `请输入 ${serverName}`,
+                errorText: '请输入服务器名称后再继续'
+            },
+            inputRequired: true
+        });
+
+        if (!typed) return;
+        if (typed !== serverName) {
+            await showUnifiedActionModal({
+                title: '名称不匹配',
+                message: '输入的名称与目标服务器不一致，已取消删除。',
+                level: 'warning',
+                confirmText: '知道了',
+                confirmClass: 'btn-warning'
+            });
+            return;
+        }
+
+        const ok = await showUnifiedActionModal({
+            title: '最终确认',
+            message: `确认删除 MCP 服务器 ${serverName} 吗？`,
+            level: 'danger',
+            confirmText: '确认删除',
+            cancelText: '取消',
+            confirmClass: 'btn-danger'
+        });
+        if (!ok) return;
+
+        try {
+            const res = await fetch(`/api/systems/mcp/servers/${encodeURIComponent(serverId)}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) {
+                throw new Error(data.message || '删除失败');
+            }
+            toastr.success('MCP 服务器已删除');
+            await loadMcpManager();
+        } catch (e) {
+            toastr.error('删除 MCP 服务器失败: ' + e.message);
+        }
+    }
+
     async function createQuickMcp() {
         const name = document.getElementById('mcp-name')?.value.trim();
         const type = document.getElementById('mcp-type')?.value.trim() || 'stdio';
@@ -5969,7 +7685,7 @@
             if (badge) badge.textContent = entries.length;
             if (!body) return;
             if (!entries.length) {
-                body.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">暂无知识条目</td></tr>';
+                body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">暂无知识条目</td></tr>';
                 return;
             }
             body.innerHTML = entries.map(entry => `
@@ -5978,10 +7694,126 @@
                     <td><span class="badge bg-light text-dark border">${escapeHtml(entry.category || '-')}</span></td>
                     <td><span class="badge bg-success">${escapeHtml(entry.entry_type || entry.type || '')}</span></td>
                     <td class="small text-muted">${escapeHtml(String(entry.content || '').slice(0, 60))}${String(entry.content || '').length > 60 ? '...' : ''}</td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm" role="group" aria-label="knowledge actions">
+                            <button class="btn btn-outline-primary" type="button" title="设置" onclick="openKnowledgeEntrySettings('${escapeForAttr(entry.id)}')"><i class="fas fa-cog"></i></button>
+                            <button class="btn btn-outline-danger" type="button" title="删除" onclick="deleteKnowledgeEntryById('${escapeForAttr(entry.id)}', '${escapeForAttr(entry.title || '')}')"><i class="far fa-trash-can"></i></button>
+                        </div>
+                    </td>
                 </tr>
             `).join('');
+            await loadKnowledgeDifyMarket(false);
         } catch (e) {
             toastr.error('加载知识库失败: ' + e.message);
+        }
+    }
+
+    function renderKnowledgeDifyMarketCards(items) {
+        const wrap = document.getElementById('kb-dify-market-cards');
+        const badge = document.getElementById('kb-dify-market-count');
+        if (!wrap) return;
+
+        const list = Array.isArray(items) ? items : [];
+        if (badge) badge.textContent = String(list.length);
+        if (!list.length) {
+            wrap.innerHTML = '<div class="col-12 text-muted">暂无可显示的 Dify 模板</div>';
+            return;
+        }
+
+        wrap.innerHTML = list.map(item => {
+            const templateId = String(item.id || '').trim();
+            const name = String(item.name || templateId || 'Dify Template');
+            const desc = String(item.description || 'Dify 官方模板').trim();
+            return `
+                <div class="col-xl-6">
+                    <div class="card h-100 plugin-card plugin-entry-card">
+                        <div class="card-body d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div class="d-flex align-items-start gap-2 flex-grow-1 plugin-title-wrap">
+                                    <div class="plugin-icon"><i class="fas fa-compass"></i></div>
+                                    <div class="plugin-title-meta">
+                                        <h6 class="mb-1 plugin-name" title="${escapeHtml(name)}">${escapeHtml(name)}</h6>
+                                        <div class="d-flex gap-1 flex-wrap">
+                                            <span class="badge text-bg-primary plugin-mini-badge">Dify Official</span>
+                                            <span class="badge text-bg-light plugin-mini-badge">${escapeHtml(templateId)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="small text-muted mb-3 plugin-desc">${escapeHtml(desc)}</div>
+                            <div class="mt-auto d-flex gap-2 flex-wrap">
+                                <button class="btn btn-sm btn-success" onclick="applyDifyTemplate('${escapeForAttr(templateId)}')"><i class="fas fa-wand-magic-sparkles me-1"></i>使用模板</button>
+                                <a class="btn btn-sm btn-outline-secondary" href="https://docs.dify.ai/zh/develop-plugin/getting-started/cli" target="_blank" rel="noopener"><i class="fas fa-book me-1"></i>官方文档</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function loadKnowledgeDifyMarket(showToast = false) {
+        const query = (document.getElementById('kb-dify-market-search')?.value || '').trim();
+        if (knowledgeDifyMarketPageState.query !== query) {
+            knowledgeDifyMarketPageState.query = query;
+            knowledgeDifyMarketPageState.page = 1;
+        }
+        const wrap = document.getElementById('kb-dify-market-cards');
+        if (wrap) wrap.innerHTML = '<div class="col-12 text-muted">正在加载模板...</div>';
+        try {
+            const q = encodeURIComponent(knowledgeDifyMarketPageState.query || '');
+            const page = Number(knowledgeDifyMarketPageState.page || 1);
+            const pageSize = Number(knowledgeDifyMarketPageState.pageSize || 8);
+            const res = await fetch(`/api/systems/dify/market/search?page=${page}&page_size=${pageSize}&query=${q}`);
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) throw new Error(data.message || 'load failed');
+
+            const items = Array.isArray(data.data) ? data.data : [];
+            knowledgeDifyMarketPageState.page = Number(data.page || page);
+            knowledgeDifyMarketPageState.pageSize = Number(data.page_size || pageSize);
+            knowledgeDifyMarketPageState.total = Number(data.total || items.length || 0);
+            knowledgeDifyMarketPageState.hasMore = !!data.has_more;
+            renderKnowledgeDifyMarketCards(items);
+            updateKnowledgeDifyMarketPagerUI();
+            if (showToast) toastr.success(`已同步 Dify 模板：${items.length}`);
+        } catch (e) {
+            if (wrap) wrap.innerHTML = `<div class="col-12 text-danger">${escapeHtml(e.message)}</div>`;
+            knowledgeDifyMarketPageState.hasMore = false;
+            updateKnowledgeDifyMarketPagerUI();
+            if (showToast) toastr.error('同步 Dify 模板失败: ' + e.message);
+        }
+    }
+
+    function onKnowledgeDifyMarketSearchInput() {
+        knowledgeDifyMarketPageState.page = 1;
+        knowledgeDifyMarketPageState.query = (document.getElementById('kb-dify-market-search')?.value || '').trim();
+        loadKnowledgeDifyMarket(false);
+    }
+
+    function updateKnowledgeDifyMarketPagerUI() {
+        const label = document.getElementById('kb-dify-market-page-label');
+        const prevBtn = document.getElementById('kb-dify-market-prev-btn');
+        const nextBtn = document.getElementById('kb-dify-market-next-btn');
+        const st = knowledgeDifyMarketPageState || {page: 1, pageSize: 8, hasMore: false, total: 0};
+
+        if (label) {
+            const approxTotalPages = Math.max(st.page, Math.ceil((Number(st.total || 0) || 1) / (Number(st.pageSize || 8) || 8)));
+            label.textContent = `第 ${st.page} / ${approxTotalPages} 页 · 共 ${st.total || 0} 条`;
+        }
+        if (prevBtn) prevBtn.disabled = st.page <= 1;
+        if (nextBtn) nextBtn.disabled = !st.hasMore;
+    }
+
+    async function changeKnowledgeDifyMarketPage(delta) {
+        const currentPage = knowledgeDifyMarketPageState.page || 1;
+        const nextPage = Math.max(1, (knowledgeDifyMarketPageState.page || 1) + Number(delta || 0));
+        if (nextPage === knowledgeDifyMarketPageState.page) return;
+        knowledgeDifyMarketPageState.page = nextPage;
+        try {
+            await loadKnowledgeDifyMarket(false);
+        } catch (_) {
+            knowledgeDifyMarketPageState.page = currentPage;
+            updateKnowledgeDifyMarketPagerUI();
         }
     }
 
@@ -6005,6 +7837,187 @@
             await loadKnowledgeManager();
         } catch (e) {
             toastr.error('创建知识条目失败: ' + e.message);
+        }
+    }
+
+    function parseKnowledgeImportPayload(rawText) {
+        const text = String(rawText || '').trim();
+        if (!text) return [];
+
+        try {
+            const parsed = JSON.parse(text);
+            if (Array.isArray(parsed)) return parsed;
+            if (parsed && Array.isArray(parsed.entries)) return parsed.entries;
+        } catch {
+            // fallback to markdown parsing
+        }
+
+        const lines = text.split(/\r?\n/);
+        const blocks = [];
+        let currentTitle = '';
+        let currentLines = [];
+
+        function pushCurrent() {
+            const content = currentLines.join('\n').trim();
+            if (currentTitle && content) {
+                blocks.push({
+                    title: currentTitle,
+                    content,
+                    type: 'knowledge',
+                    source: 'markdown-import'
+                });
+            }
+            currentLines = [];
+        }
+
+        lines.forEach(line => {
+            const m = line.match(/^#{1,3}\s+(.+)$/);
+            if (m) {
+                pushCurrent();
+                currentTitle = String(m[1] || '').trim();
+                return;
+            }
+            currentLines.push(line);
+        });
+        pushCurrent();
+
+        if (blocks.length) return blocks;
+        return [{
+            title: '导入知识条目',
+            content: text,
+            type: 'knowledge',
+            source: 'plain-text-import'
+        }];
+    }
+
+    function handleKnowledgeImportFile(inputEl) {
+        const file = inputEl?.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const payloadEl = document.getElementById('kb-import-payload');
+            if (payloadEl) payloadEl.value = String(reader.result || '');
+            toastr.info(`已读取文件: ${file.name}`);
+        };
+        reader.onerror = () => {
+            toastr.error('读取文件失败');
+        };
+        reader.readAsText(file, 'utf-8');
+    }
+
+    async function importKnowledgePayload() {
+        const payloadEl = document.getElementById('kb-import-payload');
+        const raw = (payloadEl?.value || '').trim();
+        const dedupMode = (document.getElementById('kb-import-dedup-mode')?.value || 'title_content').trim();
+        if (!raw) {
+            toastr.warning('请先粘贴或选择要导入的知识库内容');
+            return;
+        }
+
+        const entries = parseKnowledgeImportPayload(raw);
+        if (!entries.length) {
+            toastr.warning('未解析到可导入的知识条目');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/systems/knowledge/import', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ entries, dedup_mode: dedupMode })
+            });
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) throw new Error(data.message || '导入失败');
+
+            const stat = data.data || {};
+            toastr.success(`导入完成：成功 ${Number(stat.imported || 0)} 条，跳过 ${Number(stat.skipped || 0)} 条（去重跳过 ${Number(stat.dedup_skipped || 0)} 条）`);
+            if (payloadEl) payloadEl.value = '';
+            await loadKnowledgeManager();
+        } catch (e) {
+            toastr.error('导入知识库失败: ' + e.message);
+        }
+    }
+
+    async function openKnowledgeEntrySettings(entryId) {
+        try {
+            const res = await fetch(`/api/systems/knowledge/entries/${encodeURIComponent(entryId)}`);
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) throw new Error(data.message || '读取失败');
+            const entry = data.data || {};
+
+            const content = await showUnifiedActionModal({
+                title: `知识条目设置: ${entry.title || entryId}`,
+                message: '可直接编辑内容后保存。',
+                level: 'info',
+                confirmText: '保存',
+                cancelText: '取消',
+                confirmClass: 'btn-primary',
+                input: {
+                    value: String(entry.content || ''),
+                    type: 'text',
+                    placeholder: '请输入新的内容',
+                    errorText: '内容不能为空'
+                },
+                inputRequired: true
+            });
+
+            if (!content) return;
+            const saveRes = await fetch(`/api/systems/knowledge/entries/${encodeURIComponent(entryId)}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ content: String(content).trim() })
+            });
+            const saveData = await saveRes.json();
+            if (!saveRes.ok || saveData.code !== 0) throw new Error(saveData.message || '保存失败');
+
+            toastr.success('知识条目已更新');
+            await loadKnowledgeManager();
+        } catch (e) {
+            toastr.error('设置知识条目失败: ' + e.message);
+        }
+    }
+
+    async function deleteKnowledgeEntryById(entryId, entryTitle) {
+        const title = String(entryTitle || '').trim() || String(entryId || '').trim();
+        const typed = await showUnifiedActionModal({
+            title: '删除知识条目',
+            message: `该操作不可恢复。为防误删，请输入条目标题确认：${title}`,
+            level: 'danger',
+            confirmText: '下一步',
+            cancelText: '取消',
+            confirmClass: 'btn-danger',
+            input: {
+                value: '',
+                type: 'text',
+                placeholder: `请输入 ${title}`,
+                errorText: '请输入条目标题'
+            },
+            inputRequired: true
+        });
+        if (!typed) return;
+        if (String(typed).trim() !== title) {
+            toastr.warning('输入标题不匹配，已取消删除');
+            return;
+        }
+
+        const ok = await showUnifiedActionModal({
+            title: '最终确认',
+            message: `确认删除知识条目“${title}”吗？`,
+            level: 'danger',
+            confirmText: '确认删除',
+            cancelText: '取消',
+            confirmClass: 'btn-danger'
+        });
+        if (!ok) return;
+
+        try {
+            const res = await fetch(`/api/systems/knowledge/entries/${encodeURIComponent(entryId)}`, {method: 'DELETE'});
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) throw new Error(data.message || '删除失败');
+            toastr.success('知识条目已删除');
+            await loadKnowledgeManager();
+        } catch (e) {
+            toastr.error('删除知识条目失败: ' + e.message);
         }
     }
 
@@ -6176,15 +8189,36 @@
     
     async function refreshLog() {
         const logOutput = document.getElementById('log-output');
-        logOutput.textContent = 'Loading logs...';
+        if (logOutput) {
+            logOutput.innerHTML = '<div class="merged-log-line level-info"><span class="log-ts">[SYS]</span> Loading logs...</div>';
+        }
         try {
-            const res = await fetch('/api/logs');
-            let txt = await res.text();
+            const [logRes, chats] = await Promise.all([
+                fetch('/api/logs'),
+                loadRecentChatsForLog(20).catch(() => [])
+            ]);
+            let txt = await logRes.text();
             if (!txt) txt = 'No logs available.';
-            logOutput.textContent = txt;
-            logOutput.scrollTop = logOutput.scrollHeight;
+
+            mergedConsoleLines.length = 0;
+            txt.split('\n').filter(Boolean).forEach(line => appendMergedConsole(line, 'auto'));
+
+            appendMergedConsole('---------------- Chat Records ----------------', 'info');
+            if (!chats.length) {
+                appendMergedConsole('暂无聊天记录', 'warning');
+            } else {
+                chats.forEach(item => {
+                    const stamp = item.createdAt ? `[${item.createdAt}] ` : '';
+                    if (item.userText) {
+                        appendMergedConsole(`${stamp}[CHAT][USER#${item.id}] ${item.userText}`, 'chat-user');
+                    }
+                    if (item.aiText) {
+                        appendMergedConsole(`${stamp}[CHAT][BOT#${item.id}] ${item.aiText}`, 'chat-bot');
+                    }
+                });
+            }
         } catch(e) {
-            logOutput.textContent = 'Error loading logs: ' + e;
+            appendMergedConsole('Error loading logs: ' + e, 'error');
         }
     }
 

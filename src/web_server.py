@@ -2619,6 +2619,31 @@ def run_web_server():
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
+    @app.route('/api/plugins/delete', methods=['POST'])
+    def api_plugins_delete():
+        try:
+            data = request.get_json() or {}
+            plugin_name = (data.get('plugin_name') or '').strip()
+            confirm_name = (data.get('confirm_name') or '').strip()
+
+            if not plugin_name:
+                return jsonify({'success': False, 'error': 'plugin_name is required'}), 400
+            if confirm_name and confirm_name != plugin_name:
+                return jsonify({'success': False, 'error': 'confirm_name mismatch'}), 400
+
+            result = chat_system.delete_plugin(plugin_name)
+            status = chat_system.get_plugin_status()
+            return jsonify({
+                'success': True,
+                'message': f'Plugin deleted: {plugin_name}',
+                'result': result,
+                'status': status
+            })
+        except ValueError as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     @app.route('/api/skills/status', methods=['GET'])
     def api_skills_status():
         try:
@@ -2673,6 +2698,31 @@ def run_web_server():
             skill_id = _extract_skill_zip_to_workspace(upload_file)
             chat_system.reload_skills()
             return jsonify({'success': True, 'skill_id': skill_id, 'message': f'Skill {skill_id} uploaded'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/delete', methods=['POST'])
+    def api_skills_delete():
+        try:
+            data = request.get_json() or {}
+            skill_id = (data.get('skill_id') or '').strip()
+            confirm_name = (data.get('confirm_name') or '').strip()
+
+            if not skill_id:
+                return jsonify({'success': False, 'error': 'skill_id is required'}), 400
+            if confirm_name and confirm_name != skill_id:
+                return jsonify({'success': False, 'error': 'confirm_name mismatch'}), 400
+
+            result = chat_system.delete_skill(skill_id)
+            status = chat_system.get_skill_status()
+            return jsonify({
+                'success': True,
+                'message': f'Skill deleted: {skill_id}',
+                'result': result,
+                'status': status
+            })
+        except ValueError as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 

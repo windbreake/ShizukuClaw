@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
-"""
-Agent定时任务系统 - 支持灵活的任务调度
-例如：明天下午14:00提醒我喝水
-"""
+
 
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from typing import Optional, Callable, Dict, List, Any
 from dataclasses import dataclass, asdict, field
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
+from apscheduler.jobstores.base import JobLookupError
 import os
 
 
@@ -117,7 +115,7 @@ class AgentTaskScheduler:
                     for task_dict in data:
                         task = AgentTask(**task_dict)
                         self.tasks[task.id] = task
-            except Exception as e:
+            except (OSError, ValueError, TypeError, json.JSONDecodeError) as e:
                 print(f"Error loading tasks: {e}")
     
     def _save_tasks(self):
@@ -126,7 +124,7 @@ class AgentTaskScheduler:
             with open(self.tasks_file, 'w', encoding='utf-8') as f:
                 data = [task.to_dict() for task in self.tasks.values()]
                 json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
+        except OSError as e:
             print(f"Error saving tasks: {e}")
     
     def add_task(self, task: AgentTask, callback: Optional[Callable] = None) -> str:
@@ -223,7 +221,7 @@ class AgentTaskScheduler:
             task.last_run_time = datetime.now().isoformat()
             task.retry_count = 0
             
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, KeyError, OSError) as e:
             duration_ms = (datetime.now() - start_time).total_seconds() * 1000
             result = TaskResult(
                 task_id=task_id,
@@ -299,7 +297,7 @@ class AgentTaskScheduler:
         
         try:
             self.scheduler.remove_job(task_id)
-        except:
+        except JobLookupError:
             pass
         
         self._save_tasks()
@@ -317,7 +315,7 @@ class AgentTaskScheduler:
             
             try:
                 self.scheduler.remove_job(task_id)
-            except:
+            except JobLookupError:
                 pass
             
             if task_id in self.task_callbacks:
@@ -337,13 +335,10 @@ class AgentTaskScheduler:
             self.scheduler.shutdown()
 
 
-# 全局调度器实例
-_scheduler_instance: Optional[AgentTaskScheduler] = None
-
-
 def get_task_scheduler() -> AgentTaskScheduler:
     """获取或创建任务调度器实例"""
-    global _scheduler_instance
-    if _scheduler_instance is None:
-        _scheduler_instance = AgentTaskScheduler()
-    return _scheduler_instance
+    instance = getattr(get_task_scheduler, '_instance', None)
+    if instance is None:
+        instance = AgentTaskScheduler()
+        setattr(get_task_scheduler, '_instance', instance)
+    return instance

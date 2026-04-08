@@ -6,6 +6,7 @@ import importlib.util
 import inspect
 import logging
 import os
+import shutil
 import time
 import traceback
 from urllib.parse import urlparse
@@ -241,6 +242,39 @@ class PluginManager:
         for plugin_name in removed_plugins:
             self.logger.info("Plugin project removed from disk, unregistering: %s", plugin_name)
             self._unregister_plugin(plugin_name)
+
+    def delete_plugin_project(self, plugin_name: str) -> dict:
+        """Delete an external plugin project from disk and unregister it safely."""
+        name = str(plugin_name or '').strip()
+        if not name:
+            raise ValueError("plugin_name is required")
+        if name.lower().startswith('builtin.'):
+            raise ValueError("Built-in plugins cannot be deleted")
+
+        project_path = self._plugin_projects.get(name, '')
+        if not project_path:
+            raise ValueError(f"Plugin not found: {name}")
+
+        abs_project = os.path.abspath(project_path)
+        abs_external_root = os.path.abspath(self.external_plugins_dir)
+        if not abs_project.startswith(abs_external_root + os.sep):
+            raise ValueError("Only external plugins can be deleted")
+
+        removed_from_disk = False
+        if os.path.exists(abs_project):
+            shutil.rmtree(abs_project)
+            removed_from_disk = True
+
+        self._unregister_plugin(name)
+        if name in self._plugin_policies:
+            self._plugin_policies.pop(name, None)
+            self._save_policies_to_config()
+
+        return {
+            "plugin_name": name,
+            "project_path": abs_project,
+            "removed_from_disk": removed_from_disk
+        }
 
     def get_framework_status(self) -> dict:
         self._sync_removed_external_plugins()

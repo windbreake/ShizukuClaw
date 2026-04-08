@@ -7,10 +7,9 @@ import os
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from plugin_framework.base import PluginContext, PluginResult
-from plugin_framework.registry import PluginRegistry
-from plugin_framework.manager import PluginManager
-from plugin_framework.builtin_plugins import register as register_builtin
+from src.plugin_framework.base import PluginContext
+from src.plugin_framework.manager import PluginManager
+from src.plugin_framework.builtin_plugins import register as register_builtin
 
 
 def test_builtin_plugins():
@@ -128,7 +127,7 @@ def test_builtin_plugins():
 if __name__ == "__main__":
     try:
         test_builtin_plugins()
-    except Exception as e:
+    except (AssertionError, ImportError, RuntimeError, ValueError) as e:
         print(f"\n✗ 测试失败: {e}")
         import traceback
         traceback.print_exc()

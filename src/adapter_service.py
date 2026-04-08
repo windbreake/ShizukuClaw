@@ -1,29 +1,46 @@
 # adapter_service.py
 # -*- coding: utf-8 -*-
+# pyright: reportMissingImports=false, reportPrivateUsage=false
+# ruff: noqa: G004, BLE001, ARG001, F811, F841, SLF001
 """
 Adapter 通用适配模块
 """
-import socket
-import uvicorn
-import threading
+# pylint: disable=import-error,protected-access,broad-exception-caught
+# pylint: disable=logging-fstring-interpolation,redefined-outer-name,unused-argument,unused-variable
 import asyncio
-import websockets
-from fastapi import FastAPI, Request, WebSocket
-from .ai_chat_system import AIChatSystem
-import time
 import json
-import logging
+import socket
+import threading
+import time
+import traceback
+
+import uvicorn
+import websockets
+from colorama import Fore, Style, init
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import StreamingResponse
-from colorama import Fore, init
+
+from .ai_chat_system import AIChatSystem
+from .config import CONFIG
 from .database import DatabaseManager
-from .shared_utils import create_chat_completion_response, create_error_response, create_streaming_response_chunk, extract_user_input
-try:
-    from .reply_policy import can_reply_now, default_reply_policy, mark_replied, should_reply_to_onebot_message
-except ImportError:
-    from reply_policy import can_reply_now, default_reply_policy, mark_replied, should_reply_to_onebot_message
 from .logging_config import setup_logging
 from .onebot_reverse_ws_server import run_server as run_onebot_reverse_ws
-from .config import CONFIG
+from .shared_utils import (
+    create_chat_completion_response,
+    create_streaming_response_chunk,
+    extract_user_input,
+)
+
+try:
+    from .reply_policy import (
+        can_reply_now, default_reply_policy, mark_replied,
+        should_reply_to_onebot_message
+    )
+except ImportError:
+    from reply_policy import (
+        can_reply_now, default_reply_policy, mark_replied,
+        should_reply_to_onebot_message
+    )
 
 init(autoreset=True)
 
@@ -48,8 +65,115 @@ def _current_reply_policy() -> dict:
     return default_reply_policy(CONFIG.get('work_mode', {}).get('reply_policy', {}))
 
 
+def _handle_neko_model(data: dict, request_id: str):
+    """处理 Neko 模型的特殊逻辑"""
+    logger.info(f"[{request_id}] 进入 Neko 模型独立处理流程")
+    user_input = ""
+    image_data = None
+    for msg in reversed(data.get("messages", [])):
+        if msg.get("role") == "user":
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and item.get("type") == "text":
+                        user_input += item.get("text", "")
+                    elif (isinstance(item, dict) and
+                          item.get("type") == "image_url"):
+                        image_data = item.get("image_url", {}).get("url")
+                        logger.info(f"[{request_id}] 提取到图片 URL: {image_data}")
+            else:
+                user_input = content
+            break
+
+    log_msg = (f"[{request_id}] 用户输入内容: {user_input[:50]}..."
+               if len(user_input) > 50
+               else f"[{request_id}] 用户输入内容: {user_input}")
+    logger.info(log_msg)
+
+    response_text = chat_system.chat(user_input, image=image_data,
+                                      is_admin=False)
+    logger.info(f"[{request_id}] Neko 模型生成响应完成")
+    return create_chat_completion_response(response_text, "neko")
+
+
+def _extract_user_input_openai(messages: list) -> str:
+    """从消息列表中提取最后一个用户消息"""
+    for msg in reversed(messages):
+        if msg.get('role') == 'user':
+            return msg.get('content', "")
+    return ""
+
+
+def _build_chat_api_kwargs(user_input: str, temperature: float = 0.7,
+                            max_tokens: int = 200, timeout: int = 30,
+                            stream: bool = False) -> dict:
+    """构建聊天 API 请求参数"""
+    context_messages = chat_system.build_chat_context(user_input)
+    full_messages = context_messages + [{"role": "user",
+                                          "content": user_input}]
+    return {
+        "messages": full_messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "timeout": timeout,
+        "stream": stream,
+    }
+
+
+def _stream_response_events(stream_resp, user_input: str, request_id: str):
+    """生成流式响应事件"""
+    content_accum = ""
+    chunk_count = 0
+    for chunk in stream_resp:
+        delta = getattr(chunk.choices[0].delta, "content", "")
+        if delta:
+            chunk_count += 1
+            content_accum += delta
+            payload = {
+                "choices": [{
+                    "delta": {"content": delta},
+                    "index": 0,
+                    "finish_reason": None
+                }]
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+    logger.info(f"[{request_id}] 流式传输完成，共发送 {chunk_count} 个数据块")
+    chat_system.db.save_chat(user_input, content_accum)
+    yield "data: [DONE]\n\n"
+
+
+def _process_normal_response(response, used_model: str) -> dict:
+    """处理普通模式的响应"""
+    ai_response = AIChatSystem.clean_dsml_markup(
+        response.choices[0].message.content)
+    usage_info = getattr(response, "usage", None)
+    return {
+        "id": f"chatcmpl-{int(time.time())}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": used_model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": ai_response
+                },
+                "finish_reason": "stop"
+            }
+        ],
+        "usage": {
+            "prompt_tokens": usage_info.prompt_tokens if usage_info else 0,
+            "completion_tokens": (usage_info.completion_tokens
+                                   if usage_info else 0),
+            "total_tokens": usage_info.total_tokens if usage_info else 0
+        }
+    }
+
+
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
+    """OpenAI 兼容聊天完成接口"""
     request_id = f"req-{int(time.time()*1000)}"
     try:
         data = await request.json()
@@ -61,151 +185,71 @@ async def chat_completions(request: Request):
         selected_model = data.get("model", "deepseek-chat")
         logger.info(f"[{request_id}] 选定模型: {selected_model}")
 
-        # 新增：neko 模型专属处理
+        # neko 模型专属处理
         if selected_model == "neko":
-            logger.info(f"[{request_id}] 进入 Neko 模型独立处理流程")
-            user_input = ""
-            image_data = None
-            for msg in reversed(data.get("messages", [])):
-                if msg.get("role") == "user":
-                    content = msg.get("content", "")
-                    if isinstance(content, list):
-                        for item in content:
-                            if isinstance(item, dict) and item.get("type") == "text":
-                                user_input += item.get("text", "")
-                            elif isinstance(item, dict) and item.get("type") == "image_url":
-                                image_data = item.get("image_url", {}).get("url")
-                                logger.info(f"[{request_id}] 提取到图片 URL: {image_data}")
-                    else:
-                        user_input = content
-                    break
-            
-            logger.info(f"[{request_id}] 用户输入内容: {user_input[:50]}..." if len(user_input) > 50 else f"[{request_id}] 用户输入内容: {user_input}")
-
-            response_text = chat_system.chat(user_input, image=image_data, is_admin=False)
-            logger.info(f"[{request_id}] Neko 模型生成响应完成")
-            
-            return create_chat_completion_response(response_text, "neko")
+            return _handle_neko_model(data, request_id)
 
         # 提取用户消息 (OpenAI 兼容模式)
-        user_input = ""
         messages = data.get('messages', [])
-        for msg in reversed(messages):
-            if msg.get('role') == 'user':
-                user_input = msg.get('content', "")
-                break
-
+        user_input = _extract_user_input_openai(messages)
         print(Fore.GREEN + f"用户输入: {user_input}")
         logger.info(f"[{request_id}] 用户输入: {user_input}")
 
         stream_mode = data.get("stream", False)
         if stream_mode:
             logger.info(f"[{request_id}] 启用流式传输模式")
-            async def event_generator():
-                content_accum = ""
-                
-                # 动态构建上下文
-                context_messages = chat_system.build_chat_context(user_input)
-                full_messages = context_messages + [{"role": "user", "content": user_input}]
-                logger.info(f"[{request_id}] 上下文构建完成，包含 {len(full_messages)} 条消息")
-                
-                # 逐块请求 API 并推送
-                chunk_count = 0
-                stream_resp, used_model = _chat_completion_with_retry(
-                    {
-                        "messages": full_messages,
-                        "temperature": 0.7,
-                        "max_tokens": 200,
-                        "timeout": 30,
-                        "stream": True,
-                    },
-                    preferred_model=selected_model,
-                )
-                if used_model != selected_model:
-                    logger.info(f"[{request_id}] 模型回退触发: {selected_model} -> {used_model}")
+            api_kwargs = _build_chat_api_kwargs(user_input, stream=True)
+            api_kwargs.pop("stream")  # Remove stream from context building
 
-                for chunk in stream_resp:
-                    # 修改这里，从属性读取 content
-                    delta = getattr(chunk.choices[0].delta, "content", "")
-                    if delta:
-                        chunk_count += 1
-                        content_accum += delta
-                        payload = {
-                            "choices": [{
-                                "delta": {"content": delta},
-                                "index": 0,
-                                "finish_reason": None
-                            }]
-                        }
-                        yield f"data: {json.dumps(payload)}\n\n"
-                logger.info(f"[{request_id}] 流式传输完成，共发送 {chunk_count} 个数据块")
-                chat_system.db.save_chat(user_input, content_accum)
-                yield "data: [DONE]\n\n"
+            stream_resp, used_model = _chat_completion_with_retry(
+                {**api_kwargs, "stream": True},
+                preferred_model=selected_model,
+            )
+            if used_model != selected_model:
+                logger.info(f"[{request_id}] 模型回退触发: "
+                           f"{selected_model} -> {used_model}")
 
-            return StreamingResponse(event_generator(), media_type="text/event-stream")
+            return StreamingResponse(
+                _stream_response_events(stream_resp, user_input,
+                                        request_id),
+                media_type="text/event-stream"
+            )
 
         # 普通模式 (非流式)
-        # 动态构建上下文
-        context_messages = chat_system.build_chat_context(user_input)
-        full_messages = context_messages + [{"role": "user", "content": user_input}]
+        api_kwargs = _build_chat_api_kwargs(user_input)
         logger.info(f"[{request_id}] 上下文构建完成，正在请求上游 API...")
 
-        # 调用 DeepSeek 接口，使用动态模型
         start_t = time.time()
         response, used_model = _chat_completion_with_retry(
-            {
-                "messages": full_messages,
-                "temperature": 0.7,
-                "max_tokens": 200,
-                "timeout": 30,
-            },
+            api_kwargs,
             preferred_model=selected_model,
         )
         duration = time.time() - start_t
         logger.info(f"[{request_id}] 上游 API 响应耗时: {duration:.2f}s")
         if used_model != selected_model:
-            logger.info(f"[{request_id}] 模型回退触发: {selected_model} -> {used_model}")
-        
-        ai_response = AIChatSystem.clean_dsml_markup(response.choices[0].message.content)
-        # chat_system.messages.append({"role": "assistant", "content": ai_response})
-        chat_system.db.save_chat(user_input, ai_response)
-        logger.info(f"[{request_id}] 对话已保存到数据库")
+            logger.info(f"[{request_id}] 模型回退触发: "
+                       f"{selected_model} -> {used_model}")
 
-        # 提取 usage 信息
-        usage_info = getattr(response, "usage", None)
-        result = {
-            "id": f"chatcmpl-{int(time.time())}",
-            "object": "chat.completion",
-            "created": int(time.time()),
-            "model": used_model,
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": ai_response
-                    },
-                    "finish_reason": "stop"
-                }
-            ],
-            "usage": {
-                "prompt_tokens": usage_info.prompt_tokens if usage_info else 0,
-                "completion_tokens": usage_info.completion_tokens if usage_info else 0,
-                "total_tokens": usage_info.total_tokens if usage_info else 0
-            }
-        }
+        result = _process_normal_response(response, used_model)
+        chat_system.db.save_chat(
+            user_input,
+            result['choices'][0]['message']['content']
+        )
+        logger.info(f"[{request_id}] 对话已保存到数据库")
 
         print(Fore.CYAN + f"发送响应: {result}")
         logger.info(f"[{request_id}] 请求处理完成，发送响应")
         return result
 
     except Exception as e:
-        logger.error(f"[{request_id}] 处理请求时发生异常: {str(e)}", exc_info=True)
-        # 确保data变量在异常处理中可用
+        logger.error(f"[{request_id}] 处理请求时发生异常: {str(e)}",
+                    exc_info=True)
         model_name = "deepseek-chat"
         if 'data' in locals() and data is not None:
             model_name = data.get("model", "deepseek-chat")
-        return create_error_response(e, model_name, data if 'data' in locals() else None)
+        return create_error_response(e, model_name,
+                                      data if 'data' in locals() else None)
+
 
 
 @app.get("/")
@@ -227,9 +271,18 @@ async def model_list():
     return {
         "object": "list",
         "data": [
-            {"id": "deepseek-chat", "object": "model", "created": int(time.time()), "owned_by": "local"},
-            {"id": "deepseek-v1", "object": "model", "created": int(time.time()), "owned_by": "local"},
-            {"id": "neko", "object": "model", "created": int(time.time()), "owned_by": "neko"}  # 添加neko模型
+            {
+                "id": "deepseek-chat", "object": "model",
+                "created": int(time.time()), "owned_by": "local"
+            },
+            {
+                "id": "deepseek-v1", "object": "model",
+                "created": int(time.time()), "owned_by": "local"
+            },
+            {
+                "id": "neko", "object": "model",
+                "created": int(time.time()), "owned_by": "neko"
+            }
         ]
     }
 
@@ -397,17 +450,16 @@ def is_ws_token_valid(websocket: WebSocket, expected_token: str) -> bool:
             if bearer == token:
                 return True
 
-        return token_header == token or query_token == token
+        return token in (token_header, query_token)
     except Exception:
         return False
 
 
 def create_error_response(e, model_name, data=None):
     """创建统一的错误响应"""
-    import traceback
     error_trace = traceback.format_exc()
     print(Fore.RED + f"完整错误信息:\n{error_trace}")
-    
+
     # 即使出现错误，也返回有效的JSON格式
     return {
         "id": f"error-{int(time.time())}",
@@ -500,11 +552,11 @@ def run_adapter_service():
             if stream_mode:
                 async def event_generator():
                     content_accum = ""
-                    
+
                     # 动态构建上下文
                     context_messages = chat_system.build_chat_context(user_input)
                     full_messages = context_messages + [{"role": "user", "content": user_input}]
-                    
+
                     # 逐块请求 API 并推送
                     stream_resp, _used_model = _chat_completion_with_retry(
                         {
@@ -602,9 +654,18 @@ def run_adapter_service():
         return {
             "object": "list",
             "data": [
-                {"id": "deepseek-chat", "object": "model", "created": int(time.time()), "owned_by": "deepseek"},
-                {"id": "neko", "object": "model", "created": int(time.time()), "owned_by": "neko"},  # 添加neko模型
-                {"id": "gpt-3.5-turbo", "object": "model", "created": int(time.time()), "owned_by": "neko"}
+                {
+                    "id": "deepseek-chat", "object": "model",
+                    "created": int(time.time()), "owned_by": "deepseek"
+                },
+                {
+                    "id": "neko", "object": "model",
+                    "created": int(time.time()), "owned_by": "neko"
+                },
+                {
+                    "id": "gpt-3.5-turbo", "object": "model",
+                    "created": int(time.time()), "owned_by": "neko"
+                }
             ]
         }
 
@@ -643,12 +704,12 @@ def run_adapter_service():
                     else:
                         # 否则只处理文本
                         full_response = chat_system.chat(user_input)
-                    
+
                     # 逐字发送响应
-                    for i, char in enumerate(full_response):
+                    for char in full_response:
                         payload = create_streaming_response_chunk(char)
                         yield f"data: {json.dumps(payload)}\n\n"
-                    
+
                     # 发送结束标记
                     yield "data: [DONE]\n\n"
 
@@ -664,15 +725,14 @@ def run_adapter_service():
 
             # 构造符合OpenAI格式的响应
             result = create_chat_completion_response(response_text, "neko")
-            
+
             print(Fore.CYAN + f"发送统一API响应: {result}")
             return result
 
         except Exception as e:
-            import traceback
             error_trace = traceback.format_exc()
             print(Fore.RED + f"统一API错误:\n{error_trace}")
-            
+
             # 返回错误信息但仍保持OpenAI格式
             return create_error_response(e, "neko")
 
@@ -683,17 +743,16 @@ def run_adapter_service():
         return
 
     logger.info(f"Adapter 服务正在启动，端口: {port}")
-    
+
     # 打印网络环境提示
     print(Fore.YELLOW + "提示: 如果连接失败，请检查是否设置了 HTTP_PROXY/HTTPS_PROXY 环境变量")
     print(Fore.YELLOW + "      本地连接建议设置 NO_PROXY=localhost,127.0.0.1")
-    
+
     # 获取融合后的API Key (显示部分掩码)
     api_key = CONFIG['api'].get('key', 'sk-unknown')
     masked_key = f"{api_key[:8]}...{api_key[-4:]}" if len(api_key) > 12 else api_key
-    
+
     # 打印详细banner
-    from colorama import Style
     banner = f"""
 {Fore.CYAN}================================================================
    Universal Adapter Service Started Successfully!
@@ -719,7 +778,7 @@ def run_adapter_service():
     if not ws_enabled and not ws_reverse_enabled:
         onebot_cfg.setdefault('ws', {})['enable'] = True
         logger.info("OneBot WS 与 Reverse WS 均未启用，已自动启用 OneBot WS 以兼容 NapCat WebSocket Client")
-    
+
     # 1. HTTP Server
     if onebot_cfg.get('http', {}).get('enable'):
         h_host = onebot_cfg['http'].get('host', '0.0.0.0')
@@ -730,17 +789,17 @@ def run_adapter_service():
                 logger.warning("OneBot HTTP 端口 %s 占用，自动切换到 %s", h_port, alt_port)
                 h_port = alt_port
         print(Fore.YELLOW + f"► OneBot HTTP Server:   http://{h_host}:{h_port} (Starting...)")
-        
+
         # Define a simple FastAPI app for OneBot HTTP
         ob_http_app = FastAPI()
-        
+
         @ob_http_app.post("/")
         @ob_http_app.post("/post")
         async def onebot_http_handler(request: Request):
             try:
                 data = await request.json()
                 msg_type = data.get('post_type')
-                
+
                 if msg_type == 'message':
                     should_reply, meta = should_reply_to_onebot_message(data, _current_reply_policy())
                     raw_msg = meta.get('message_text', '')
@@ -762,7 +821,7 @@ def run_adapter_service():
                         mark_replied(meta.get('conversation_key', 'http'))
                         logger.info(f"OneBot Reply to {user_id}: {reply}")
                         return {"reply": reply, "block": True, "at_sender": False}
-                
+
                 return {"status": "ok", "retcode": 0, "data": None}
             except Exception as e:
                 logger.error(f"OneBot HTTP Handler Error: {e}")
@@ -789,7 +848,7 @@ def run_adapter_service():
                 logger.warning("OneBot WS 端口 %s 占用，自动切换到 %s", w_port, alt_port)
                 w_port = alt_port
         print(Fore.YELLOW + f"► OneBot WebSocket:     ws://{w_host}:{w_port}/ws (Starting...)")
-        
+
         ob_ws_app = FastAPI()
 
         @ob_ws_app.websocket("/")
@@ -863,13 +922,13 @@ def run_adapter_service():
     rws_recv_host = onebot_cfg.get('host', '0.0.0.0')
     rws_recv_port = 8000  # NapCat 期望反向 WS 服务端在 8000 端口
     rws_recv_token = str(onebot_cfg.get('access_token', '') or '').strip()
-    
+
     if rws_recv_port:
         print(Fore.YELLOW + f"► OneBot Reverse WS Server: ws://{rws_recv_host}:{rws_recv_port}/ws (Starting...)")
-        
+
         # 使用独立的反向 WS 服务器
         bind_host = '127.0.0.1' if rws_recv_host == '0.0.0.0' else rws_recv_host
-        
+
         def start_reverse_ws():
             try:
                 run_onebot_reverse_ws(
@@ -880,7 +939,7 @@ def run_adapter_service():
                 )
             except Exception as e:
                 logger.error(f"OneBot Reverse WS Server 启动失败: {e}")
-        
+
         t_rws = threading.Thread(target=start_reverse_ws, daemon=True, name="OneBot-ReverseWS")
         t_rws.start()
         logger.info("OneBot Reverse WS Server 线程已启动")
@@ -898,7 +957,7 @@ def run_adapter_service():
         r_token = str(onebot_cfg.get('access_token', '') or '').strip()
         r_headers = build_ws_auth_headers(r_token)
         logger.info("OneBot Reverse WS 连接目标已规范化为: %s", r_url)
-        
+
         def run_reverse_ws():
             def _build_reverse_candidates(base_url: str, token: str, headers: dict):
                 base_url = str(base_url or '').strip()

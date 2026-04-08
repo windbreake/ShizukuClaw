@@ -1,0 +1,29 @@
+Per-file pytest report
+Generated: 2026-04-08T12:09:16
+Total test files: 8
+
+=== C:\Users\win11\Shizuku_Nya_Bot-master\test_builtin_plugins.py
+exit_code=0
+
+=== C:\Users\win11\Shizuku_Nya_Bot-master\test_encoding.py
+exit_code=5
+
+=== C:\Users\win11\Shizuku_Nya_Bot-master\test_server.py
+exit_code=5
+
+=== C:\Users\win11\Shizuku_Nya_Bot-master\test_systems_api.py
+exit_code=5
+
+=== C:\Users\win11\Shizuku_Nya_Bot-master\src\test_ai_search.py
+exit_code=0
+
+=== C:\Users\win11\Shizuku_Nya_Bot-master\src\test_image_video_api.py
+exit_code=0
+
+=== C:\Users\win11\Shizuku_Nya_Bot-master\src\test_webapi.py
+exit_code=5
+
+=== C:\Users\win11\Shizuku_Nya_Bot-master\tests\benchmarks\test_systems_api_benchmark.py
+exit_code=0
+
+FAILED_FILES=4

@@ -1,11 +1,26 @@
 """图片和视频API测试模块"""
 
 import json
+import socket
+
+import pytest
 import requests
+
+
+def _require_local_service(host: str = "localhost", port: int = 5001) -> None:
+    """Skip test when local image/video service is not running."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.settimeout(0.8)
+        if sock.connect_ex((host, port)) != 0:
+            pytest.skip(f"local api service is unavailable at {host}:{port}")
+    finally:
+        sock.close()
 
 
 def test_image_generation():
     """测试图片生成API"""
+    _require_local_service()
     url = "http://localhost:5001/v1/images/generations"
     
     headers = {
@@ -27,6 +42,7 @@ def test_image_generation():
 
 def test_video_generation():
     """测试视频生成API"""
+    _require_local_service()
     url = "http://localhost:5001/v1/videos/generations"
     
     headers = {
@@ -57,8 +73,6 @@ def main():
         print(f"图片生成测试失败: {e}")
     except json.JSONDecodeError as e:
         print(f"图片生成响应解析失败: {e}")
-    except Exception as e:
-        print(f"图片生成测试出现未知错误: {e}")
     
     # 测试视频生成
     try:
@@ -68,8 +82,6 @@ def main():
         print(f"视频生成测试失败: {e}")
     except json.JSONDecodeError as e:
         print(f"视频生成响应解析失败: {e}")
-    except Exception as e:
-        print(f"视频生成测试出现未知错误: {e}")
     
     print("测试完成。")
 

@@ -15,6 +15,12 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(PROJECT_ROOT, 'data', 'chat_history.db')
 
 
+def get_engine() -> str:
+    """Return configured database engine type, defaulting to mysql."""
+    db_cfg = CONFIG.get('database', {}) if isinstance(CONFIG, dict) else {}
+    return str(db_cfg.get('engine') or 'mysql').strip().lower()
+
+
 def get_connection():
     """获取数据库连接
     

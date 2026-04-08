@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import sys
+from mysql.connector import Error
 
 # 添加项目根目录到 sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -149,8 +150,8 @@ def delete_first_n_records(connection):
 def main():
     """主函数"""
     setup_logging()
-    conn = get_connection()
-    if not conn:
+    db_conn = get_connection()
+    if not db_conn:
         print("无法连接数据库。")
         return
     try:
@@ -161,7 +162,7 @@ def main():
             if choice == '1':
                 confirm = input("警告：此操作将清空所有聊天记录，是否继续？(y/n): ").strip().lower()
                 if confirm == 'y':
-                    reset_chat_history(conn)
+                    reset_chat_history(db_conn)
                 else:
                     print("已取消清空操作。")
             elif choice == '2':
@@ -171,17 +172,17 @@ def main():
             elif choice == '3':
                 rid = input("请输入要删除的记录 ID: ").strip()
                 if rid.isdigit():
-                    delete_record(conn, int(rid))
+                    delete_record(db_conn, int(rid))
                 else:
                     print("无效 ID。")
             elif choice == '4':
-                delete_first_n_records(conn)
+                delete_first_n_records(db_conn)
             elif choice == '5':
                 break
             else:
                 print("无效选项。")
     finally:
-        conn.close()
+        db_conn.close()
 
 
 if __name__ == "__main__":
