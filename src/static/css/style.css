@@ -226,7 +226,7 @@ body {
     margin-left: 300px;
     padding: 24px;
     transition: margin-left var(--transition-speed);
-    min-height: 100vh;
+    min-height: 0;
 }
 
 /* 卡片通用样式 */

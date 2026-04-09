@@ -129,12 +129,20 @@ def _system_config_default():
             'reply_policy': default_reply_policy({}),
             'chat_settings': {
                 'bothub_enabled': True,
+                'sandbox_show_agent_trace': True,
+                'sandbox_trace_collapsed': True,
+                'sandbox_show_back_to_top': True,
+                'sandbox_use_docker_runtime': True,
             },
             'features': {
                 'allow_file_write': True,
                 'allow_code_exec': True,
                 'allow_plan_update': True,
                 'allow_coder_tool': True,
+                'plugin_command_requires_work_mode': False,
+                'plugin_dev_tools_require_work_mode': True,
+                'allow_external_access': False,
+                'require_external_approval': True,
             },
             'allowed_databases': ['catgirl_db'],
         },
@@ -396,12 +404,18 @@ CONFIG = {
         'reply_policy': default_reply_policy(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('reply_policy', {})),
         'chat_settings': {
             'bothub_enabled': bool(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('chat_settings', {}).get('bothub_enabled', True)),
+            'sandbox_show_agent_trace': bool(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('chat_settings', {}).get('sandbox_show_agent_trace', True)),
+            'sandbox_trace_collapsed': bool(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('chat_settings', {}).get('sandbox_trace_collapsed', True)),
+            'sandbox_show_back_to_top': bool(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('chat_settings', {}).get('sandbox_show_back_to_top', True)),
+            'sandbox_use_docker_runtime': bool(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('chat_settings', {}).get('sandbox_use_docker_runtime', True)),
         },
         'features': {
             'allow_file_write': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('features', {}).get('allow_file_write', True),
             'allow_code_exec': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('features', {}).get('allow_code_exec', True),
             'allow_plan_update': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('features', {}).get('allow_plan_update', True),
-            'allow_coder_tool': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('features', {}).get('allow_coder_tool', True)
+            'allow_coder_tool': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('features', {}).get('allow_coder_tool', True),
+            'plugin_command_requires_work_mode': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('features', {}).get('plugin_command_requires_work_mode', False),
+            'plugin_dev_tools_require_work_mode': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('features', {}).get('plugin_dev_tools_require_work_mode', True)
         },
         'allowed_databases': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('allowed_databases', ['catgirl_db'])
     },

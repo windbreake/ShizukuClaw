@@ -1,5 +1,5 @@
 {
-  "active_persona": "shizuku.json",
+  "active_persona": "azuma.json",
   "api_keys": {
     "deepseek_chat": {
       "key": "sk-76c143f207bf4e688b15999a7fcf4336",
@@ -121,7 +121,11 @@
         "enabled": true,
         "allow_network": true,
         "allowed_domains": [
-          "1"
+          "wttr.in",
+          "wikipedia.org",
+          "en.wikipedia.org",
+          "zh.wikipedia.org",
+          "hn.algolia.com"
         ],
         "allowed_commands": [],
         "max_execution_ms": 10000
@@ -140,7 +144,8 @@
           "kemono.su"
         ],
         "allowed_commands": [
-          "crawl"
+          "crawl",
+          "kemono_crawl"
         ],
         "max_execution_ms": 35000
       },

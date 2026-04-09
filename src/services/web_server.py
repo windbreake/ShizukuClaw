@@ -84,7 +84,11 @@ def _default_work_mode_features(existing: dict = None) -> dict:
         'allow_file_write': bool(existing.get('allow_file_write', True)),
         'allow_code_exec': bool(existing.get('allow_code_exec', True)),
         'allow_plan_update': bool(existing.get('allow_plan_update', True)),
-        'allow_coder_tool': bool(existing.get('allow_coder_tool', True))
+        'allow_coder_tool': bool(existing.get('allow_coder_tool', True)),
+        'plugin_command_requires_work_mode': bool(existing.get('plugin_command_requires_work_mode', False)),
+        'plugin_dev_tools_require_work_mode': bool(existing.get('plugin_dev_tools_require_work_mode', True)),
+        'allow_external_access': bool(existing.get('allow_external_access', False)),
+        'require_external_approval': bool(existing.get('require_external_approval', True))
     }
 
 
@@ -92,6 +96,10 @@ def _default_chat_settings(existing: dict = None) -> dict:
     existing = existing or {}
     return {
         'bothub_enabled': bool(existing.get('bothub_enabled', True)),
+        'sandbox_show_agent_trace': bool(existing.get('sandbox_show_agent_trace', True)),
+        'sandbox_trace_collapsed': bool(existing.get('sandbox_trace_collapsed', True)),
+        'sandbox_show_back_to_top': bool(existing.get('sandbox_show_back_to_top', True)),
+        'sandbox_use_docker_runtime': bool(existing.get('sandbox_use_docker_runtime', True)),
     }
 
 
@@ -444,9 +452,91 @@ def api_sandbox_execute():
 
         from src.agent.agent_manager import AgentManager
         am = AgentManager() # This initializes a new manager (and sandbox)
-        result = am.sandbox.execute_python(code)
-        
-        return jsonify({'success': True, 'output': result})
+        details = am.sandbox.execute_python_with_details(code)
+
+        return jsonify({'success': True, 'output': details.get('combined_output', ''), 'details': details})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/sandbox/external_approvals', methods=['GET'])
+def api_sandbox_external_approvals_list():
+    try:
+        status = (request.args.get('status') or 'pending').strip().lower()
+        limit = request.args.get('limit', 100, type=int)
+        from src.agent.agent_manager import AgentManager
+        am = AgentManager()
+        rows = am.sandbox.list_external_approvals(status=status, limit=limit)
+        return jsonify({'success': True, 'data': rows, 'count': len(rows)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/sandbox/external_approvals/<request_id>', methods=['POST'])
+def api_sandbox_external_approvals_resolve(request_id):
+    try:
+        frontend_source = request.headers.get('X-Frontend-Source', 'sandbox')
+        if not _is_work_mode_enabled(frontend_source):
+            return jsonify({'success': False, 'error': 'Work Mode is disabled.'}), 403
+
+        data = request.get_json() or {}
+        approve = bool(data.get('approve', False))
+        reason = data.get('reason', '')
+        from src.agent.agent_manager import AgentManager
+        am = AgentManager()
+        result = am.sandbox.resolve_external_approval(request_id=request_id, approve=approve, reason=reason)
+        code = 200 if result.get('success') else 400
+        return jsonify(result), code
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/sandbox/open_path', methods=['POST'])
+def api_sandbox_open_path():
+    try:
+        frontend_source = request.headers.get('X-Frontend-Source', 'sandbox')
+        if not _is_work_mode_enabled(frontend_source):
+            return jsonify({'success': False, 'error': 'Work Mode is disabled.'}), 403
+
+        data = request.get_json() or {}
+        path = str(data.get('path') or '').strip()
+        if not path:
+            return jsonify({'success': False, 'error': 'path is required'}), 400
+
+        from src.agent.agent_manager import AgentManager
+        am = AgentManager()
+        safe_path = am.sandbox.validate_path(path, action='read', external_approval_id=data.get('external_approval_id', ''))
+        if not os.path.exists(safe_path):
+            return jsonify({'success': False, 'error': f'Path not found: {safe_path}'}), 404
+
+        if os.name == 'nt':
+            os.startfile(safe_path)
+        elif sys.platform == 'darwin':
+            subprocess.Popen(['open', safe_path])
+        else:
+            subprocess.Popen(['xdg-open', safe_path])
+
+        return jsonify({'success': True, 'path': safe_path})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/sandbox/open_url', methods=['POST'])
+def api_sandbox_open_url():
+    try:
+        frontend_source = request.headers.get('X-Frontend-Source', 'sandbox')
+        if not _is_work_mode_enabled(frontend_source):
+            return jsonify({'success': False, 'error': 'Work Mode is disabled.'}), 403
+
+        data = request.get_json() or {}
+        url = str(data.get('url') or '').strip()
+        if not url:
+            return jsonify({'success': False, 'error': 'url is required'}), 400
+        if not re.match(r'^https?://', url, flags=re.IGNORECASE):
+            return jsonify({'success': False, 'error': 'Only http/https url is allowed'}), 400
+
+        webbrowser.open(url)
+        return jsonify({'success': True, 'url': url})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -2108,6 +2198,12 @@ def run_web_server():
                 return jsonify({'success': False, 'error': '无效请求'}), 400
 
             frontend_source = request.headers.get('X-Frontend-Source', 'control_panel')
+            short_term_before = []
+            if frontend_source == 'sandbox':
+                try:
+                    short_term_before = chat_system.agent_manager.memory.load_short_term()
+                except Exception:
+                    short_term_before = []
 
             # Web请求被视为管理员操作，允许使用Agent工具
             response = chat_system.chat(
@@ -2118,7 +2214,58 @@ def run_web_server():
                 frontend_source=frontend_source,
                 persona_filename=data.get('persona_filename')
             )
-            return jsonify({'success': True, 'reply': response})
+            payload = {'success': True, 'reply': response}
+
+            if frontend_source == 'sandbox':
+                try:
+                    short_term_after = chat_system.agent_manager.memory.load_short_term()
+                    delta = short_term_after[len(short_term_before):] if len(short_term_after) >= len(short_term_before) else short_term_after
+                    chat_settings = _default_chat_settings((CONFIG.get('work_mode', {}) or {}).get('chat_settings', {}))
+
+                    events = []
+                    for item in delta[-80:]:
+                        role = str(item.get('role', 'unknown') or 'unknown')
+                        content = str(item.get('content', '') or '')
+                        ts = item.get('timestamp')
+
+                        event_type = 'message'
+                        label = '消息'
+                        tool_name = ''
+                        if role == 'assistant' and content.startswith('Called '):
+                            event_type = 'tool_call'
+                            tool_name = content[len('Called '):].strip()
+                            label = f"调用工具 {tool_name}" if tool_name else '调用工具'
+                        elif role == 'system' and content.startswith('Result:'):
+                            event_type = 'tool_result'
+                            label = '工具返回结果'
+                        elif role == 'assistant':
+                            event_type = 'assistant_message'
+                            label = 'AI 回复/思考摘要'
+
+                        events.append({
+                            'role': role,
+                            'type': event_type,
+                            'label': label,
+                            'tool_name': tool_name,
+                            'timestamp': ts,
+                            'content': content[:6000]
+                        })
+
+                    payload['debug'] = {
+                        'enabled': bool(chat_settings.get('sandbox_show_agent_trace', True)),
+                        'collapsed': bool(chat_settings.get('sandbox_trace_collapsed', True)),
+                        'show_back_to_top': bool(chat_settings.get('sandbox_show_back_to_top', True)),
+                        'events': events,
+                    }
+                except Exception:
+                    payload['debug'] = {
+                        'enabled': True,
+                        'collapsed': True,
+                        'show_back_to_top': True,
+                        'events': []
+                    }
+
+            return jsonify(payload)
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 

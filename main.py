@@ -137,12 +137,24 @@ def run_mode(mode):
             from src.services.web_server import run_terminal_chat
             run_terminal_chat()
         elif mode == 2:
+            try:
+                from src.core.launcher_boot import ensure_office_dependencies, load_launcher_settings
+                launcher = load_launcher_settings()
+                ensure_office_dependencies(bool(launcher.get('auto_install_office_deps', True)))
+            except Exception:
+                pass
             # 沙箱模式 - 启动Web服务器并默认打开沙箱页面
             from src.services.web_server import run_web_server
             os.environ.setdefault('DEFAULT_PAGE', '/sandbox')
             exit_code = run_web_server()
             sys.exit(exit_code)
         elif mode == 5:
+            try:
+                from src.core.launcher_boot import ensure_office_dependencies, load_launcher_settings
+                launcher = load_launcher_settings()
+                ensure_office_dependencies(bool(launcher.get('auto_install_office_deps', True)))
+            except Exception:
+                pass
             # 控制面板模式 - 启动Web服务器并默认打开控制面板
             from src.services.web_server import run_web_server
             os.environ.setdefault('DEFAULT_PAGE', '/control_panel')

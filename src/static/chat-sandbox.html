@@ -3,11 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeepSeek 测试聊天</title>
+    <title>沙箱聊天</title>
     <style>
-        html, body {
-            height: 100%;
-        }
+        html, body { height: 100%; }
         body {
             font-family: 'Arial', sans-serif;
             margin: 0;
@@ -20,7 +18,7 @@
             margin: 0 auto;
             height: 100vh;
             height: 100dvh;
-            background: white;
+            background: #fff;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             overflow: hidden;
@@ -29,7 +27,7 @@
         }
         .chat-header {
             background: #ff6b9e;
-            color: white;
+            color: #fff;
             padding: 15px;
             text-align: center;
             font-size: 1.2em;
@@ -41,13 +39,16 @@
             padding: 15px;
             overflow-y: auto;
             background: #fafafa;
+            scroll-behavior: smooth;
         }
         .message {
             margin-bottom: 15px;
-            max-width: 80%;
+            max-width: 88%;
             padding: 10px 15px;
             border-radius: 18px;
-            line-height: 1.4;
+            line-height: 1.45;
+            white-space: normal;
+            word-break: break-word;
         }
         .user-message {
             background: #e3f2fd;
@@ -61,7 +62,7 @@
         }
         .input-area {
             padding: 15px;
-            background: white;
+            background: #fff;
             border-top: 1px solid #eee;
             flex: 0 0 auto;
         }
@@ -73,6 +74,7 @@
             resize: none;
             height: 80px;
             margin-bottom: 10px;
+            box-sizing: border-box;
         }
         .button-group {
             display: flex;
@@ -84,12 +86,10 @@
             border: none;
             border-radius: 5px;
             background: #ff6b9e;
-            color: white;
+            color: #fff;
             cursor: pointer;
         }
-        button:hover {
-            background: #ff4785;
-        }
+        button:hover { background: #ff4785; }
         .typing {
             color: #888;
             font-style: italic;
@@ -99,20 +99,16 @@
         .timestamp {
             font-size: 0.8em;
             color: #999;
-            margin-top: 5px;
+            margin-top: 6px;
             text-align: right;
         }
-        .image-upload {
-            margin-bottom: 10px;
-        }
+        .image-upload { margin-bottom: 10px; }
         #image-preview img {
             max-width: 100px;
             max-height: 100px;
             margin-top: 5px;
             border-radius: 5px;
         }
-        
-        /* 添加加载指示器样式 */
         .loading {
             display: none;
             text-align: center;
@@ -131,7 +127,6 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
         .workmode-bar {
             margin: 12px 0;
             padding: 10px 12px;
@@ -144,7 +139,68 @@
             gap: 12px;
             font-size: 0.92rem;
         }
-
+        .quick-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .quick-actions button {
+            padding: 8px;
+            font-size: 13px;
+        }
+        .quick-open-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .quick-open-row input {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 8px;
+        }
+        .approval-box {
+            margin-bottom: 10px;
+            border: 1px solid #f7c6cc;
+            border-radius: 8px;
+            background: #fff8f9;
+            display: none;
+        }
+        .approval-box.show { display: block; }
+        .approval-head {
+            padding: 8px 10px;
+            background: #ffeef1;
+            color: #8e2648;
+            font-size: 12px;
+            font-weight: 600;
+            border-bottom: 1px solid #f6d8df;
+        }
+        .approval-list {
+            padding: 8px;
+            display: grid;
+            gap: 8px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        .approval-item {
+            border: 1px solid #f2d9df;
+            border-radius: 6px;
+            background: #fff;
+            padding: 8px;
+            font-size: 12px;
+            color: #3a3d43;
+        }
+        .approval-actions {
+            margin-top: 6px;
+            display: flex;
+            gap: 6px;
+        }
+        .approval-actions button {
+            font-size: 12px;
+            padding: 5px 8px;
+            flex: 0 0 auto;
+        }
         .workmode-badge {
             display: inline-block;
             padding: 2px 8px;
@@ -153,7 +209,6 @@
             color: #fff;
             font-size: 0.8rem;
         }
-
         .wm-modal {
             position: fixed;
             inset: 0;
@@ -163,9 +218,7 @@
             justify-content: center;
             z-index: 9999;
         }
-
         .wm-modal.show { display: flex; }
-
         .wm-card {
             width: min(520px, calc(100vw - 24px));
             background: #fff;
@@ -173,39 +226,108 @@
             padding: 18px;
             box-shadow: 0 12px 32px rgba(0,0,0,0.2);
         }
-
         .wm-actions {
             display: flex;
             justify-content: flex-end;
             gap: 10px;
             margin-top: 14px;
         }
-
+        .ai-trace-panel {
+            margin-top: 10px;
+            border: 1px solid #f2b8c6;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .ai-trace-panel > summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 8px 10px;
+            background: #fff6f8;
+            color: #8a1f44;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .ai-trace-panel > summary::-webkit-details-marker { display: none; }
+        .ai-trace-list {
+            padding: 8px;
+            display: grid;
+            gap: 8px;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+        .ai-trace-item {
+            border: 1px solid #f0e2e7;
+            border-radius: 6px;
+            background: #fff;
+        }
+        .ai-trace-item-head {
+            padding: 6px 8px;
+            background: #faf4f6;
+            font-size: 12px;
+            color: #6f3550;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .ai-trace-item-body {
+            margin: 0;
+            padding: 8px;
+            font-size: 12px;
+            line-height: 1.35;
+            white-space: pre-wrap;
+            color: #30343a;
+            max-height: 150px;
+            overflow: auto;
+        }
+        .ai-trace-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 999px;
+            font-size: 11px;
+            background: #eceff3;
+            color: #36404a;
+        }
+        .back-to-top-btn {
+            position: fixed;
+            right: 22px;
+            bottom: 22px;
+            width: 44px;
+            height: 44px;
+            border-radius: 999px;
+            background: #ff6b9e;
+            border: 0;
+            box-shadow: 0 6px 18px rgba(255, 107, 158, 0.35);
+            color: #fff;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9998;
+            padding: 0;
+        }
+        .back-to-top-btn:hover { background: #ff4785; }
+        .back-to-top-btn svg { width: 18px; height: 18px; }
         @media (max-width: 768px) {
             .chat-container {
                 width: 100%;
                 border-radius: 0;
                 box-shadow: none;
             }
-
-            .input-area {
-                padding: 12px;
-            }
-
-            textarea {
-                height: 64px;
-            }
+            .input-area { padding: 12px; }
+            textarea { height: 64px; }
+            .back-to-top-btn { right: 14px; bottom: 14px; }
         }
     </style>
 </head>
 <body>
     <div class="chat-container">
-        <div class="chat-header">
-            🐱 测试沙箱
-        </div>
+        <div class="chat-header">沙箱调试会话</div>
         <div class="chat-messages" id="chat-messages">
             <div class="message bot-message">
-                喵~你好呀！我是你的小可爱，今天也要和你好好聊天哦！
+                已进入沙箱模式。你可以直接要求我写代码、运行代码并调试问题。
                 <div class="timestamp">刚刚</div>
             </div>
         </div>
@@ -219,23 +341,40 @@
                 <button id="toggle-workmode-btn">切换工作模式</button>
             </div>
 
-            <textarea id="user-input" placeholder="输入你想说的话..."></textarea>
+            <div class="quick-actions">
+                <button id="open-workspace-btn" type="button">打开工作空间目录</button>
+                <button id="open-sandbox-page-btn" type="button">打开当前沙箱网页</button>
+            </div>
 
-            <!-- 图片上传区域 -->
+            <div class="quick-open-row">
+                <input id="quick-open-path" type="text" placeholder="输入文件或目录路径，例如 reports/output.md">
+                <button id="quick-open-path-btn" type="button">一键打开</button>
+            </div>
+
+            <div class="quick-open-row">
+                <input id="quick-open-url" type="text" placeholder="输入部署URL，例如 http://127.0.0.1:8765/">
+                <button id="quick-open-url-btn" type="button">打开网页</button>
+            </div>
+
+            <div id="approval-box" class="approval-box">
+                <div class="approval-head">外部路径访问审批（工作空间外）</div>
+                <div id="approval-list" class="approval-list"></div>
+            </div>
+
+            <textarea id="user-input" placeholder="输入需求，例如：修复启动报错并运行测试"></textarea>
+
             <div class="image-upload">
                 <input type="file" id="image-upload" accept="image/*" style="display: none">
                 <button id="upload-button">上传图片</button>
                 <div id="image-preview"></div>
             </div>
 
-            <div class="typing" id="typing-indicator">小可爱正在输入...</div>
-            
-            <!-- 添加加载指示器 -->
+            <div class="typing" id="typing-indicator">正在处理中...</div>
             <div class="loading" id="loading-indicator">
                 <div class="loading-spinner"></div>
                 <p>正在处理中，请稍候...</p>
             </div>
-            
+
             <div class="button-group">
                 <button id="send-button">发送</button>
                 <button id="clear-button">清空</button>
@@ -243,13 +382,19 @@
         </div>
     </div>
 
+    <button id="back-to-top-btn" class="back-to-top-btn" title="返回顶部" aria-label="返回顶部">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M12 3L18.5 9.5L16.9 11.1L13.2 7.4V18H10.8V7.4L7.1 11.1L5.5 9.5L12 3Z" fill="currentColor"/>
+        </svg>
+    </button>
+
     <div id="wm-modal" class="wm-modal">
         <div class="wm-card">
-            <h3 style="margin:0 0 8px 0;color:#b02a37;">⚠ 安全风险提示</h3>
+            <h3 style="margin:0 0 8px 0;color:#b02a37;">安全风险提示</h3>
             <p style="margin:0 0 6px 0;">开启工作模式后，系统将允许代码执行与本地文件写入能力。</p>
-            <p style="margin:0;color:#6c757d;font-size:13px;">请确认当前环境可信，并理解潜在风险。</p>
+            <p style="margin:0;color:#6c757d;font-size:13px;">默认优先使用 Docker 隔离运行时，避免破坏宿主机。</p>
             <div class="wm-actions">
-                <button type="button" id="wm-cancel">那还是算了吧</button>
+                <button type="button" id="wm-cancel">取消</button>
                 <button type="button" id="wm-confirm" style="background:#dc3545;">我已知晓风险，开启工作模式</button>
             </div>
         </div>
@@ -261,8 +406,7 @@
             const userInput = document.getElementById('user-input');
             const sendButton = document.getElementById('send-button');
             const clearButton = document.getElementById('clear-button');
-            const typingIndicator = document.getElementById('typing-indicator');
-            const loadingIndicator = document.getElementById('loading-indicator'); // 新增加载指示器
+            const loadingIndicator = document.getElementById('loading-indicator');
             const uploadButton = document.getElementById('upload-button');
             const imageUpload = document.getElementById('image-upload');
             const imagePreview = document.getElementById('image-preview');
@@ -271,6 +415,93 @@
             const wmCancel = document.getElementById('wm-cancel');
             const wmBadge = document.getElementById('sandbox-workmode-badge');
             const toggleWorkmodeBtn = document.getElementById('toggle-workmode-btn');
+            const backToTopBtn = document.getElementById('back-to-top-btn');
+            const approvalBox = document.getElementById('approval-box');
+            const approvalList = document.getElementById('approval-list');
+            const openWorkspaceBtn = document.getElementById('open-workspace-btn');
+            const openSandboxPageBtn = document.getElementById('open-sandbox-page-btn');
+            const quickOpenPathInput = document.getElementById('quick-open-path');
+            const quickOpenPathBtn = document.getElementById('quick-open-path-btn');
+            const quickOpenUrlInput = document.getElementById('quick-open-url');
+            const quickOpenUrlBtn = document.getElementById('quick-open-url-btn');
+
+            let sandboxSettings = {
+                sandbox_show_agent_trace: true,
+                sandbox_trace_collapsed: true,
+                sandbox_show_back_to_top: true,
+            };
+
+            function escapeHtml(text) {
+                return String(text || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function iconForTrace(type) {
+                if (type === 'tool_call') {
+                    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M11 4h2v8h4l-5 8-5-8h4V4z"/></svg>';
+                }
+                if (type === 'tool_result') {
+                    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M9 16.2l-3.5-3.5L4 14.2l5 5 11-11-1.5-1.5z"/></svg>';
+                }
+                return '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>';
+            }
+
+            function buildTracePanel(debug) {
+                if (!debug || !debug.enabled || !Array.isArray(debug.events) || debug.events.length === 0) {
+                    return null;
+                }
+
+                const details = document.createElement('details');
+                details.className = 'ai-trace-panel';
+                details.open = !debug.collapsed;
+
+                const summary = document.createElement('summary');
+                summary.innerHTML =
+                    '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3 5h18v2H3zm0 6h18v2H3zm0 6h18v2H3z"/></svg>' +
+                    `<span>AI 操作流程（${debug.events.length} 条）</span>`;
+                details.appendChild(summary);
+
+                const list = document.createElement('div');
+                list.className = 'ai-trace-list';
+
+                debug.events.forEach((event) => {
+                    const item = document.createElement('div');
+                    item.className = 'ai-trace-item';
+
+                    const head = document.createElement('div');
+                    head.className = 'ai-trace-item-head';
+
+                    const lower = String((event.content || '')).toLowerCase();
+                    const codingHit = /write_file|append_file_content|delete_file|exec_python|py_compile|pytest|run|build/.test(lower);
+
+                    head.innerHTML = `${iconForTrace(event.type)}<span>${escapeHtml(event.label || '步骤')}</span>` +
+                        (codingHit ? '<span class="ai-trace-badge">代码调试</span>' : '') +
+                        ((event.tool_name || '') ? `<span class="ai-trace-badge">${escapeHtml(event.tool_name)}</span>` : '');
+
+                    const body = document.createElement('pre');
+                    body.className = 'ai-trace-item-body';
+                    body.textContent = String(event.content || '').slice(0, 6000);
+
+                    item.appendChild(head);
+                    item.appendChild(body);
+                    list.appendChild(item);
+                });
+
+                details.appendChild(list);
+                return details;
+            }
+
+            function refreshBackToTopVisibility() {
+                if (!sandboxSettings.sandbox_show_back_to_top) {
+                    backToTopBtn.style.display = 'none';
+                    return;
+                }
+                backToTopBtn.style.display = chatMessages.scrollTop > 220 ? 'flex' : 'none';
+            }
 
             async function loadWorkModeStatus() {
                 try {
@@ -281,8 +512,119 @@
                     wmBadge.innerText = enabled ? '开启' : '关闭';
                     wmBadge.style.background = enabled ? '#ffc107' : '#6c757d';
                     wmBadge.style.color = enabled ? '#212529' : '#fff';
+
+                    const settings = data.chat_settings || {};
+                    sandboxSettings.sandbox_show_agent_trace = !!settings.sandbox_show_agent_trace;
+                    sandboxSettings.sandbox_trace_collapsed = !!settings.sandbox_trace_collapsed;
+                    sandboxSettings.sandbox_show_back_to_top = !!settings.sandbox_show_back_to_top;
+                    refreshBackToTopVisibility();
                 } catch (e) {
                     console.warn('load work mode failed', e);
+                }
+            }
+
+            async function openPath(path, externalApprovalId) {
+                const resp = await fetch('/api/sandbox/open_path', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Frontend-Source': 'sandbox'
+                    },
+                    body: JSON.stringify({path, external_approval_id: externalApprovalId || ''})
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    alert(data.error || '打开失败');
+                }
+                return data;
+            }
+
+            async function openUrl(url) {
+                const resp = await fetch('/api/sandbox/open_url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Frontend-Source': 'sandbox'
+                    },
+                    body: JSON.stringify({url})
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    alert(data.error || '打开失败');
+                }
+                return data;
+            }
+
+            async function resolveApproval(requestId, approve) {
+                const resp = await fetch(`/api/sandbox/external_approvals/${encodeURIComponent(requestId)}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Frontend-Source': 'sandbox'
+                    },
+                    body: JSON.stringify({approve})
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    alert(data.error || '审批失败');
+                }
+                await refreshApprovals();
+                return data;
+            }
+
+            async function refreshApprovals() {
+                try {
+                    const resp = await fetch('/api/sandbox/external_approvals?status=pending&limit=20', {
+                        headers: {'X-Frontend-Source': 'sandbox'}
+                    });
+                    const data = await resp.json();
+                    const rows = Array.isArray(data.data) ? data.data : [];
+                    approvalList.innerHTML = '';
+
+                    if (rows.length === 0) {
+                        approvalBox.classList.remove('show');
+                        return;
+                    }
+
+                    rows.forEach((item) => {
+                        const block = document.createElement('div');
+                        block.className = 'approval-item';
+                        const path = String(item.path || '');
+                        block.innerHTML =
+                            `<div><strong>${escapeHtml(item.action || 'read')}</strong></div>` +
+                            `<div style="margin-top:4px;word-break:break-all;">${escapeHtml(path)}</div>`;
+
+                        const actions = document.createElement('div');
+                        actions.className = 'approval-actions';
+
+                        const approveBtn = document.createElement('button');
+                        approveBtn.type = 'button';
+                        approveBtn.style.background = '#198754';
+                        approveBtn.textContent = '允许';
+                        approveBtn.addEventListener('click', () => resolveApproval(item.id, true));
+
+                        const rejectBtn = document.createElement('button');
+                        rejectBtn.type = 'button';
+                        rejectBtn.style.background = '#dc3545';
+                        rejectBtn.textContent = '拒绝';
+                        rejectBtn.addEventListener('click', () => resolveApproval(item.id, false));
+
+                        const openBtn = document.createElement('button');
+                        openBtn.type = 'button';
+                        openBtn.style.background = '#0d6efd';
+                        openBtn.textContent = '打开路径';
+                        openBtn.addEventListener('click', () => openPath(path, item.id));
+
+                        actions.appendChild(approveBtn);
+                        actions.appendChild(rejectBtn);
+                        actions.appendChild(openBtn);
+                        block.appendChild(actions);
+                        approvalList.appendChild(block);
+                    });
+
+                    approvalBox.classList.add('show');
+                } catch (e) {
+                    console.warn('refresh approvals failed', e);
                 }
             }
 
@@ -301,53 +643,38 @@
                 loadWorkModeStatus();
             }
 
-            toggleWorkmodeBtn.addEventListener('click', function() {
-                wmModal.classList.add('show');
-            });
-            wmCancel.addEventListener('click', function() {
-                wmModal.classList.remove('show');
-            });
-            wmConfirm.addEventListener('click', async function() {
-                await toggleSandboxWorkMode();
-                wmModal.classList.remove('show');
-            });
-
-            // 图片上传处理
-            uploadButton.addEventListener('click', function() {
-                imageUpload.click();
-            });
-
-            imageUpload.addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    // 限制图片大小（最大2MB）
-                    if (file.size > 2 * 1024 * 1024) {
-                        alert('图片太大啦！请选择小于2MB的图片喵~');
-                        return;
-                    }
-
-                    const reader = new FileReader();
-                    reader.onload = function(event) {
-                        const img = document.createElement('img');
-                        img.src = event.target.result;
-                        imagePreview.innerHTML = '';
-                        imagePreview.appendChild(img);
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-
-            function addMessage(text, isUser) {
+            function addMessage(text, isUser, options) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
 
-                messageDiv.innerHTML = `
-                    ${text}
-                    <div class="timestamp">${new Date().toLocaleTimeString()}</div>
-                `;
+                const contentDiv = document.createElement('div');
+                if (isUser) {
+                    contentDiv.innerHTML = text;
+                } else {
+                    contentDiv.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
+                }
+                messageDiv.appendChild(contentDiv);
+
+                if (!isUser && options && options.debug) {
+                    const merged = {
+                        enabled: sandboxSettings.sandbox_show_agent_trace && !!options.debug.enabled,
+                        collapsed: options.debug.collapsed !== undefined ? !!options.debug.collapsed : sandboxSettings.sandbox_trace_collapsed,
+                        events: Array.isArray(options.debug.events) ? options.debug.events : [],
+                    };
+                    const panel = buildTracePanel(merged);
+                    if (panel) {
+                        messageDiv.appendChild(panel);
+                    }
+                }
+
+                const ts = document.createElement('div');
+                ts.className = 'timestamp';
+                ts.textContent = new Date().toLocaleTimeString();
+                messageDiv.appendChild(ts);
 
                 chatMessages.appendChild(messageDiv);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
+                refreshBackToTopVisibility();
             }
 
             async function sendMessage() {
@@ -355,28 +682,18 @@
                 const image = imagePreview.querySelector('img');
                 let imageData = null;
 
-                // 如果有图片，获取Base64数据
-                if (image) {
-                    imageData = image.src;
-                }
-
-                // 如果既没有文本也没有图片，则不发送
+                if (image) imageData = image.src;
                 if (!message && !imageData) return;
 
-                // 显示用户消息（包括图片）
-                let userMessageContent = message;
+                let userMessageContent = escapeHtml(message).replace(/\n/g, '<br>');
                 if (imageData) {
-                    userMessageContent += `<br><img src="${imageData}" style="max-width: 200px; max-height: 200px;">`;
+                    userMessageContent += `<br><img src="${imageData}" style="max-width: 200px; max-height: 200px; border-radius: 6px;">`;
                 }
-                addMessage(userMessageContent, true);
+                addMessage(userMessageContent, true, null);
 
-                // 清空输入
                 userInput.value = '';
                 imagePreview.innerHTML = '';
-                imageUpload.value = ''; // 清除文件选择
-                
-                // 显示加载指示器，隐藏打字指示器
-                typingIndicator.style.display = 'none';
+                imageUpload.value = '';
                 loadingIndicator.style.display = 'block';
 
                 try {
@@ -388,41 +705,102 @@
                         },
                         body: JSON.stringify({
                             message: message,
-                            image: imageData // 发送Base64图片数据
+                            image: imageData
                         })
                     });
 
                     const data = await response.json();
-
                     if (data.success) {
-                        addMessage(data.reply, false);
+                        addMessage(data.reply, false, {debug: data.debug || null});
+                        if (data.debug && data.debug.show_back_to_top !== undefined) {
+                            sandboxSettings.sandbox_show_back_to_top = !!data.debug.show_back_to_top;
+                        }
+                        const foundUrl = String(data.reply || '').match(/https?:\/\/[^\s<>"]+/i);
+                        if (foundUrl) {
+                            quickOpenUrlInput.value = foundUrl[0];
+                        }
                     } else {
-                        addMessage(`出错啦: ${data.error || '未知错误'}`, false);
+                        addMessage(`出错啦: ${data.error || '未知错误'}`, false, null);
                     }
                 } catch (error) {
-                    addMessage(`网络错误: ${error.message}`, false);
+                    addMessage(`网络错误: ${error.message}`, false, null);
                 } finally {
-                    // 隐藏加载指示器
                     loadingIndicator.style.display = 'none';
+                    refreshApprovals();
+                    refreshBackToTopVisibility();
                 }
             }
 
-            sendButton.addEventListener('click', sendMessage);
+            toggleWorkmodeBtn.addEventListener('click', function() {
+                wmModal.classList.add('show');
+            });
+            wmCancel.addEventListener('click', function() {
+                wmModal.classList.remove('show');
+            });
+            wmConfirm.addEventListener('click', async function() {
+                await toggleSandboxWorkMode();
+                wmModal.classList.remove('show');
+            });
 
+            uploadButton.addEventListener('click', function() {
+                imageUpload.click();
+            });
+
+            imageUpload.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (file.size > 2 * 1024 * 1024) {
+                    alert('图片太大啦！请选择小于2MB的图片。');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = document.createElement('img');
+                    img.src = event.target.result;
+                    imagePreview.innerHTML = '';
+                    imagePreview.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            });
+
+            sendButton.addEventListener('click', sendMessage);
             userInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     sendMessage();
                 }
             });
-
             clearButton.addEventListener('click', function() {
                 userInput.value = '';
                 imagePreview.innerHTML = '';
                 imageUpload.value = '';
             });
 
+            openWorkspaceBtn.addEventListener('click', function() {
+                openPath('.', '');
+            });
+            openSandboxPageBtn.addEventListener('click', function() {
+                openUrl(window.location.origin + '/sandbox');
+            });
+            quickOpenPathBtn.addEventListener('click', function() {
+                const value = quickOpenPathInput.value.trim();
+                if (!value) return;
+                openPath(value, '');
+            });
+            quickOpenUrlBtn.addEventListener('click', function() {
+                const value = quickOpenUrlInput.value.trim();
+                if (!value) return;
+                openUrl(value);
+            });
+
+            chatMessages.addEventListener('scroll', refreshBackToTopVisibility);
+            backToTopBtn.addEventListener('click', function() {
+                chatMessages.scrollTo({top: 0, behavior: 'smooth'});
+            });
+
             loadWorkModeStatus();
+            refreshApprovals();
+            setInterval(refreshApprovals, 10000);
         });
     </script>
 </body>

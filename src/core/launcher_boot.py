@@ -24,6 +24,7 @@ def load_launcher_settings():
         'open_browser': True,
         'startup_page': '/control_panel',
         'auto_start_adapter': True,
+        'auto_install_office_deps': True,
     }
     try:
         with open(SYSTEM_CONFIG_PATH, 'r', encoding='utf-8') as file_handle:
@@ -34,6 +35,71 @@ def load_launcher_settings():
     except Exception:
         pass
     return default_settings
+
+
+def ensure_office_dependencies(auto_install=True):
+    """Ensure office/pdf document dependencies exist for conversion tools."""
+    required_modules = [
+        'docx',
+        'pptx',
+        'openpyxl',
+        'pypdf',
+        'reportlab',
+    ]
+    missing = []
+    for module_name in required_modules:
+        try:
+            __import__(module_name)
+        except Exception:
+            missing.append(module_name)
+
+    if not missing:
+        print('[INFO] Office/PDF dependencies ready.')
+        return True
+
+    if not auto_install:
+        print(f"[WARN] Missing office/pdf dependencies: {', '.join(missing)}")
+        print('[WARN] Auto install is disabled. Some document conversions may fail.')
+        return False
+
+    print(f"[INFO] Missing office/pdf dependencies detected: {', '.join(missing)}")
+    print('[INFO] Installing missing office/pdf dependencies...')
+
+    package_map = {
+        'docx': 'python-docx',
+        'pptx': 'python-pptx',
+        'openpyxl': 'openpyxl',
+        'pypdf': 'pypdf',
+        'reportlab': 'reportlab',
+    }
+    packages = [package_map.get(x, x) for x in missing]
+
+    try:
+        proc = subprocess.run(
+            [sys.executable, '-m', 'pip', 'install', *packages],
+            cwd=BASE_DIR,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            timeout=180,
+            check=False,
+        )
+        if proc.returncode != 0:
+            stderr_text = (proc.stderr or '').strip()
+            if stderr_text:
+                print(f'[WARN] Dependency install stderr: {stderr_text[:800]}')
+            print('[WARN] Auto install failed, startup will continue.')
+            return False
+
+        print('[INFO] Office/PDF dependencies installed.')
+        return True
+    except subprocess.TimeoutExpired:
+        print('[WARN] Dependency install timed out, startup will continue.')
+        return False
+    except BaseException as exc:
+        print(f'[WARN] Dependency install failed: {exc}, startup will continue.')
+        return False
 
 
 def run_startup_self_check(timeout_seconds=20):
@@ -127,6 +193,8 @@ def main():
 
     # Allow one-off override from caller scripts; otherwise follow launcher config.
     os.environ.setdefault('DEFAULT_PAGE', startup_page)
+
+    ensure_office_dependencies(bool(launcher.get('auto_install_office_deps', True)))
 
     if launcher.get('startup_self_check', True):
         timeout_seconds = launcher.get('startup_self_check_timeout_sec', 20)

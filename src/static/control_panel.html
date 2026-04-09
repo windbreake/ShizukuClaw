@@ -548,6 +548,22 @@
                                         <input class="form-check-input" type="checkbox" id="wm-feature-coder-tool" checked>
                                         <label class="form-check-label" for="wm-feature-coder-tool">允许调用 Coder Agent（ask_coder）</label>
                                     </div>
+                                    <div class="form-check mb-1">
+                                        <input class="form-check-input" type="checkbox" id="wm-feature-plugin-command-require-workmode">
+                                        <label class="form-check-label" for="wm-feature-plugin-command-require-workmode">仅工作模式允许插件指令（plugin_command）</label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="wm-feature-plugin-dev-tools-require-workmode" checked>
+                                        <label class="form-check-label" for="wm-feature-plugin-dev-tools-require-workmode">仅工作模式允许插件开发工具（plugin_list/reload/toggle/config）</label>
+                                    </div>
+                                    <div class="form-check mb-1">
+                                        <input class="form-check-input" type="checkbox" id="wm-feature-allow-external-access">
+                                        <label class="form-check-label" for="wm-feature-allow-external-access">允许访问工作空间外路径（默认关闭）</label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="wm-feature-require-external-approval" checked>
+                                        <label class="form-check-label" for="wm-feature-require-external-approval">工作空间外路径操作必须人工审批</label>
+                                    </div>
                                     <button type="button" class="btn btn-success btn-sm" onclick="saveWorkModeOptions()">保存工作模式选项</button>
                                 </div>
 
@@ -603,6 +619,29 @@
                                         </div>
                                         <div class="col-12 d-flex justify-content-end">
                                             <button type="button" class="btn btn-primary btn-sm" onclick="saveWorkModeOptions()">保存聊天设置</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="row g-2 mb-3 mt-2">
+                                        <div class="col-md-6">
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="chat-settings-sandbox-trace-enabled" checked>
+                                                <label class="form-check-label" for="chat-settings-sandbox-trace-enabled">沙箱显示 AI 操作流程</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="chat-settings-sandbox-trace-collapsed" checked>
+                                                <label class="form-check-label" for="chat-settings-sandbox-trace-collapsed">默认折叠流程详情</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="chat-settings-sandbox-backtotop" checked>
+                                                <label class="form-check-label" for="chat-settings-sandbox-backtotop">沙箱显示右侧返回顶部按钮</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="chat-settings-sandbox-use-docker" checked>
+                                                <label class="form-check-label" for="chat-settings-sandbox-use-docker">沙箱优先使用 Docker 安全运行时</label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -3884,12 +3923,24 @@
                 setChecked('wm-feature-code-exec', data.features.allow_code_exec);
                 setChecked('wm-feature-plan-update', data.features.allow_plan_update);
                 setChecked('wm-feature-coder-tool', data.features.allow_coder_tool);
+                setChecked('wm-feature-plugin-command-require-workmode', data.features.plugin_command_requires_work_mode);
+                setChecked('wm-feature-plugin-dev-tools-require-workmode', data.features.plugin_dev_tools_require_work_mode);
+                setChecked('wm-feature-allow-external-access', data.features.allow_external_access);
+                setChecked('wm-feature-require-external-approval', data.features.require_external_approval);
             }
 
             const bothubToggle = document.getElementById('chat-settings-bothub-enabled');
             if (bothubToggle) {
                 const chatSettings = data.chat_settings || {};
                 bothubToggle.checked = !!chatSettings.bothub_enabled;
+                const traceEnabled = document.getElementById('chat-settings-sandbox-trace-enabled');
+                const traceCollapsed = document.getElementById('chat-settings-sandbox-trace-collapsed');
+                const backToTop = document.getElementById('chat-settings-sandbox-backtotop');
+                const useDocker = document.getElementById('chat-settings-sandbox-use-docker');
+                if (traceEnabled) traceEnabled.checked = !!chatSettings.sandbox_show_agent_trace;
+                if (traceCollapsed) traceCollapsed.checked = !!chatSettings.sandbox_trace_collapsed;
+                if (backToTop) backToTop.checked = !!chatSettings.sandbox_show_back_to_top;
+                if (useDocker) useDocker.checked = !!chatSettings.sandbox_use_docker_runtime;
             }
 
             if (data.reply_policy) {
@@ -4061,6 +4112,10 @@
         const keywordValue = (document.getElementById('wm-reply-keywords')?.value || '').trim();
         const selectedPersona = (document.getElementById('chat-settings-persona-select')?.value || '').trim();
         const bothubEnabled = !!document.getElementById('chat-settings-bothub-enabled')?.checked;
+        const sandboxTraceEnabled = !!document.getElementById('chat-settings-sandbox-trace-enabled')?.checked;
+        const sandboxTraceCollapsed = !!document.getElementById('chat-settings-sandbox-trace-collapsed')?.checked;
+        const sandboxBackToTop = !!document.getElementById('chat-settings-sandbox-backtotop')?.checked;
+        const sandboxUseDocker = !!document.getElementById('chat-settings-sandbox-use-docker')?.checked;
         const replyPolicy = {
             group_mode: document.getElementById('wm-reply-group-mode')?.value || 'mention_or_keyword',
             private_mode: document.getElementById('wm-reply-private-mode')?.value || 'always',
@@ -4073,10 +4128,18 @@
                 allow_file_write: !!document.getElementById('wm-feature-file-write')?.checked,
                 allow_code_exec: !!document.getElementById('wm-feature-code-exec')?.checked,
                 allow_plan_update: !!document.getElementById('wm-feature-plan-update')?.checked,
-                allow_coder_tool: !!document.getElementById('wm-feature-coder-tool')?.checked
+                allow_coder_tool: !!document.getElementById('wm-feature-coder-tool')?.checked,
+                plugin_command_requires_work_mode: !!document.getElementById('wm-feature-plugin-command-require-workmode')?.checked,
+                plugin_dev_tools_require_work_mode: !!document.getElementById('wm-feature-plugin-dev-tools-require-workmode')?.checked,
+                allow_external_access: !!document.getElementById('wm-feature-allow-external-access')?.checked,
+                require_external_approval: !!document.getElementById('wm-feature-require-external-approval')?.checked
             },
             chat_settings: {
-                bothub_enabled: bothubEnabled
+                bothub_enabled: bothubEnabled,
+                sandbox_show_agent_trace: sandboxTraceEnabled,
+                sandbox_trace_collapsed: sandboxTraceCollapsed,
+                sandbox_show_back_to_top: sandboxBackToTop,
+                sandbox_use_docker_runtime: sandboxUseDocker
             },
             reply_policy: replyPolicy
         };

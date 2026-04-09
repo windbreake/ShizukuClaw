@@ -73,17 +73,30 @@ def _load_builtin_config(manager, plugin_name):
 def register(registry, manager):
     plugin_name = "builtin.basic"
     _load_builtin_config(manager, plugin_name)
+    required_domains = ["wttr.in", "wikipedia.org", "en.wikipedia.org", "zh.wikipedia.org", "hn.algolia.com"]
     manager.ensure_plugin_policy(
         plugin_name,
         {
             "enabled": True,
             "allow_network": True,
-            "allowed_domains": ["wttr.in", "wikipedia.org", "en.wikipedia.org", "zh.wikipedia.org", "hn.algolia.com"],
+            "allowed_domains": required_domains,
             "allowed_commands": ["plugins", "echo", "weather", "wiki", "news"],
             "max_execution_ms": 12000,
         },
         persist=False,
     )
+
+    # Self-heal policy drift from manual edits to avoid unexpected domain blocks.
+    policy = manager.get_plugin_policy(plugin_name)
+    if bool(policy.get("allow_network", True)):
+        current_domains = [str(x).strip().lower() for x in (policy.get("allowed_domains") or []) if str(x).strip()]
+        merged_domains = []
+        for domain in current_domains + required_domains:
+            d = str(domain).strip().lower()
+            if d and d not in merged_domains:
+                merged_domains.append(d)
+        if merged_domains != current_domains:
+            manager.update_plugin_policy(plugin_name, {"allowed_domains": merged_domains}, persist=True)
 
     def cmd_plugins(ctx, arg):
         sub = (arg or "").strip().lower()
