@@ -149,6 +149,14 @@ MCP_MARKET_CATALOG = [
         'command': 'npx',
         'args': ['-y', '@modelcontextprotocol/server-sqlite', '--db-path', 'data/database.sqlite'],
         'tags': ['database', 'sqlite']
+    },
+    {
+        'id': 'github-copilot-http',
+        'name': 'GitHub MCP',
+        'description': 'GitHub 官方 MCP（HTTP）',
+        'type': 'http',
+        'url': 'https://api.githubcopilot.com/mcp/',
+        'tags': ['github', 'official', 'remote']
     }
 ]
 

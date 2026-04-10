@@ -34,7 +34,7 @@
   "work_mode": {
     "enabled": false,
     "password_hash": "73011b56941c1e4bd9675f2c4082fba8d7f8ee20b0dbaab8a55ca730eb5acd0c",
-    "sandbox_enabled": false,
+    "sandbox_enabled": true,
     "features": {
       "allow_file_write": true,
       "allow_code_exec": true,
@@ -61,7 +61,9 @@
       "sandbox_show_agent_trace": true,
       "sandbox_trace_collapsed": true,
       "sandbox_show_back_to_top": true,
-      "sandbox_use_docker_runtime": true
+      "sandbox_use_docker_runtime": true,
+      "sandbox_agent_autonomous": true,
+      "sandbox_trace_retention_days": 7
     }
   },
   "comm_protocol": "onebot"

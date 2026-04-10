@@ -340,7 +340,8 @@ CONFIG = {
     'api': {
         'key': CONFIG_DATA['api_keys']['deepseek_chat']['key'],
         'base_url': CONFIG_DATA['api_keys']['deepseek_chat']['base_url'],
-        'model': (CONFIG_DATA['api_keys']['deepseek_chat'].get('model') or 'deepseek-chat')
+        'model': (CONFIG_DATA['api_keys']['deepseek_chat'].get('model') or 'deepseek-chat'),
+        'fallback_models': CONFIG_DATA['api_keys']['deepseek_chat'].get('fallback_models', [])
     },
     'aliyun_api': {
         'key': CONFIG_DATA['api_keys']['image_recognition']['key'],

@@ -93,6 +93,7 @@ class AIChatSystem:
         self.client = client
         self.messages = messages
         self.persona_runtime = persona_runtime
+        self._last_search_result = ''
         self.current_persona_state = None
         self.repo_context_graph = CodeContextGraph(PROJECT_ROOT)
         self.repo_context_recent_hashes = []
@@ -1623,6 +1624,32 @@ If the request involves modifying existing code, output the full modified file c
                     except Exception as e:
                         messages.append({"role": "user", "content": f"[附件 {name} 读取失败]: {str(e)}"})
 
+        def _build_search_query(text, history_messages):
+            raw = str(text or '').strip()
+            if not raw:
+                return ''
+
+            generic_search = re.compile(
+                r'^(网上搜索|上网搜索|搜索一下|搜一下|帮我搜(一下)?|查一下|去网上搜(一下)?|搜索)$',
+                re.IGNORECASE
+            )
+            if not generic_search.search(raw):
+                return raw
+
+            for msg in reversed(history_messages or []):
+                if str(msg.get('role')) != 'user':
+                    continue
+                content = str(msg.get('content') or '').strip()
+                if not content or content == raw:
+                    continue
+                if content.startswith('用户问题:'):
+                    continue
+                if generic_search.search(content):
+                    continue
+                return f"{content}（优先官网来源，给出可核验数据）"
+
+            return raw
+
         # 处理文本输入
         if user_input:
             # 对于简单聊天，跳过插件处理和搜索逻辑
@@ -1659,7 +1686,26 @@ If the request involves modifying existing code, output the full modified file c
                 # 判断是否需要搜索
                 if AIChatSystem.should_search(user_input):
                     print(f"检测到搜索请求: {user_input}")
-                    search_result = AIChatSystem.search_with_ai_search(user_input)
+                    search_query = _build_search_query(user_input, messages)
+                    try:
+                        self.agent_manager.record_action(
+                            "assistant",
+                            f"Called web_search(query={search_query})",
+                            persona_filename=effective_persona_filename
+                        )
+                    except Exception:
+                        pass
+
+                    search_result = AIChatSystem.search_with_ai_search(search_query)
+
+                    try:
+                        self.agent_manager.record_action(
+                            "system",
+                            f"Result: {search_result}",
+                            persona_filename=effective_persona_filename
+                        )
+                    except Exception:
+                        pass
 
                     # 检查搜索是否成功
                     if "搜索API错误" in search_result or "搜索失败" in search_result:
@@ -1667,7 +1713,8 @@ If the request involves modifying existing code, output the full modified file c
                         messages.append({"role": "user", "content": user_input})
                     else:
                         # 将搜索结果拼接到当前输入中
-                        search_context = f"用户问题: {user_input}\n{search_result}"
+                        self._last_search_result = str(search_result or '')[:20000]
+                        search_context = f"用户问题: {user_input}\n搜索查询: {search_query}\n{search_result}"
                         messages.append({
                             "role": "user",
                             "content": search_context
@@ -1703,6 +1750,115 @@ If the request involves modifying existing code, output the full modified file c
                 if not m:
                     return ''
                 return str(m.group(1)).replace('\\', '/')
+
+            def _is_start_request(text):
+                return bool(re.search(r'(启动|运行它|跑起来|launch|start|open)', str(text or ''), re.IGNORECASE))
+
+            def _contains_chart_block(text):
+                lower = str(text or '').lower()
+                return '```chart' in lower or '```chartjs' in lower
+
+            def _wants_bar_chart(text):
+                return bool(re.search(r'(柱状图|条形图|bar\s*chart)', str(text or ''), re.IGNORECASE))
+
+            def _extract_year_value_pairs(text):
+                pairs = {}
+                for line in str(text or '').splitlines():
+                    year_match = re.search(r'\b(20\d{2})\b', line)
+                    if not year_match:
+                        continue
+                    year = int(year_match.group(1))
+                    if year < 2000 or year > 2100:
+                        continue
+                    remain = line.replace(year_match.group(1), ' ', 1)
+                    nums = re.findall(r'(?<!\d)(\d{3,6})(?!\d)', remain)
+                    if not nums:
+                        continue
+                    value = int(nums[0])
+                    if value <= 0:
+                        continue
+                    pairs[year] = value
+                return sorted(pairs.items(), key=lambda x: x[0])
+
+            def _find_chart_pairs_from_context(current_reply, history_messages):
+                candidates = [str(current_reply or '')]
+                if getattr(self, '_last_search_result', ''):
+                    candidates.append(str(getattr(self, '_last_search_result') or ''))
+                for msg in reversed(history_messages or []):
+                    c = str(msg.get('content') or '').strip()
+                    if c:
+                        candidates.append(c)
+                    if len(candidates) >= 10:
+                        break
+
+                best = []
+                for text in candidates:
+                    parsed = _extract_year_value_pairs(text)
+                    if len(parsed) > len(best):
+                        best = parsed
+                return best
+
+            def _build_bar_chart_block(pairs, title='数据柱状图'):
+                labels = [str(year) for year, _ in pairs]
+                values = [int(v) for _, v in pairs]
+                config = {
+                    'type': 'bar',
+                    'data': {
+                        'labels': labels,
+                        'datasets': [{
+                            'label': '人数',
+                            'data': values,
+                            'backgroundColor': 'rgba(37, 99, 235, 0.70)',
+                            'borderColor': 'rgba(29, 78, 216, 1)',
+                            'borderWidth': 1
+                        }]
+                    },
+                    'options': {
+                        'responsive': True,
+                        'plugins': {
+                            'title': {'display': True, 'text': title}
+                        },
+                        'scales': {
+                            'y': {'beginAtZero': False}
+                        }
+                    }
+                }
+                return "```chart\n" + json.dumps(config, ensure_ascii=False, indent=2) + "\n```"
+
+            def _format_auto_result(raw_result):
+                text = str(raw_result or '').strip()
+                if not text:
+                    return "自动执行：无返回内容。"
+                try:
+                    obj = json.loads(text)
+                except Exception:
+                    if len(text) > 1800:
+                        text = text[:1800] + "\n...truncated..."
+                    return f"自动执行结果:\n{text}"
+
+                ok = bool(obj.get('ok')) if isinstance(obj, dict) else False
+                project_type = str(obj.get('project_type', 'unknown')) if isinstance(obj, dict) else 'unknown'
+                summary = str(obj.get('summary', '')).strip() if isinstance(obj, dict) else ''
+                parts = []
+                parts.append(f"自动执行状态: {'成功' if ok else '失败'}")
+                parts.append(f"项目类型: {project_type}")
+                if summary:
+                    parts.append(f"摘要: {summary}")
+                if isinstance(obj, dict) and obj.get('exe'):
+                    parts.append(f"可执行文件: {obj.get('exe')}")
+                if isinstance(obj, dict) and obj.get('pid'):
+                    parts.append(f"进程 PID: {obj.get('pid')}")
+
+                steps = obj.get('steps') if isinstance(obj, dict) else None
+                if isinstance(steps, list) and steps:
+                    step_lines = []
+                    for s in steps[:6]:
+                        step_name = str(s.get('step', 'step'))
+                        code = s.get('return_code', '')
+                        step_lines.append(f"- {step_name}: rc={code}")
+                    parts.append("步骤:\n" + "\n".join(step_lines))
+
+                return "\n".join(parts)
             
             # --- AGENT EXTENSION ---
             # 获取工具定义（只在需要时获取）
@@ -1732,6 +1888,7 @@ If the request involves modifying existing code, output the full modified file c
             
             ai_response = self.clean_dsml_markup(message.content) # 默认回复，清理DSML标记
             did_tool_execution = False
+            executed_tool_summaries = []
 
             # 处理工具调用（只在非简单聊天时处理）
             if not is_simple_chat and hasattr(message, 'tool_calls') and message.tool_calls:
@@ -1762,6 +1919,12 @@ If the request involves modifying existing code, output the full modified file c
                         frontend_source=frontend_source,
                         user_input=user_input
                     )
+
+                    if function_name in {'run_project_debug', 'exec_python', 'git_clone_repo'}:
+                        try:
+                            executed_tool_summaries.append(f"{function_name}:\n{_format_auto_result(tool_result)}")
+                        except Exception:
+                            executed_tool_summaries.append(f"{function_name}:\n{str(tool_result)[:800]}")
                     
                     # 记录操作到 AgentMemory (Short Term)
                     self.agent_manager.record_action("assistant", f"Called {function_name}", persona_filename=effective_persona_filename)
@@ -1793,9 +1956,14 @@ If the request involves modifying existing code, output the full modified file c
                 except Exception as e:
                     ai_response = f"工具执行完毕，但生成最终回复时出错: {str(e)}"
 
+                if run_request and executed_tool_summaries:
+                    confirm = "\n\n[执行确认]\n" + "\n\n".join(executed_tool_summaries[:2])
+                    ai_response = f"{ai_response}{confirm}"
+
             if is_admin and run_request and not did_tool_execution:
                 auto_result = ''
                 py_target = _extract_python_target(user_input)
+                want_start = _is_start_request(user_input)
                 if py_target:
                     run_args = ["sys.executable", repr(py_target)]
                     if '--self-test' in str(user_input):
@@ -1824,7 +1992,7 @@ If the request involves modifying existing code, output the full modified file c
                 else:
                     auto_result = self.agent_manager.execute_tool(
                         'run_project_debug',
-                        {'target': '.', 'run_tests': True},
+                        {'target': '.', 'run_tests': (not want_start), 'start_app': bool(want_start)},
                         is_admin=is_admin,
                         frontend_source=frontend_source,
                         user_input=user_input
@@ -1832,9 +2000,7 @@ If the request involves modifying existing code, output the full modified file c
                     self.agent_manager.record_action("assistant", "Called run_project_debug(auto_execute_request)", persona_filename=effective_persona_filename)
                     self.agent_manager.record_action("system", f"Result: {auto_result}", persona_filename=effective_persona_filename)
 
-                auto_text = str(auto_result or '')
-                if len(auto_text) > 4000:
-                    auto_text = auto_text[:4000] + "\n...truncated..."
+                auto_text = _format_auto_result(auto_result)
                 ai_response = f"{ai_response}\n\n[自动执行结果]\n{auto_text}"
 
             # --- TOKEN COUNTING FIX BEGIN ---
@@ -1871,6 +2037,29 @@ If the request involves modifying existing code, output the full modified file c
                 chat_system=self
             )
             ai_response = self.plugin_manager.process_response(response_context, ai_response)
+
+            if user_input and _wants_bar_chart(user_input) and not _contains_chart_block(ai_response):
+                pairs = _find_chart_pairs_from_context(ai_response, messages)
+                if len(pairs) >= 3:
+                    chart_title = str(user_input).strip()[:40] or '数据柱状图'
+                    ai_response = (
+                        f"{ai_response}\n\n"
+                        "已根据对话中的结构化数据自动生成柱状图：\n\n"
+                        f"{_build_bar_chart_block(pairs, chart_title)}"
+                    )
+                    try:
+                        self.agent_manager.record_action(
+                            "assistant",
+                            f"Called chart_synthesizer(pairs={len(pairs)})",
+                            persona_filename=effective_persona_filename
+                        )
+                        self.agent_manager.record_action(
+                            "system",
+                            f"Result: generated chart block with {len(pairs)} points",
+                            persona_filename=effective_persona_filename
+                        )
+                    except Exception:
+                        pass
             
             # 保存对话记录（包括图片描述）
             self.db.save_chat(user_input or "[图片]", ai_response, image_description, persona_filename=effective_persona_filename)

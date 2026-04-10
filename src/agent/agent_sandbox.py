@@ -18,6 +18,9 @@ import threading
 import uuid
 import shlex
 import textwrap
+import re
+
+import requests
 
 OFFICE_BINARY_EXTS = {'.docx', '.pptx', '.xlsx', '.pdf'}
 
@@ -554,18 +557,125 @@ class AgentSandbox:
         details = self.execute_python_with_details(code_str, filename=filename)
         return details.get("combined_output", "")
 
-    def run_project_debug(self, target='.', run_tests=True, max_output_chars=12000, external_approval_id=''):
-        """Run compile/test diagnostics to help Agent iterate until project is runnable."""
+    def run_project_debug(self, target='.', run_tests=True, start_app=False, max_output_chars=12000, external_approval_id=''):
+        """Run project diagnostics/build, with optional start action for runnable apps."""
         try:
             safe_target = self.validate_path(target or '.', action='read', external_approval_id=external_approval_id)
             if not os.path.isdir(safe_target):
                 safe_target = os.path.dirname(safe_target)
+
+            # Detect .NET workspace first (sln/csproj), otherwise fallback to Python diagnostics.
+            sln_files = []
+            csproj_files = []
+            for root, dirs, files in os.walk(safe_target):
+                dirs[:] = [d for d in dirs if d not in {'bin', 'obj', '.git', '.venv', 'venv', '__pycache__', 'node_modules'}]
+                for name in files:
+                    lower_name = name.lower()
+                    full_path = os.path.join(root, name)
+                    if lower_name.endswith('.sln'):
+                        sln_files.append(full_path)
+                    elif lower_name.endswith('.csproj'):
+                        csproj_files.append(full_path)
+
+            if sln_files or csproj_files:
+                entry = sln_files[0] if sln_files else csproj_files[0]
+                entry_name = os.path.basename(entry)
+                outputs = []
+
+                build_proc = subprocess.run(
+                    ['dotnet', 'build', entry_name, '-c', 'Debug'],
+                    cwd=os.path.dirname(entry),
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8',
+                    errors='replace',
+                    timeout=240,
+                    check=False,
+                )
+                outputs.append({
+                    'step': 'dotnet_build',
+                    'return_code': build_proc.returncode,
+                    'stdout': build_proc.stdout,
+                    'stderr': build_proc.stderr,
+                })
+
+                app_started = False
+                app_pid = None
+                started_exe = ''
+                if int(build_proc.returncode) == 0 and bool(start_app):
+                    candidate_exes = []
+                    search_root = os.path.dirname(entry)
+                    for root, _, files in os.walk(search_root):
+                        norm = root.replace('\\', '/').lower()
+                        if '/bin/debug/' not in norm:
+                            continue
+                        for name in files:
+                            lower_name = name.lower()
+                            if not lower_name.endswith('.exe'):
+                                continue
+                            if lower_name in {'vbcsexcompiler.exe'}:
+                                continue
+                            candidate_exes.append(os.path.join(root, name))
+
+                    if candidate_exes:
+                        started_exe = sorted(candidate_exes, key=lambda p: len(p))[0]
+                        try:
+                            proc = subprocess.Popen(
+                                [started_exe],
+                                cwd=os.path.dirname(started_exe),
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                            )
+                            time.sleep(0.35)
+                            app_pid = int(proc.pid)
+                            app_started = (proc.poll() is None)
+                            outputs.append({
+                                'step': 'start_app',
+                                'return_code': 0 if app_started else 1,
+                                'stdout': f'Launched: {started_exe}',
+                                'stderr': '' if app_started else 'Process exited immediately',
+                                'pid': app_pid,
+                            })
+                        except Exception as start_err:
+                            outputs.append({
+                                'step': 'start_app',
+                                'return_code': 1,
+                                'stdout': '',
+                                'stderr': str(start_err),
+                            })
+                    else:
+                        outputs.append({
+                            'step': 'start_app',
+                            'return_code': 1,
+                            'stdout': '',
+                            'stderr': 'No executable found under bin/Debug',
+                        })
+
+                ok = int(build_proc.returncode) == 0 and (not start_app or app_started)
+                payload = {
+                    'ok': bool(ok),
+                    'project_type': 'dotnet',
+                    'target': safe_target,
+                    'entry': entry,
+                    'started': bool(app_started),
+                    'pid': app_pid,
+                    'exe': started_exe,
+                    'steps': outputs,
+                    'summary': 'Dotnet build/start succeeded.' if ok else 'Dotnet build/start found issues.'
+                }
+                text = json.dumps(payload, ensure_ascii=False, indent=2)
+                if len(text) > max_output_chars:
+                    text = text[:max_output_chars] + '\n...truncated...'
+                return text
 
             outputs = []
 
             compile_cmd = [sys.executable, '-m', 'py_compile']
             py_files = []
             for root, _, files in os.walk(safe_target):
+                norm_root = root.replace('\\', '/').lower()
+                if any(seg in norm_root for seg in ['/bin/', '/obj/', '/.venv/', '/venv/', '/site-packages/', '/__pycache__/']):
+                    continue
                 for name in files:
                     if name.endswith('.py'):
                         py_files.append(os.path.join(root, name))
@@ -578,6 +688,8 @@ class AgentSandbox:
                     cwd=safe_target,
                     capture_output=True,
                     text=True,
+                    encoding='utf-8',
+                    errors='replace',
                     timeout=90,
                     check=False,
                 )
@@ -593,10 +705,12 @@ class AgentSandbox:
             if run_tests:
                 try:
                     result_test = subprocess.run(
-                        [sys.executable, '-m', 'pytest', '-q'],
+                        [sys.executable, '-m', 'pytest', '-q', '--ignore=bin', '--ignore=obj', '--ignore=.venv', '--ignore=venv'],
                         cwd=safe_target,
                         capture_output=True,
                         text=True,
+                        encoding='utf-8',
+                        errors='replace',
                         timeout=180,
                         check=False,
                     )
@@ -612,6 +726,7 @@ class AgentSandbox:
             ok = all(int(item.get('return_code', 1)) == 0 for item in outputs)
             payload = {
                 'ok': bool(ok),
+                'project_type': 'python',
                 'target': safe_target,
                 'steps': outputs,
                 'summary': 'Project diagnostics passed.' if ok else 'Project diagnostics found issues.'
@@ -760,6 +875,326 @@ class AgentSandbox:
             return f"Error: {str(e)}"
         except Exception as e:
             return f"Error starting web preview: {str(e)}"
+
+    def git_clone_repo(self, repo_url, target_dir='', branch='', depth=1, external_approval_id=''):
+        """Clone a git repository into agent workspace."""
+        try:
+            repo = str(repo_url or '').strip()
+            if not repo:
+                return "Error: repo_url is required"
+
+            allowed_prefixes = ('https://', 'http://', 'git@', 'ssh://')
+            if not repo.startswith(allowed_prefixes):
+                return "Error: repo_url must start with https://, http://, git@, or ssh://"
+
+            git_bin = shutil.which('git')
+            if not git_bin:
+                return "Error: git command not found in runtime environment"
+
+            target_name = str(target_dir or '').strip()
+            if not target_name:
+                base_name = os.path.basename(repo.rstrip('/'))
+                target_name = base_name[:-4] if base_name.lower().endswith('.git') else base_name
+            if not target_name:
+                target_name = f"repo_{int(time.time())}"
+            target_name = target_name.replace('\\\\', '/').strip().lstrip('./')
+            if not target_name:
+                target_name = f"repo_{int(time.time())}"
+
+            safe_target = self.validate_path(target_name, action='write', external_approval_id=external_approval_id)
+
+            parent_dir = os.path.dirname(safe_target)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+
+            rel_target = os.path.relpath(safe_target, self.workspace_dir).replace('\\\\', '/')
+
+            def _build_report(status_text, detail_text, return_code=None):
+                lines = [
+                    "Git 仓库拉取结果",
+                    f"状态: {status_text}",
+                    f"沙箱目录: {rel_target}",
+                    "进入目录命令:",
+                    f"cd {rel_target}",
+                    "ls",
+                ]
+
+                if return_code is not None:
+                    lines.append(f"返回码: {int(return_code)}")
+
+                if detail_text:
+                    lines.append("说明:")
+                    lines.append(str(detail_text))
+
+                if os.path.isdir(safe_target):
+                    items = sorted(os.listdir(safe_target))
+                    if items:
+                        lines.append("文件示例:")
+                        for name in items[:20]:
+                            lines.append(f"- {rel_target}/{name}")
+                        if len(items) > 20:
+                            lines.append(f"- ... 其余 {len(items) - 20} 项")
+
+                return "\n".join(lines)
+
+            if os.path.exists(safe_target):
+                if os.path.isdir(safe_target) and os.listdir(safe_target):
+                    # 已存在且非空时，直接汇报目录位置与内容，避免重复 clone 破坏用户数据。
+                    return _build_report(
+                        status_text="已存在",
+                        detail_text=f"目录已存在且非空，未重复克隆: {rel_target}",
+                        return_code=0,
+                    )
+
+            cmd = [git_bin, 'clone']
+
+            try:
+                depth_int = int(depth)
+            except Exception:
+                depth_int = 1
+            if depth_int > 0:
+                cmd.extend(['--depth', str(depth_int)])
+
+            branch_name = str(branch or '').strip()
+            if branch_name:
+                cmd.extend(['--branch', branch_name, '--single-branch'])
+
+            cmd.extend([repo, safe_target])
+
+            result = subprocess.run(
+                cmd,
+                cwd=self.workspace_dir,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                check=False,
+            )
+
+            stdout = str(result.stdout or '')
+            stderr = str(result.stderr or '')
+            if len(stdout) > 8000:
+                stdout = stdout[:8000] + '\n...truncated...'
+            if len(stderr) > 8000:
+                stderr = stderr[:8000] + '\n...truncated...'
+
+            detail = []
+            detail.append(f"仓库: {repo}")
+            if branch_name:
+                detail.append(f"分支: {branch_name}")
+            detail.append(f"深度: {depth_int}")
+            if stderr.strip():
+                detail.append(stderr.strip())
+            elif stdout.strip():
+                detail.append(stdout.strip())
+
+            if result.returncode == 0:
+                return _build_report(
+                    status_text="成功",
+                    detail_text="\n".join(detail),
+                    return_code=result.returncode,
+                )
+
+            return _build_report(
+                status_text="失败",
+                detail_text="\n".join(detail) if detail else "git clone 执行失败",
+                return_code=result.returncode,
+            )
+        except SandboxError as e:
+            return f"Error: {str(e)}"
+        except subprocess.TimeoutExpired:
+            return "Git 仓库拉取结果\n状态: 失败\n说明:\ngit clone 超时 (300s)"
+        except Exception as e:
+            return f"Error cloning repository: {str(e)}"
+
+    @staticmethod
+    def _resolve_env_placeholders(value):
+        if not isinstance(value, str):
+            return value
+        text = value
+
+        def repl(match):
+            raw = str(match.group(1) or '').strip()
+            if raw.lower().startswith('env:'):
+                raw = raw[4:].strip()
+            resolved = os.environ.get(raw, '')
+            if resolved:
+                return resolved
+            # GitHub MCP token fallback chain
+            if raw in {'GITHUB_MCP_TOKEN', 'github_mcp_token'}:
+                return os.environ.get('GITHUB_TOKEN', '') or os.environ.get('GH_TOKEN', '')
+            return ''
+
+        return re.sub(r'\$\{([^}]+)\}', repl, text)
+
+    def _resolved_headers(self, headers):
+        out = {}
+        for k, v in (headers or {}).items():
+            val = self._resolve_env_placeholders(v)
+            if val in (None, ''):
+                continue
+            key = str(k)
+            sval = str(val).strip()
+            if not sval:
+                continue
+            if key.lower() == 'authorization' and sval.lower() in {'bearer', 'bearer ${github_mcp_token}'}:
+                continue
+            if key.lower() == 'authorization' and sval.lower().startswith('bearer ') and len(sval) <= 7:
+                continue
+            out[key] = sval
+        return out
+
+    def github_mcp_action_test(self, owner='modelcontextprotocol', repo='servers'):
+        """Run a real read-only action against GitHub MCP (initialize -> tools/list -> tools/call)."""
+        try:
+            from src.frameworks.mcp_manager import get_mcp_manager
+
+            def parse_mcp_response(resp):
+                text = str(resp.text or '')
+                # First try regular JSON body
+                try:
+                    return resp.json() if resp.content else {}
+                except Exception:
+                    pass
+
+                # Fallback for SSE/event-stream style MCP responses
+                data_lines = []
+                for line in text.splitlines():
+                    stripped = line.strip()
+                    if stripped.startswith('data:'):
+                        data_lines.append(stripped[5:].strip())
+
+                for chunk in reversed(data_lines):
+                    try:
+                        return json.loads(chunk)
+                    except Exception:
+                        continue
+
+                return {'raw': text[:4000]}
+
+            manager = get_mcp_manager()
+            servers = manager.list_servers(enabled_only=True)
+            github = None
+            for srv in servers:
+                name = str(srv.get('name') or '').lower()
+                tags = [str(t).lower() for t in (srv.get('capabilities', {}).get('tags') or [])]
+                if 'github' in name or 'github' in tags:
+                    github = srv
+                    break
+
+            if not github:
+                return json.dumps({
+                    'ok': False,
+                    'error': 'GitHub MCP server not found or not enabled',
+                }, ensure_ascii=False, indent=2)
+
+            url = str(github.get('url') or '').strip()
+            if not url:
+                return json.dumps({
+                    'ok': False,
+                    'error': 'GitHub MCP server URL is empty',
+                }, ensure_ascii=False, indent=2)
+
+            headers = self._resolved_headers(github.get('headers') or {})
+            headers.setdefault('Content-Type', 'application/json')
+            headers.setdefault('Accept', 'application/json, text/event-stream')
+
+            session = requests.Session()
+            init_req = {
+                'jsonrpc': '2.0',
+                'id': 'init-1',
+                'method': 'initialize',
+                'params': {
+                    'protocolVersion': '2024-11-05',
+                    'capabilities': {},
+                    'clientInfo': {'name': 'shizuku-agent-mcp-test', 'version': '0.1.0'}
+                }
+            }
+            init_resp = session.post(url, headers=headers, json=init_req, timeout=20)
+            init_payload = parse_mcp_response(init_resp)
+
+            session_headers = dict(headers)
+            session_id = str(init_resp.headers.get('mcp-session-id') or '').strip()
+            if session_id:
+                session_headers['mcp-session-id'] = session_id
+
+            tools_req = {
+                'jsonrpc': '2.0',
+                'id': 'tools-1',
+                'method': 'tools/list',
+                'params': {}
+            }
+            tools_resp = session.post(url, headers=session_headers, json=tools_req, timeout=20)
+            tools_payload = parse_mcp_response(tools_resp)
+
+            tools = []
+            if isinstance(tools_payload, dict):
+                tools = list((tools_payload.get('result') or {}).get('tools') or [])
+
+            def _tool_names():
+                return [str(t.get('name') or '') for t in tools if isinstance(t, dict)]
+
+            preferred = [
+                ('get_repository', {'owner': owner, 'repo': repo}),
+                ('get_repo', {'owner': owner, 'repo': repo}),
+                ('repository_get', {'owner': owner, 'repo': repo}),
+                ('repos_get', {'owner': owner, 'repo': repo}),
+                ('search_repositories', {'query': f'{owner}/{repo}'}),
+            ]
+
+            selected_name = ''
+            selected_args = {}
+            available = set(_tool_names())
+            for name, args in preferred:
+                if name in available:
+                    selected_name = name
+                    selected_args = args
+                    break
+
+            call_payload = {}
+            call_resp_code = None
+            if selected_name:
+                call_req = {
+                    'jsonrpc': '2.0',
+                    'id': 'call-1',
+                    'method': 'tools/call',
+                    'params': {
+                        'name': selected_name,
+                        'arguments': selected_args
+                    }
+                }
+                call_resp = session.post(url, headers=session_headers, json=call_req, timeout=25)
+                call_resp_code = int(call_resp.status_code)
+                call_payload = parse_mcp_response(call_resp)
+
+            result = {
+                'ok': int(init_resp.status_code) < 500 and int(tools_resp.status_code) < 500,
+                'server': {
+                    'id': github.get('id'),
+                    'name': github.get('name'),
+                    'url': url,
+                },
+                'initialize': {
+                    'http_status': int(init_resp.status_code),
+                    'session_id_present': bool(session_id),
+                    'body_excerpt': json.dumps(init_payload, ensure_ascii=False)[:800],
+                },
+                'tools_list': {
+                    'http_status': int(tools_resp.status_code),
+                    'count': len(tools),
+                    'names': _tool_names()[:30],
+                },
+                'action_call': {
+                    'selected_tool': selected_name,
+                    'arguments': selected_args,
+                    'http_status': call_resp_code,
+                    'response_excerpt': json.dumps(call_payload, ensure_ascii=False)[:1600] if call_payload else '',
+                }
+            }
+            return json.dumps(result, ensure_ascii=False, indent=2)
+        except requests.RequestException as e:
+            return json.dumps({'ok': False, 'error': f'Request failed: {str(e)}'}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return json.dumps({'ok': False, 'error': str(e)}, ensure_ascii=False, indent=2)
 
     def execute_python_with_details(self, code_str, filename="temp_script.py"):
         """

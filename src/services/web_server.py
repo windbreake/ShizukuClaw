@@ -2908,8 +2908,13 @@ def run_web_server():
                             event_type = 'tool_result'
                             label = '工具返回结果'
                         elif role == 'assistant':
-                            event_type = 'assistant_message'
-                            label = 'AI 回复/思考摘要'
+                            stripped = content.strip()
+                            if stripped.startswith('思考:') or stripped.startswith('Thought:') or stripped.startswith('[THINK]'):
+                                event_type = 'assistant_message'
+                                label = '思考内容'
+                            else:
+                                event_type = 'assistant_reply'
+                                label = 'AI 回复'
 
                         events.append({
                             'role': role,

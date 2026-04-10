@@ -4,7 +4,10 @@
     "deepseek_chat": {
       "key": "sk-76c143f207bf4e688b15999a7fcf4336",
       "base_url": "https://api.deepseek.com/v1",
-      "model": ""
+      "model": "deepseek-reasoner",
+      "fallback_models": [
+        "deepseek-chat"
+      ]
     },
     "search": {
       "key": "sk-VfP8AhbSELO9p4v31IpKHu5Sn6CWhquS23n2ONjqsDtWM2Ez",
@@ -215,6 +218,10 @@
         "allow_model_invocation": true
       },
       "microsoft__skills": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "likaku__mck-ppt-design-skill": {
         "enabled": true,
         "allow_model_invocation": true
       }

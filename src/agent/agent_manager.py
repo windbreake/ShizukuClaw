@@ -70,6 +70,9 @@ Always use create_document or convert_document for these formats.
 When the user explicitly asks to run/execute/debug/check a project, script, or command, you MUST execute it in the sandbox first.
 Do not stop at providing sample code or command suggestions only.
 Your final answer must include actual execution result (success/failure, output, return code, and next fix if failed).
+When the user asks to clone/pull a GitHub repository, use git_clone_repo instead of writing ad-hoc subprocess code in exec_python.
+When the user asks to verify GitHub MCP works, use github_mcp_action_test for a real MCP call.
+For clone/download status responses, do not output diagnostic code snippets. Report sandbox-relative path, `cd` + `ls` steps, and concise file summary.
 
 [Current Plan]
 {plan}
@@ -119,6 +122,8 @@ Your final answer must include actual execution result (success/failure, output,
             'create_document': 'allow_file_write',
             'convert_document': 'allow_file_write',
             'exec_python': 'allow_code_exec',
+            'git_clone_repo': 'allow_code_exec',
+            'github_mcp_action_test': 'allow_code_exec',
             'run_project_debug': 'allow_code_exec',
             'start_web_preview': 'allow_code_exec',
             'generate_data_chart': 'allow_code_exec',
@@ -134,7 +139,8 @@ Your final answer must include actual execution result (success/failure, output,
         if not is_admin:
             if tool_name in [
                 'write_file', 'append_file_content', 'delete_file_content', 'delete_file',
-                'exec_python', 'update_plan', 'run_project_debug', 'start_web_preview',
+                'exec_python', 'git_clone_repo', 'update_plan', 'run_project_debug', 'start_web_preview',
+                'github_mcp_action_test',
                 'generate_data_chart', 'generate_markdown_diagram', 'resolve_external_approval'
             ]:
                 return "Error: Permission Denied. You are not authorized to perform file modifications or code execution."
@@ -216,10 +222,26 @@ Your final answer must include actual execution result (success/failure, output,
             elif tool_name == 'exec_python':
                 return self.sandbox.execute_python(args.get('code'), args.get('filename', 'script.py'))
 
+            elif tool_name == 'git_clone_repo':
+                return self.sandbox.git_clone_repo(
+                    repo_url=args.get('repo_url', ''),
+                    target_dir=args.get('target_dir', ''),
+                    branch=args.get('branch', ''),
+                    depth=args.get('depth', 1),
+                    external_approval_id=args.get('external_approval_id', '')
+                )
+
+            elif tool_name == 'github_mcp_action_test':
+                return self.sandbox.github_mcp_action_test(
+                    owner=args.get('owner', 'modelcontextprotocol'),
+                    repo=args.get('repo', 'servers')
+                )
+
             elif tool_name == 'run_project_debug':
                 return self.sandbox.run_project_debug(
                     target=args.get('target', '.'),
                     run_tests=bool(args.get('run_tests', True)),
+                    start_app=bool(args.get('start_app', False)),
                     external_approval_id=args.get('external_approval_id', '')
                 )
 
@@ -495,6 +517,38 @@ Your final answer must include actual execution result (success/failure, output,
                 {
                     "type": "function",
                     "function": {
+                        "name": "git_clone_repo",
+                        "description": "Clone a Git repository into the agent workspace. Prefer this over exec_python for pull/clone tasks.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "repo_url": {"type": "string", "description": "Repository URL (https://..., git@..., ssh://...)"},
+                                "target_dir": {"type": "string", "description": "Optional target directory under workspace"},
+                                "branch": {"type": "string", "description": "Optional branch name"},
+                                "depth": {"type": "integer", "description": "Clone depth, default 1"},
+                                "external_approval_id": {"type": "string", "description": "Approval id for external path access"}
+                            },
+                            "required": ["repo_url"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "github_mcp_action_test",
+                        "description": "Run a real GitHub MCP test: initialize, tools/list, and one read-only tools/call action.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "owner": {"type": "string", "description": "GitHub owner/org, default modelcontextprotocol"},
+                                "repo": {"type": "string", "description": "GitHub repo name, default servers"}
+                            }
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
                         "name": "run_project_debug",
                         "description": "Run compile/test diagnostics in the workspace to iterate debugging until project becomes runnable.",
                         "parameters": {
@@ -502,6 +556,7 @@ Your final answer must include actual execution result (success/failure, output,
                             "properties": {
                                 "target": {"type": "string", "description": "Project directory path, default '.'"},
                                 "run_tests": {"type": "boolean", "description": "Whether to run pytest after py_compile"},
+                                "start_app": {"type": "boolean", "description": "For runnable projects, attempt to start app after successful build."},
                                 "external_approval_id": {"type": "string", "description": "Approval id for external path access"}
                             }
                         }

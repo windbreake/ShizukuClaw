@@ -28,3 +28,69 @@
 2026-04-10 10:44:48,461 - INFO - 服务器启动于 http://localhost:8888
 2026-04-10 11:06:48,537 - INFO - 服务器启动于 http://localhost:8888
 2026-04-10 11:43:22,938 - INFO - 服务器启动于 http://localhost:8888
+2026-04-10 13:26:40,217 - INFO - 服务器启动于 http://localhost:8888
+2026-04-10 13:58:26,036 - INFO - 服务器启动于 http://localhost:8888
+2026-04-10 14:05:11,478 - INFO - 服务器启动于 http://localhost:8888
+2026-04-10 14:32:38,664 - INFO - 服务器启动于 http://localhost:8888
+2026-04-10 14:36:12,338 - ERROR - Exception on /api/systems/mcp/servers [GET]
+Traceback (most recent call last):
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\win11\ShizukuClaw_Alpha0.1\Shizuku_Nya_Bot-master\src\services\systems_api.py", line 187, in list_mcp_servers
+    servers = manager.list_servers(enabled_only=enabled_only)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\win11\ShizukuClaw_Alpha0.1\Shizuku_Nya_Bot-master\src\frameworks\mcp_manager.py", line 310, in list_servers
+    self._refresh_server_statuses(persist=True)
+  File "C:\Users\win11\ShizukuClaw_Alpha0.1\Shizuku_Nya_Bot-master\src\frameworks\mcp_manager.py", line 281, in _refresh_server_statuses
+    new_status = self._probe_server_status(server)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\win11\ShizukuClaw_Alpha0.1\Shizuku_Nya_Bot-master\src\frameworks\mcp_manager.py", line 260, in _probe_server_status
+    response = requests.get(
+               ^^^^^^^^^^^^^
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\requests\api.py", line 73, in get
+    return request("get", url, params=params, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\requests\adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\urllib3\connectionpool.py", line 716, in urlopen
+    httplib_response = self._make_request(
+                       ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\urllib3\connectionpool.py", line 416, in _make_request
+    conn.request(method, url, **httplib_request_kw)
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\urllib3\connection.py", line 244, in request
+    super(HTTPConnection, self).request(method, url, body=body, headers=headers)
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\http\client.py", line 1336, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\http\client.py", line 1377, in _send_request
+    self.putheader(hdr, value)
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\site-packages\urllib3\connection.py", line 224, in putheader
+    _HTTPConnection.putheader(self, header, *values)
+  File "C:\Users\win11\AppData\Local\Programs\Python\Python312\Lib\http\client.py", line 1309, in putheader
+    values[i] = one_value.encode('latin-1')
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'latin-1' codec can't encode characters in position 291-296: ordinal not in range(256)
+2026-04-10 14:54:04,977 - INFO - 服务器启动于 http://localhost:8888
+2026-04-10 15:24:24,973 - INFO - 服务器启动于 http://localhost:8888
+2026-04-10 15:42:16,819 - INFO - 服务器启动于 http://localhost:8888
+2026-04-10 15:51:20,851 - INFO - 服务器启动于 http://localhost:8888
+2026-04-10 16:20:22,324 - INFO - 服务器启动于 http://localhost:8888

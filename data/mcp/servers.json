@@ -129,9 +129,9 @@
       "source": "market"
     },
     "enabled": true,
-    "status": "disconnected",
-    "last_sync": null,
+    "status": "connected",
+    "last_sync": "2026-04-10T13:58:31.981820",
     "created_at": "2026-04-07T16:34:00.837099",
-    "updated_at": "2026-04-07T16:34:00.837099"
+    "updated_at": "2026-04-10T13:58:31.981820"
   }
 ]

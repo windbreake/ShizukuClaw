@@ -9,6 +9,10 @@ from datetime import datetime
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass, asdict, field
 import os
+from glob import glob
+import re
+
+import requests
 
 
 def _repo_root_from_here() -> str:
@@ -117,10 +121,13 @@ class MCPManager:
 
         self.storage_dir = resolved_storage_dir
         self.servers_file = os.path.join(resolved_storage_dir, 'servers.json')
+        self.server_file_pattern = os.path.join(resolved_storage_dir, '*.server.json')
         self.resources_file = os.path.join(resolved_storage_dir, 'resources.json')
         self.tools_file = os.path.join(resolved_storage_dir, 'tools.json')
         
         self.servers: Dict[str, MCPServer] = {}
+        self._server_sources: Dict[str, str] = {}
+        self._known_server_files: set[str] = set()
         self.resources: Dict[str, MCPResource] = {}
         self.tools: Dict[str, MCPTool] = {}
         
@@ -133,11 +140,30 @@ class MCPManager:
     def _load_data(self):
         """加载MCP数据"""
         try:
+            self._known_server_files = {self.servers_file}
+
+            def _load_servers_from_file(file_path: str):
+                if not os.path.exists(file_path):
+                    return
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    payload = json.load(f)
+                if isinstance(payload, dict):
+                    payload = [payload]
+                if not isinstance(payload, list):
+                    return
+                self._known_server_files.add(file_path)
+                for server_dict in payload:
+                    if not isinstance(server_dict, dict):
+                        continue
+                    server = MCPServer(**server_dict)
+                    self.servers[server.id] = server
+                    self._server_sources[server.id] = file_path
+
             if os.path.exists(self.servers_file):
-                with open(self.servers_file, 'r', encoding='utf-8') as f:
-                    for server_dict in json.load(f):
-                        server = MCPServer(**server_dict)
-                        self.servers[server.id] = server
+                _load_servers_from_file(self.servers_file)
+
+            for extra_file in glob(self.server_file_pattern):
+                _load_servers_from_file(extra_file)
             
             if os.path.exists(self.resources_file):
                 with open(self.resources_file, 'r', encoding='utf-8') as f:
@@ -156,9 +182,15 @@ class MCPManager:
     def _save_data(self):
         """保存MCP数据"""
         try:
-            with open(self.servers_file, 'w', encoding='utf-8') as f:
-                data = [s.to_dict() for s in self.servers.values()]
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            grouped_servers: Dict[str, List[Dict[str, Any]]] = {}
+            for server in self.servers.values():
+                source_file = self._server_sources.get(server.id, self.servers_file)
+                grouped_servers.setdefault(source_file, []).append(server.to_dict())
+
+            files_to_write = set(self._known_server_files) | set(grouped_servers.keys())
+            for server_file in files_to_write:
+                with open(server_file, 'w', encoding='utf-8') as f:
+                    json.dump(grouped_servers.get(server_file, []), f, ensure_ascii=False, indent=2)
             
             with open(self.resources_file, 'w', encoding='utf-8') as f:
                 data = [r.to_dict() for r in self.resources.values()]
@@ -169,12 +201,111 @@ class MCPManager:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"Error saving MCP data: {e}")
+
+    def _resolve_header_value(self, value: Any) -> Any:
+        """解析头部里的环境变量占位符。"""
+        if not isinstance(value, str):
+            return value
+
+        text = value
+        if not text:
+            return text
+
+        def repl(match):
+            raw = str(match.group(1) or '').strip()
+            if raw.lower().startswith('env:'):
+                raw = raw[4:].strip()
+            resolved = os.environ.get(raw, '')
+            if resolved:
+                return resolved
+            if raw in {'GITHUB_MCP_TOKEN', 'github_mcp_token'}:
+                return os.environ.get('GITHUB_TOKEN', '') or os.environ.get('GH_TOKEN', '')
+            return ''
+
+        return re.sub(r'\$\{([^}]+)\}', repl, text)
+
+    def _resolved_headers(self, headers: Dict[str, str]) -> Dict[str, str]:
+        """返回解析后的请求头。"""
+        resolved = {}
+        for key, value in (headers or {}).items():
+            resolved_value = self._resolve_header_value(value)
+            if resolved_value in (None, ''):
+                continue
+            h_key = str(key)
+            h_val = str(resolved_value).strip()
+            if not h_val:
+                continue
+            # requests/urllib3 最终要求 header key/value 可按 latin-1 编码。
+            try:
+                h_key.encode('latin-1')
+                h_val.encode('latin-1')
+            except UnicodeEncodeError:
+                continue
+            if h_key.lower() == 'authorization' and h_val.lower() in {'bearer', 'bearer ${github_mcp_token}'}:
+                continue
+            if h_key.lower() == 'authorization' and h_val.lower().startswith('bearer ') and len(h_val) <= 7:
+                continue
+            resolved[h_key] = h_val
+        return resolved
+
+    def _probe_server_status(self, server: MCPServer) -> str:
+        """探测服务器连通性并返回状态。"""
+        if not server.enabled:
+            return 'disconnected'
+
+        server_type = str(server.type or '').strip().lower()
+        if server_type not in {'http', 'sse'}:
+            return server.status or 'disconnected'
+
+        target_url = str(server.url or '').strip()
+        if not target_url:
+            return 'error'
+
+        try:
+            headers = self._resolved_headers(server.headers or {})
+            response = requests.get(
+                target_url,
+                timeout=5,
+                allow_redirects=True,
+                stream=True,
+                headers=headers,
+            )
+            try:
+                response.close()
+            except Exception:
+                pass
+            return 'connected'
+        except requests.RequestException:
+            return 'disconnected'
+        except Exception:
+            return 'error'
+
+    def _refresh_server_statuses(self, persist: bool = True):
+        """刷新所有服务器状态。"""
+        changed = False
+        now = datetime.now().isoformat()
+
+        for server in self.servers.values():
+            new_status = self._probe_server_status(server)
+            if new_status and new_status != server.status:
+                server.status = new_status
+                server.updated_at = now
+                if new_status == 'connected':
+                    server.last_sync = now
+                changed = True
+
+        if changed and persist:
+            self._save_data()
+
+        return changed
     
     # ===== Server 管理 =====
     
     def add_server(self, server: MCPServer) -> str:
         """添加MCP服务器"""
         self.servers[server.id] = server
+        self._server_sources[server.id] = self.servers_file
+        self._known_server_files.add(self.servers_file)
         self._save_data()
         return server.id
     
@@ -184,6 +315,7 @@ class MCPManager:
     
     def list_servers(self, enabled_only: bool = False) -> List[Dict[str, Any]]:
         """列表查询服务器"""
+        self._refresh_server_statuses(persist=True)
         servers = list(self.servers.values())
         
         if enabled_only:
@@ -209,6 +341,7 @@ class MCPManager:
         """删除服务器"""
         if server_id in self.servers:
             del self.servers[server_id]
+            self._server_sources.pop(server_id, None)
             
             # 删除关联的资源和工具
             self.resources = {
