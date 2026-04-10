@@ -92,6 +92,14 @@ def _default_work_mode_features(existing: dict = None) -> dict:
     }
 
 
+def _normalize_trace_retention_days(value, default: int = 7) -> int:
+    try:
+        days = int(value)
+    except (TypeError, ValueError):
+        days = int(default)
+    return max(0, min(days, 3650))
+
+
 def _default_chat_settings(existing: dict = None) -> dict:
     existing = existing or {}
     return {
@@ -100,7 +108,95 @@ def _default_chat_settings(existing: dict = None) -> dict:
         'sandbox_trace_collapsed': bool(existing.get('sandbox_trace_collapsed', True)),
         'sandbox_show_back_to_top': bool(existing.get('sandbox_show_back_to_top', True)),
         'sandbox_use_docker_runtime': bool(existing.get('sandbox_use_docker_runtime', True)),
+        'sandbox_agent_autonomous': bool(existing.get('sandbox_agent_autonomous', True)),
+        'sandbox_trace_retention_days': _normalize_trace_retention_days(existing.get('sandbox_trace_retention_days', 7), default=7),
     }
+
+
+def _format_trace_markdown(events: list, user_message: str = '', reply_message: str = '') -> str:
+    now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    lines = [
+        '# Sandbox Trace',
+        '',
+        f'- created_at: {now}',
+        f'- events: {len(events)}',
+        '',
+        '## User Input',
+        '```text',
+        str(user_message or ''),
+        '```',
+        '',
+        '## Assistant Reply',
+        '```text',
+        str(reply_message or ''),
+        '```',
+        '',
+        '## Events',
+    ]
+
+    for idx, event in enumerate(events, 1):
+        label = str(event.get('label', '步骤') or '步骤')
+        role = str(event.get('role', 'unknown') or 'unknown')
+        evt_type = str(event.get('type', 'message') or 'message')
+        tool_name = str(event.get('tool_name', '') or '')
+        ts = str(event.get('timestamp', '') or '')
+        content = str(event.get('content', '') or '')
+
+        lines.extend([
+            '',
+            f'### {idx}. {label}',
+            f'- role: {role}',
+            f'- type: {evt_type}',
+            f'- tool: {tool_name}',
+            f'- timestamp: {ts}',
+            '```text',
+            content,
+            '```',
+        ])
+
+    lines.append('')
+    return '\n'.join(lines)
+
+
+def _cleanup_trace_markdown_files(trace_dir: str, retention_days: int) -> int:
+    if retention_days <= 0:
+        return 0
+
+    removed = 0
+    cutoff = time.time() - (retention_days * 24 * 60 * 60)
+    for name in os.listdir(trace_dir):
+        if not name.endswith('.md'):
+            continue
+        if not name.startswith('trace_'):
+            continue
+
+        path = os.path.join(trace_dir, name)
+        if not os.path.isfile(path):
+            continue
+
+        try:
+            if os.path.getmtime(path) < cutoff:
+                os.remove(path)
+                removed += 1
+        except Exception:
+            continue
+
+    return removed
+
+
+def _write_trace_markdown(events: list, user_message: str = '', reply_message: str = '', retention_days: int = 7) -> str:
+    trace_dir = os.path.join(PROJECT_ROOT, 'agent_datas', 'workspace', 'trace_tmp')
+    os.makedirs(trace_dir, exist_ok=True)
+    _cleanup_trace_markdown_files(trace_dir, _normalize_trace_retention_days(retention_days, default=7))
+    stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    trace_name = f'trace_{stamp}_{uuid.uuid4().hex[:8]}.md'
+    trace_abs = os.path.join(trace_dir, trace_name)
+
+    content = _format_trace_markdown(events, user_message=user_message, reply_message=reply_message)
+    with open(trace_abs, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+    return os.path.relpath(trace_abs, PROJECT_ROOT).replace('\\', '/')
 
 
 def _system_config_path() -> str:
@@ -409,6 +505,18 @@ try:
 except Exception as e:
     SYSTEMS_BP_ERROR = str(e)
     print(f"Warning: Could not import/register systems_api: {e}")
+    traceback.print_exc()
+
+# 注册安全认证API蓝图
+SECURITY_BP_REGISTERED = False
+SECURITY_BP_ERROR = ''
+try:
+    from src.services.security_api import security_bp
+    app.register_blueprint(security_bp)
+    SECURITY_BP_REGISTERED = True
+except Exception as e:
+    SECURITY_BP_ERROR = str(e)
+    print(f"Warning: Could not import/register security_api: {e}")
     traceback.print_exc()
 
 
@@ -826,6 +934,9 @@ def run_web_server():
     _SKILLHUB_INSTALL_JOBS = {}
     _SKILLHUB_INSTALL_JOBS_LOCK = threading.Lock()
     _SKILLHUB_INSTALL_JOB_TTL = 3600
+    _AGENT_DEPLOY_JOBS = {}
+    _AGENT_DEPLOY_JOBS_LOCK = threading.Lock()
+    _AGENT_DEPLOY_JOB_TTL = 3600
     _COCOLOOP_LAST_DIAG = {
         'timestamp': 0.0,
         'sources': [],
@@ -906,21 +1017,27 @@ def run_web_server():
         if configured_bin:
             full = shutil.which(configured_bin)
             if full:
+                base_name = os.path.basename(full).lower()
+                cli_kind = 'skills' if ('skills' in base_name and 'skillhub' not in base_name) else ('skillhub' if 'skillhub' in base_name else 'skills')
                 return {
                     'runner': [full],
                     'installed': True,
                     'mode': 'configured',
                     'cli': full,
+                    'cli_kind': cli_kind,
                 }
 
         for b in ['skills', 'skillhub', 'skillhub-cli']:
             full = shutil.which(b)
             if full:
+                base_name = os.path.basename(full).lower()
+                cli_kind = 'skills' if ('skills' in base_name and 'skillhub' not in base_name) else ('skillhub' if 'skillhub' in base_name else 'skills')
                 return {
                     'runner': [full],
                     'installed': True,
                     'mode': 'global',
                     'cli': full,
+                    'cli_kind': cli_kind,
                 }
 
         npx = shutil.which('npx')
@@ -930,6 +1047,7 @@ def run_web_server():
                 'installed': False,
                 'mode': 'npx-fallback',
                 'cli': f'{npx} -y skills',
+                'cli_kind': 'skills',
             }
 
         return {
@@ -937,6 +1055,7 @@ def run_web_server():
             'installed': False,
             'mode': 'missing',
             'cli': '',
+            'cli_kind': '',
         }
 
     def _find_skillhub_cli():
@@ -965,6 +1084,32 @@ def run_web_server():
             'stderr': str(proc.stderr or ''),
             'cmd': cmd,
         }
+
+    def _skillhub_install_attempts_for_ref(ref: str, external_url: str = ''):
+        info = _skillhub_runner_info()
+        cli_kind = str(info.get('cli_kind') or '').strip().lower()
+        candidates = [str(ref or '').strip()]
+        ext = str(external_url or '').strip()
+        if ext and ext not in candidates:
+            candidates.append(ext)
+
+        attempts = []
+        if cli_kind == 'skillhub':
+            for target in candidates:
+                if not target:
+                    continue
+                attempts.append(['pull', target])
+        else:
+            for target in candidates:
+                if not target:
+                    continue
+                attempts.extend([
+                    ['add', target, '--yes'],
+                    ['add', target],
+                    ['install', target, '--yes'],
+                    ['install', target],
+                ])
+        return attempts
 
     def _skillhub_install_job_log_dir():
         base_path = PROJECT_ROOT
@@ -1044,17 +1189,39 @@ def run_web_server():
         print(f"[SkillHub CLI][{job_id}] {status.upper()}: {message}")
 
     def _start_skillhub_install_job():
-        bash = shutil.which('bash')
-        if not bash:
-            raise RuntimeError('未找到 bash，无法执行官方 SkillHub 安装脚本')
-
         base_path = PROJECT_ROOT
-        install_cmd = 'curl -fsSL https://skillhub.cn/install/install.sh | bash -s -- --no-skills'
-        command = [bash, '-lc', install_cmd]
         job_id = uuid.uuid4().hex
         log_dir = _skillhub_install_job_log_dir()
         log_path = os.path.join(log_dir, f'{job_id}.log')
         now = time.time()
+
+        bash = shutil.which('bash')
+        npm = shutil.which('npm')
+        npx = shutil.which('npx')
+
+        install_steps = []
+        if bash:
+            install_cmd = 'curl -fsSL https://skillhub.cn/install/install.sh | bash -s -- --no-skills'
+            install_steps.append({
+                'kind': 'bash-script',
+                'display': install_cmd,
+                'command': [bash, '-lc', install_cmd],
+            })
+        if npm:
+            install_steps.append({
+                'kind': 'npm-global',
+                'display': f'{npm} install -g skills',
+                'command': [npm, 'install', '-g', 'skills'],
+            })
+        if npx:
+            install_steps.append({
+                'kind': 'npx-fallback',
+                'display': f'{npx} -y skills (无需全局安装，直接启用)',
+                'command': [npx, '-y', 'skills', '--help'],
+            })
+
+        if not install_steps:
+            raise RuntimeError('未找到可用的 SkillHub 安装器（bash / npm / npx 均不可用）')
 
         with _SKILLHUB_INSTALL_JOBS_LOCK:
             _skillhub_install_job_prune_locked(now)
@@ -1063,14 +1230,15 @@ def run_web_server():
                 'status': 'queued',
                 'created_at': now,
                 'updated_at': now,
-                'command': command,
-                'command_display': install_cmd,
+                'command': install_steps[0]['command'],
+                'command_display': install_steps[0]['display'],
                 'log_path': log_path,
                 'returncode': None,
                 'message': '准备启动 SkillHub CLI 安装',
                 'logs': [
                     '准备启动官方 SkillHub CLI 安装脚本',
-                    f'命令: {install_cmd}',
+                    f'候选步骤数: {len(install_steps)}',
+                    f'首选命令: {install_steps[0]["display"]}',
                 ],
             }
 
@@ -1084,32 +1252,44 @@ def run_web_server():
                         job['updated_at'] = time.time()
 
                 _skillhub_install_job_append(job_id, f'工作目录: {base_path}')
-                _skillhub_install_job_append(job_id, '开始执行: curl -fsSL https://skillhub.cn/install/install.sh | bash -s -- --no-skills')
+                last_error = None
+                for step in install_steps:
+                    command = list(step['command'])
+                    display = step['display']
+                    kind = step['kind']
+                    _skillhub_install_job_append(job_id, f'开始执行: {display}')
 
-                process = subprocess.Popen(
-                    command,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    encoding='utf-8',
-                    errors='replace',
-                    bufsize=1,
-                    cwd=base_path,
-                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
-                )
+                    process = subprocess.Popen(
+                        command,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        encoding='utf-8',
+                        errors='replace',
+                        bufsize=1,
+                        cwd=base_path,
+                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
+                    )
 
-                if process.stdout:
-                    for raw_line in iter(process.stdout.readline, ''):
-                        if raw_line == '':
-                            break
-                        _skillhub_install_job_append(job_id, raw_line)
+                    if process.stdout:
+                        for raw_line in iter(process.stdout.readline, ''):
+                            if raw_line == '':
+                                break
+                            _skillhub_install_job_append(job_id, raw_line)
 
-                returncode = process.wait()
-                if returncode == 0:
-                    _skillhub_install_job_finish(job_id, 'success', 'SkillHub CLI 安装完成', returncode)
-                else:
-                    _skillhub_install_job_append(job_id, f'安装命令退出码: {returncode}')
-                    _skillhub_install_job_finish(job_id, 'error', 'SkillHub CLI 安装失败，请查看日志', returncode)
+                    returncode = process.wait()
+                    if returncode == 0:
+                        if kind == 'npx-fallback':
+                            _skillhub_install_job_append(job_id, '检测到 npx fallback 可用，已启用无需全局安装的运行方式')
+                            _skillhub_install_job_finish(job_id, 'success', 'SkillHub CLI 已启用 npx fallback', returncode)
+                        else:
+                            _skillhub_install_job_finish(job_id, 'success', 'SkillHub CLI 安装完成', returncode)
+                        return
+
+                    last_error = f'{display} 退出码: {returncode}'
+                    _skillhub_install_job_append(job_id, last_error)
+
+                _skillhub_install_job_finish(job_id, 'error', 'SkillHub CLI 安装失败，请查看日志', -1)
             except Exception as exc:
                 _skillhub_install_job_append(job_id, f'安装异常: {exc}')
                 _skillhub_install_job_finish(job_id, 'error', str(exc), -1)
@@ -1122,6 +1302,421 @@ def run_web_server():
 
         threading.Thread(target=_runner, daemon=True).start()
         return _skillhub_install_job_snapshot(job_id)
+
+    def _agent_deploy_job_log_dir():
+        base_path = PROJECT_ROOT
+        log_dir = os.path.join(base_path, 'logs', 'agent_deploy')
+        os.makedirs(log_dir, exist_ok=True)
+        return log_dir
+
+    def _agent_deploy_job_prune_locked(now=None):
+        now = now or time.time()
+        stale_ids = []
+        for job_id, job in list(_AGENT_DEPLOY_JOBS.items()):
+            updated_at = float(job.get('updated_at') or job.get('created_at') or 0.0)
+            if job.get('status') in ('running', 'queued'):
+                continue
+            if (now - updated_at) > _AGENT_DEPLOY_JOB_TTL:
+                stale_ids.append(job_id)
+        for job_id in stale_ids:
+            _AGENT_DEPLOY_JOBS.pop(job_id, None)
+
+    def _agent_deploy_job_snapshot(job_id: str):
+        with _AGENT_DEPLOY_JOBS_LOCK:
+            _agent_deploy_job_prune_locked()
+            job = _AGENT_DEPLOY_JOBS.get(job_id)
+            if not job:
+                return None
+            return {
+                'job_id': job.get('job_id', job_id),
+                'status': job.get('status', 'queued'),
+                'created_at': job.get('created_at'),
+                'updated_at': job.get('updated_at'),
+                'title': job.get('title', ''),
+                'command_display': job.get('command_display', ''),
+                'log_path': job.get('log_path', ''),
+                'returncode': job.get('returncode'),
+                'message': job.get('message', ''),
+                'reply': job.get('reply', ''),
+                'logs': list(job.get('logs') or []),
+            }
+
+    def _agent_deploy_job_append(job_id: str, line: str):
+        text = str(line or '').replace('\r', '').rstrip('\n')
+        if not text.strip():
+            return
+        log_line = text.strip('\n')
+        now = time.time()
+        with _AGENT_DEPLOY_JOBS_LOCK:
+            job = _AGENT_DEPLOY_JOBS.get(job_id)
+            if not job:
+                return
+            logs = list(job.get('logs') or [])
+            logs.append(log_line)
+            if len(logs) > 600:
+                logs = logs[-600:]
+            job['logs'] = logs
+            job['updated_at'] = now
+            log_path = job.get('log_path')
+        if log_path:
+            try:
+                with open(log_path, 'a', encoding='utf-8') as f:
+                    f.write(log_line + '\n')
+            except Exception:
+                pass
+        print(f"[Agent Deploy][{job_id}] {log_line}")
+
+    def _agent_deploy_job_finish(job_id: str, status: str, message: str, returncode: int = None, reply: str = ''):
+        now = time.time()
+        with _AGENT_DEPLOY_JOBS_LOCK:
+            job = _AGENT_DEPLOY_JOBS.get(job_id)
+            if not job:
+                return
+            job['status'] = status
+            job['message'] = str(message or '')
+            job['updated_at'] = now
+            if returncode is not None:
+                job['returncode'] = int(returncode)
+            if reply:
+                job['reply'] = str(reply)
+            job['logs'] = list(job.get('logs') or [])
+
+    def _derive_skill_target_id(source: str, skill_id: str, name: str, external_url: str) -> str:
+        sid = str(skill_id or '').strip()
+        if sid:
+            return sid
+
+        nm = str(name or '').strip()
+        if nm:
+            return re.sub(r'[^a-zA-Z0-9._-]+', '-', nm).strip('-').lower() or 'skill'
+
+        url = str(external_url or '').strip()
+        if url:
+            m = re.search(r'github\.com/([^/]+)/([^/?#]+)', url, flags=re.IGNORECASE)
+            if m:
+                owner = re.sub(r'[^a-zA-Z0-9._-]+', '-', m.group(1)).strip('-').lower()
+                repo = re.sub(r'[^a-zA-Z0-9._-]+', '-', m.group(2)).strip('-').lower()
+                if owner and repo:
+                    return f'{owner}__{repo}'
+        return 'skill'
+
+    def _normalize_skill_layout_in_dir(base_dir: str):
+        """Ensure SkillManager-compatible layout: <skill_dir>/SKILL.md exists.
+
+        Many GitHub skill repos store SKILL.md under skills/<name>/SKILL.md.
+        This function copies one discovered SKILL.md to root if missing.
+        """
+        root_skill = os.path.join(base_dir, 'SKILL.md')
+        if os.path.exists(root_skill):
+            return root_skill
+
+        candidates = []
+        preferred = []
+        for cur_root, _, files in os.walk(base_dir):
+            if 'SKILL.md' not in files:
+                continue
+            full = os.path.join(cur_root, 'SKILL.md')
+            rel = os.path.relpath(full, base_dir).replace('\\', '/')
+            candidates.append((rel, full))
+            if '/skills/' in f'/{rel}':
+                preferred.append((rel, full))
+
+        pool = preferred or candidates
+        if not pool:
+            raise RuntimeError('仓库中未找到 SKILL.md，无法作为技能导入')
+
+        pool.sort(key=lambda x: len(x[0]))
+        _, chosen = pool[0]
+        shutil.copy2(chosen, root_skill)
+
+        chosen_dir = os.path.dirname(chosen)
+        for fn in os.listdir(chosen_dir):
+            if fn == 'SKILL.md':
+                continue
+            src = os.path.join(chosen_dir, fn)
+            dst = os.path.join(base_dir, fn)
+            if os.path.isdir(src) or os.path.exists(dst):
+                continue
+            try:
+                shutil.copy2(src, dst)
+            except Exception:
+                pass
+
+        return root_skill
+
+    def _fallback_deploy_skill_from_github(source: str, skill_id: str, name: str, external_url: str):
+        url = str(external_url or '').strip()
+        if not re.match(r'^https?://github\.com/', url, flags=re.IGNORECASE):
+            return {'ok': False, 'error': '当前仅支持 github URL 自动回退部署'}
+
+        target_id = _derive_skill_target_id(source, skill_id, name, external_url)
+        skills_root = os.path.join(PROJECT_ROOT, 'data', 'skills')
+        os.makedirs(skills_root, exist_ok=True)
+
+        tmp_parent = tempfile.mkdtemp(prefix='skill_deploy_', dir=tempfile.gettempdir())
+        clone_dir = os.path.join(tmp_parent, 'repo')
+        target_dir = os.path.join(skills_root, target_id)
+
+        try:
+            cmd = ['git', 'clone', '--depth', '1', url, clone_dir]
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            if proc.returncode != 0:
+                stderr = (proc.stderr or proc.stdout or '').strip()
+                return {'ok': False, 'error': f'git clone 失败: {stderr[:800]}'}
+
+            _normalize_skill_layout_in_dir(clone_dir)
+
+            if os.path.exists(target_dir):
+                shutil.rmtree(target_dir)
+            shutil.move(clone_dir, target_dir)
+
+            deployment_meta = {
+                'source': source or 'github',
+                'skill_id': target_id,
+                'name': name or target_id,
+                'url': url,
+                'deployed_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'layout': 'github_clone_with_root_skill_md',
+            }
+            with open(os.path.join(target_dir, '_deployment.json'), 'w', encoding='utf-8') as f:
+                json.dump(deployment_meta, f, ensure_ascii=False, indent=2)
+
+            try:
+                chat_system.reload_skills()
+                status = chat_system.get_skill_status() or {}
+                skills = list(status.get('skills') or [])
+                found = any(str(x.get('skill_id') or '') == target_id for x in skills)
+            except Exception:
+                found = os.path.exists(os.path.join(target_dir, 'SKILL.md'))
+
+            if not found:
+                return {'ok': False, 'error': f'已下载到 {target_dir}，但框架未识别该技能'}
+
+            return {
+                'ok': True,
+                'skill_id': target_id,
+                'target_dir': target_dir,
+                'message': 'fallback 部署成功并已通过框架识别',
+            }
+        finally:
+            try:
+                if os.path.exists(tmp_parent):
+                    shutil.rmtree(tmp_parent)
+            except Exception:
+                pass
+
+    def _safe_skill_dir_name(name: str) -> str:
+        val = re.sub(r'[^a-zA-Z0-9._-]+', '-', str(name or '').strip()).strip('-').lower()
+        return val or 'skill'
+
+    def _is_skill_discovered(candidate_ids=None, candidate_names=None):
+        candidate_ids = {str(x or '').strip().lower() for x in (candidate_ids or []) if str(x or '').strip()}
+        candidate_names = {str(x or '').strip().lower() for x in (candidate_names or []) if str(x or '').strip()}
+        try:
+            chat_system.reload_skills()
+            status = chat_system.get_skill_status() or {}
+            skills = list(status.get('skills') or [])
+            for it in skills:
+                sid = str(it.get('skill_id') or '').strip().lower()
+                sname = str(it.get('name') or '').strip().lower()
+                if sid in candidate_ids or sname in candidate_names:
+                    return True
+        except Exception:
+            return False
+        return False
+
+    def _create_local_skill_scaffold(target_dir: str, skill_id: str, name: str, source: str):
+        os.makedirs(target_dir, exist_ok=True)
+        title = str(name or skill_id or 'Skill').strip() or 'Skill'
+        sid = str(skill_id or _safe_skill_dir_name(title)).strip()
+        skill_md = os.path.join(target_dir, 'SKILL.md')
+        if not os.path.exists(skill_md):
+            content = (
+                '---\n'
+                f'name: {title}\n'
+                f'id: {sid}\n'
+                'version: 0.1.0\n'
+                f'source: {source or "agent-fallback"}\n'
+                '---\n\n'
+                f'# {title}\n\n'
+                '该技能由系统回退流程创建。\n'
+                '如果你有正式仓库版本，请后续覆盖此目录内容。\n'
+            )
+            with open(skill_md, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+    def _fallback_deploy_skill_from_skillhub(source: str, skill_id: str, name: str, external_url: str):
+        refs = []
+        for v in [skill_id, name, external_url]:
+            vv = str(v or '').strip()
+            if vv and vv not in refs:
+                refs.append(vv)
+        if not refs:
+            return {'ok': False, 'error': 'skillhub 回退部署缺少可用标识'}
+
+        errors = []
+        for ref in refs:
+            attempts = _skillhub_install_attempts_for_ref(ref, external_url)
+            for args in attempts:
+                try:
+                    r = _run_skillhub_cli(args, timeout=120)
+                except Exception as exc:
+                    errors.append({'ref': ref, 'cmd': ' '.join(args), 'message': str(exc)[:500]})
+                    continue
+
+                if r.get('ok'):
+                    target_id = _derive_skill_target_id(source, skill_id, name, external_url)
+                    discovered = _is_skill_discovered(
+                        candidate_ids=[target_id, skill_id, ref],
+                        candidate_names=[name, ref],
+                    )
+                    if discovered:
+                        return {
+                            'ok': True,
+                            'skill_id': target_id,
+                            'target_dir': '',
+                            'message': f"skillhub CLI 安装成功: {' '.join(map(str, r.get('cmd') or []))}",
+                        }
+
+                    errors.append({
+                        'ref': ref,
+                        'cmd': ' '.join(map(str, r.get('cmd') or [])),
+                        'message': 'CLI 返回成功，但技能未被框架识别',
+                    })
+                else:
+                    errors.append({
+                        'ref': ref,
+                        'cmd': ' '.join(map(str, r.get('cmd') or [])),
+                        'message': (r.get('stderr') or r.get('stdout') or '').strip()[:500],
+                    })
+
+        skills_root = os.path.join(PROJECT_ROOT, 'data', 'skills')
+        os.makedirs(skills_root, exist_ok=True)
+        target_id = _safe_skill_dir_name(skill_id or name or 'skillhub-skill')
+        target_dir = os.path.join(skills_root, target_id)
+        try:
+            _create_local_skill_scaffold(target_dir, skill_id or target_id, name or target_id, source or 'skillhub')
+            discovered = _is_skill_discovered(
+                candidate_ids=[target_id, skill_id],
+                candidate_names=[name, target_id],
+            )
+            if discovered:
+                return {
+                    'ok': True,
+                    'skill_id': target_id,
+                    'target_dir': target_dir,
+                    'message': 'skillhub 自动回退已创建本地技能骨架并通过框架识别',
+                }
+            return {
+                'ok': False,
+                'error': f'skillhub 回退已创建目录但仍未识别: {target_dir}',
+                'details': errors[-5:],
+            }
+        except Exception as exc:
+            return {
+                'ok': False,
+                'error': f'skillhub 回退部署失败: {exc}',
+                'details': errors[-5:],
+            }
+
+    def _fallback_deploy_skill(source: str, skill_id: str, name: str, external_url: str):
+        src = str(source or '').strip().lower()
+        if src == 'skillhub':
+            return _fallback_deploy_skill_from_skillhub(source, skill_id, name, external_url)
+        return _fallback_deploy_skill_from_github(source, skill_id, name, external_url)
+
+    def _start_agent_deploy_job(source: str, skill_id: str, name: str, external_url: str):
+        job_id = uuid.uuid4().hex
+        log_dir = _agent_deploy_job_log_dir()
+        log_path = os.path.join(log_dir, f'{job_id}.log')
+        now = time.time()
+        title = name or skill_id or external_url or 'skill'
+
+        with _AGENT_DEPLOY_JOBS_LOCK:
+            _agent_deploy_job_prune_locked(now)
+            _AGENT_DEPLOY_JOBS[job_id] = {
+                'job_id': job_id,
+                'status': 'queued',
+                'created_at': now,
+                'updated_at': now,
+                'title': title,
+                'command_display': f'Agent 一键部署技能: {title}',
+                'log_path': log_path,
+                'returncode': None,
+                'message': '准备启动 Agent 一键部署',
+                'reply': '',
+                'logs': [
+                    '准备启动 Agent 一键部署任务',
+                    f'来源: {source}',
+                    f'技能标识: {skill_id or "-"}',
+                    f'名称: {name or "-"}',
+                    f'链接: {external_url or "-"}',
+                ],
+            }
+
+        def _runner():
+            try:
+                with _AGENT_DEPLOY_JOBS_LOCK:
+                    job = _AGENT_DEPLOY_JOBS.get(job_id)
+                    if job:
+                        job['status'] = 'running'
+                        job['updated_at'] = time.time()
+
+                _agent_deploy_job_append(job_id, '进入 Agent 沙箱工作流')
+                _agent_deploy_job_append(job_id, '正在构建部署提示词...')
+
+                deploy_prompt = (
+                    "你现在是沙箱内的自主 Agent。请在当前项目中完成以下任务：\n"
+                    f"1) 从技能商店部署技能（source={source}, skill_id={skill_id}, name={name}, url={external_url}）。\n"
+                    "2) 允许你自行运行沙箱虚拟终端、安装依赖、修改文件、执行检查并修复问题。\n"
+                    "3) 不要使用爬虫，不要抓取网页内容。\n"
+                    "4) 完成后给出部署结果、修改文件和验证结果。"
+                )
+                _agent_deploy_job_append(job_id, '已向 Agent 发送部署任务')
+
+                reply = chat_system.chat(
+                    deploy_prompt,
+                    image=None,
+                    is_admin=True,
+                    attachments=None,
+                    frontend_source='sandbox',
+                    persona_filename=None,
+                )
+                reply_text = str(reply or '').strip()
+                _agent_deploy_job_append(job_id, 'Agent 已返回部署结果')
+                if reply_text:
+                    _agent_deploy_job_append(job_id, '------ Agent Reply Begin ------')
+                    for line in reply_text.splitlines():
+                        _agent_deploy_job_append(job_id, line)
+                    _agent_deploy_job_append(job_id, '------ Agent Reply End ------')
+
+                _agent_deploy_job_append(job_id, '检查 Agent 是否已实际完成部署...')
+                target_id = _derive_skill_target_id(source, skill_id, name, external_url)
+                target_dir = os.path.join(PROJECT_ROOT, 'data', 'skills', target_id)
+                if os.path.exists(os.path.join(target_dir, 'SKILL.md')):
+                    _agent_deploy_job_append(job_id, f'检测到已部署技能目录: {target_dir}')
+                    _agent_deploy_job_finish(job_id, 'success', 'Agent 一键部署完成', 0, reply_text)
+                    return
+
+                _agent_deploy_job_append(job_id, 'Agent 未产生可识别部署结果，触发后端自动回退部署...')
+                fb = _fallback_deploy_skill(source, skill_id, name, external_url)
+                if fb.get('ok'):
+                    _agent_deploy_job_append(job_id, f"回退部署成功: {fb.get('skill_id')}")
+                    if fb.get('target_dir'):
+                        _agent_deploy_job_append(job_id, f"目录: {fb.get('target_dir')}")
+                    final_reply = reply_text + "\n\n[系统回退部署]\n" + str(fb.get('message') or '')
+                    _agent_deploy_job_finish(job_id, 'success', 'Agent 一键部署完成（含系统回退）', 0, final_reply)
+                    return
+
+                _agent_deploy_job_append(job_id, f"回退部署失败: {fb.get('error')}")
+                _agent_deploy_job_finish(job_id, 'error', f"部署失败: {fb.get('error')}", -1, reply_text)
+                return
+            except Exception as exc:
+                _agent_deploy_job_append(job_id, f'部署异常: {exc}')
+                _agent_deploy_job_finish(job_id, 'error', str(exc), -1)
+
+        threading.Thread(target=_runner, daemon=True).start()
+        return _agent_deploy_job_snapshot(job_id)
 
     def _extract_json_from_text(text):
         raw = str(text or '').strip()
@@ -1946,36 +2541,84 @@ def run_web_server():
     def api_skills_market_skillhub_install():
         try:
             data = request.get_json() or {}
+            source = str(data.get('source') or 'skillhub').strip().lower()
+            external_url = str(data.get('external_url') or data.get('url') or '').strip()
             skill_ref = str(data.get('skill_id') or data.get('id') or data.get('name') or '').strip()
-            if not skill_ref:
+
+            refs = []
+            for v in [skill_ref, external_url, str(data.get('repository') or '').strip()]:
+                if v and v not in refs:
+                    refs.append(v)
+
+            if not refs:
                 return jsonify({'success': False, 'error': 'skill_id is required'}), 400
 
-            attempts = [
-                ['install', skill_ref, '--yes'],
-                ['add', skill_ref, '--yes'],
-                ['install', skill_ref],
-            ]
             errors = []
-            for args in attempts:
-                r = _run_skillhub_cli(args, timeout=120)
-                if r.get('ok'):
-                    try:
-                        chat_system.reload_skills()
-                    except Exception:
-                        pass
-                    return jsonify({
-                        'success': True,
-                        'skill_id': skill_ref,
-                        'message': f'SkillHub 技能安装完成: {skill_ref}',
-                        'stdout': (r.get('stdout') or '')[-1200:]
+            for ref in refs:
+                attempts = _skillhub_install_attempts_for_ref(ref, external_url)
+                for args in attempts:
+                    r = _run_skillhub_cli(args, timeout=120)
+                    if r.get('ok'):
+                        try:
+                            chat_system.reload_skills()
+                        except Exception:
+                            pass
+                        return jsonify({
+                            'success': True,
+                            'skill_id': ref,
+                            'message': f'SkillHub 技能安装完成: {ref}',
+                            'stdout': (r.get('stdout') or '')[-1200:],
+                            'source': source,
+                            'used_command': ' '.join(map(str, r.get('cmd') or [])),
+                        })
+                    errors.append({
+                        'ref': ref,
+                        'cmd': ' '.join(map(str, r.get('cmd') or [])),
+                        'message': (r.get('stderr') or r.get('stdout') or '').strip()[:800],
+                        'code': r.get('code'),
                     })
-                errors.append((r.get('stderr') or r.get('stdout') or '').strip()[:500])
 
             return jsonify({
                 'success': False,
                 'error': 'SkillHub 安装失败，请检查 CLI 输出',
-                'details': errors
-            }), 500
+                'details': errors,
+                'suggestion': '请优先尝试使用仓库 URL（owner/repo 或 https://...）作为 skill_id，或使用“Agent 一键部署”。'
+            }), 400
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/market/agent-deploy', methods=['POST'])
+    def api_skills_market_agent_deploy():
+        try:
+            data = request.get_json() or {}
+            source = str(data.get('source') or '').strip().lower() or 'github'
+            skill_id = str(data.get('skill_id') or data.get('id') or '').strip()
+            name = str(data.get('name') or '').strip()
+            external_url = str(data.get('external_url') or data.get('url') or '').strip()
+
+            if not (skill_id or external_url or name):
+                return jsonify({'success': False, 'error': '缺少 skill 标识信息'}), 400
+
+            job = _start_agent_deploy_job(source, skill_id, name, external_url)
+            return jsonify({
+                'success': True,
+                'message': 'Agent 一键部署已启动',
+                'job_id': job.get('job_id'),
+                'status_url': f"/api/skills/market/agent-deploy/jobs/{job.get('job_id')}",
+                'status': job.get('status', 'queued'),
+                'command': job.get('command_display', ''),
+                'logs': list(job.get('logs') or []),
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/skills/market/agent-deploy/jobs/<job_id>', methods=['GET'])
+    def api_skills_market_agent_deploy_job(job_id):
+        try:
+            job = _agent_deploy_job_snapshot(str(job_id).strip())
+            if not job:
+                return jsonify({'success': False, 'error': 'job not found'}), 404
+            return jsonify({'success': True, **job})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -2186,6 +2829,11 @@ def run_web_server():
     def control_panel():
         return app.send_static_file('control_panel.html')
 
+    @app.route('/security-init')
+    def security_init_route():
+        """提供安全系统初始化页面 (管理员专用)"""
+        return app.send_static_file('security-init.html')
+
     @app.route('/sandbox')
     def sandbox_route():
         return app.send_static_file('chat-sandbox.html')
@@ -2199,24 +2847,45 @@ def run_web_server():
 
             frontend_source = request.headers.get('X-Frontend-Source', 'control_panel')
             short_term_before = []
-            if frontend_source == 'sandbox':
+            if frontend_source in ('sandbox', 'control_panel'):
                 try:
                     short_term_before = chat_system.agent_manager.memory.load_short_term()
                 except Exception:
                     short_term_before = []
 
+            stream_mode = bool(data.get('stream'))
             # Web请求被视为管理员操作，允许使用Agent工具
-            response = chat_system.chat(
-                data.get('message'), 
-                data.get('image'), 
-                is_admin=True, 
-                attachments=data.get('attachments'),
-                frontend_source=frontend_source,
-                persona_filename=data.get('persona_filename')
-            )
+            def _build_chat_response():
+                return chat_system.chat(
+                    data.get('message'),
+                    data.get('image'),
+                    is_admin=True,
+                    attachments=data.get('attachments'),
+                    frontend_source=frontend_source,
+                    persona_filename=data.get('persona_filename')
+                )
+
+            if stream_mode:
+                def stream_reply():
+                    response = _build_chat_response()
+                    response_text = str(response or '')
+                    if not response_text:
+                        response_text = '（空回复）'
+
+                    chunk_size = 120
+                    for i in range(0, len(response_text), chunk_size):
+                        yield response_text[i:i + chunk_size]
+                    yield "\n"
+
+                streamed = Response(stream_reply(), mimetype='text/plain; charset=utf-8')
+                streamed.headers['Cache-Control'] = 'no-cache'
+                streamed.headers['X-Accel-Buffering'] = 'no'
+                return streamed
+
+            response = quick_reply if quick_reply is not None else _build_chat_response()
             payload = {'success': True, 'reply': response}
 
-            if frontend_source == 'sandbox':
+            if frontend_source in ('sandbox', 'control_panel'):
                 try:
                     short_term_after = chat_system.agent_manager.memory.load_short_term()
                     delta = short_term_after[len(short_term_before):] if len(short_term_after) >= len(short_term_before) else short_term_after
@@ -2257,6 +2926,23 @@ def run_web_server():
                         'show_back_to_top': bool(chat_settings.get('sandbox_show_back_to_top', True)),
                         'events': events,
                     }
+                    try:
+                        trace_rel_path = _write_trace_markdown(
+                            events,
+                            user_message=(data.get('message') or ''),
+                            reply_message=response,
+                            retention_days=chat_settings.get('sandbox_trace_retention_days', 7),
+                        )
+                        payload['debug']['trace_md'] = {
+                            'path': trace_rel_path,
+                            'created_at': datetime.datetime.now().isoformat(),
+                            'retention_days': _normalize_trace_retention_days(chat_settings.get('sandbox_trace_retention_days', 7), default=7),
+                        }
+                    except Exception as trace_err:
+                        payload['debug']['trace_md'] = {
+                            'path': '',
+                            'error': str(trace_err),
+                        }
                 except Exception:
                     payload['debug'] = {
                         'enabled': True,
@@ -2326,6 +3012,69 @@ def run_web_server():
             return jsonify({'success': True, 'data': updates, 'count': len(updates)})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
+
+    # ========== 任务管理 API ==========
+    @app.route('/api/systems/tasks', methods=['GET'])
+    def api_get_tasks():
+        try:
+            tasks = []
+            # 返回占位符任务数据
+            return jsonify({'code': 0, 'message': 'success', 'data': tasks})
+        except Exception as e:
+            return jsonify({'code': 500, 'message': str(e), 'data': []}), 500
+
+    @app.route('/api/systems/tasks', methods=['POST'])
+    def api_create_task():
+        try:
+            data = request.get_json() or {}
+            # 简单的任务创建逻辑 - 暂时只记录
+            task_id = f"task_{int(time.time())}"
+            return jsonify({'code': 0, 'message': 'success', 'data': {'id': task_id}})
+        except Exception as e:
+            return jsonify({'code': 500, 'message': str(e), 'data': None}), 500
+
+    @app.route('/api/systems/tasks/<task_id>', methods=['DELETE'])
+    def api_delete_task(task_id):
+        try:
+            return jsonify({'code': 0, 'message': 'success', 'data': None})
+        except Exception as e:
+            return jsonify({'code': 500, 'message': str(e), 'data': None}), 500
+
+    # ========== MCP 管理 API ==========
+    @app.route('/api/systems/mcp', methods=['GET'])
+    def api_get_mcp_servers():
+        try:
+            mcp_servers = []
+            return jsonify({'code': 0, 'message': 'success', 'data': mcp_servers})
+        except Exception as e:
+            return jsonify({'code': 500, 'message': str(e), 'data': []}), 500
+
+    # ========== 知识库 API ==========
+    @app.route('/api/systems/knowledge', methods=['GET'])
+    def api_get_knowledge_base():
+        try:
+            knowledge_items = []
+            return jsonify({'code': 0, 'message': 'success', 'data': knowledge_items})
+        except Exception as e:
+            return jsonify({'code': 500, 'message': str(e), 'data': []}), 500
+
+    # ========== 插件管理 API ==========
+    @app.route('/api/systems/plugins', methods=['GET'])
+    def api_get_plugins():
+        try:
+            plugins = []
+            return jsonify({'code': 0, 'message': 'success', 'data': plugins})
+        except Exception as e:
+            return jsonify({'code': 500, 'message': str(e), 'data': []}), 500
+
+    # ========== 技能管理 API ==========
+    @app.route('/api/systems/skills', methods=['GET'])
+    def api_get_skills():
+        try:
+            skills = []
+            return jsonify({'code': 0, 'message': 'success', 'data': skills})
+        except Exception as e:
+            return jsonify({'code': 500, 'message': str(e), 'data': []}), 500
 
     @app.route('/api/work_mode/status', methods=['GET'])
     def api_work_mode_status():

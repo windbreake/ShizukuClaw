@@ -132,7 +132,10 @@ def _system_config_default():
                 'sandbox_show_agent_trace': True,
                 'sandbox_trace_collapsed': True,
                 'sandbox_show_back_to_top': True,
-                'sandbox_use_docker_runtime': True,
+                'sandbox_use_docker_runtime': False,  # 仅 Windows 默认关闭
+                'sandbox_use_wsl_runtime': False,     # WSL 运行时
+                'sandbox_agent_autonomous': True,
+                'sandbox_trace_retention_days': 7,
             },
             'features': {
                 'allow_file_write': True,
@@ -143,6 +146,13 @@ def _system_config_default():
                 'plugin_dev_tools_require_work_mode': True,
                 'allow_external_access': False,
                 'require_external_approval': True,
+            },
+            'security_modes': {
+                'level1_password_hash': '',      # 工作模式密码 (SHA256)
+                'level2_password_hash': '',      # 广域管理模式密码 (SHA256)
+                'global_admin_enabled': False,   # 是否启用广域管理模式
+                'sandbox_mode': 'amala',         # 沙箱引擎: amala, docker, wsl
+                'amala_default_security': 0,     # amala 默认安全级别 (0=沙箱, 1=工作, 2=广域)
             },
             'allowed_databases': ['catgirl_db'],
         },
@@ -408,6 +418,8 @@ CONFIG = {
             'sandbox_trace_collapsed': bool(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('chat_settings', {}).get('sandbox_trace_collapsed', True)),
             'sandbox_show_back_to_top': bool(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('chat_settings', {}).get('sandbox_show_back_to_top', True)),
             'sandbox_use_docker_runtime': bool(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('chat_settings', {}).get('sandbox_use_docker_runtime', True)),
+            'sandbox_agent_autonomous': bool(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('chat_settings', {}).get('sandbox_agent_autonomous', True)),
+            'sandbox_trace_retention_days': int(SYSTEM_CONFIG_DATA.get('work_mode', {}).get('chat_settings', {}).get('sandbox_trace_retention_days', 7) or 7),
         },
         'features': {
             'allow_file_write': SYSTEM_CONFIG_DATA.get('work_mode', {}).get('features', {}).get('allow_file_write', True),

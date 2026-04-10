@@ -22,20 +22,25 @@ from src.agent.agent_sandbox import AgentSandbox
 
 class AgentManager:
     """Core manager for Agent functionality"""
-    def __init__(self, ai_chat_system=None):
+    def __init__(self, ai_chat_system=None, persona_filename=None):
         self.ai_chat_system = ai_chat_system
-        self.memory = AgentMemory(ai_chat_system)
+        self.memory = AgentMemory(ai_chat_system, persona_filename=persona_filename)
         self.planner = AgentPlanner()
         # Define sandbox root: project_root/agent_datas/workspace
         project_root = PROJECT_ROOT
         sandbox_root = os.path.join(project_root, 'agent_datas', 'workspace')
         self.sandbox = AgentSandbox(sandbox_root)
 
-    def get_agent_context(self):
+    def set_persona_context(self, persona_filename=None, bootstrap_from_legacy=False):
+        return self.memory.set_persona_context(persona_filename, bootstrap_from_legacy=bootstrap_from_legacy)
+
+    def get_agent_context(self, persona_filename=None):
         """Builds context string for the LLM"""
         try:
+            if persona_filename is not None:
+                self.set_persona_context(persona_filename)
             plan = self.planner.load_plan()
-            memory_packet = self.memory.build_context_packet()
+            memory_packet = self.memory.build_context_packet(persona_filename=persona_filename)
             
             context = f"""
 [Agent Capabilities]
@@ -62,6 +67,9 @@ Do not use exec_python just to delete a file or to check whether a file exists b
 Use exec_python only when file deletion requires more complex logic that cannot be handled by delete_file.
 When creating or converting Office/PDF files (.docx/.pptx/.xlsx/.pdf), do NOT use write_file.
 Always use create_document or convert_document for these formats.
+When the user explicitly asks to run/execute/debug/check a project, script, or command, you MUST execute it in the sandbox first.
+Do not stop at providing sample code or command suggestions only.
+Your final answer must include actual execution result (success/failure, output, return code, and next fix if failed).
 
 [Current Plan]
 {plan}
@@ -81,8 +89,11 @@ Always use create_document or convert_document for these formats.
         global_work_mode = bool(work_mode_cfg.get('enabled', False))
         sandbox_work_mode = bool(work_mode_cfg.get('sandbox_enabled', False))
         features = work_mode_cfg.get('features', {})
+        chat_settings = work_mode_cfg.get('chat_settings', {})
         source = (frontend_source or '').strip().lower()
-        work_mode = global_work_mode or (sandbox_work_mode and source == 'sandbox')
+        sandbox_agent_autonomous = bool(chat_settings.get('sandbox_agent_autonomous', True))
+        sandbox_autonomous_mode = bool(source == 'sandbox' and sandbox_agent_autonomous)
+        work_mode = global_work_mode or (sandbox_work_mode and source == 'sandbox') or sandbox_autonomous_mode
         plugin_command_requires_work_mode = bool(features.get('plugin_command_requires_work_mode', False))
         plugin_dev_tools_require_work_mode = bool(features.get('plugin_dev_tools_require_work_mode', True))
         plugin_dev_tools = ['plugin_list', 'plugin_reload', 'plugin_toggle', 'plugin_get_config', 'plugin_set_config']
@@ -311,8 +322,8 @@ Always use create_document or convert_document for these formats.
         except Exception as e:
             return f"Error executing tool {tool_name}: {str(e)}"
     
-    def record_action(self, role, content):
-        self.memory.append_short_term(role, content)
+    def record_action(self, role, content, persona_filename=None):
+        self.memory.append_short_term(role, content, persona_filename=persona_filename)
 
     def get_tools_definitions(self, is_admin=False):
         """Return the list of available tools based on permission"""

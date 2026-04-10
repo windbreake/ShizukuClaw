@@ -66,7 +66,7 @@ class AIChatSystem:
 
         # 初始化 Agent Manager
         from src.agent.agent_manager import AgentManager
-        self.agent_manager = AgentManager(self)
+        self.agent_manager = AgentManager(self, persona_filename=CONFIG.get('active_persona', 'shizuku.json'))
 
         # 初始化插件框架
         self.plugin_manager = PluginManager(self)
@@ -112,6 +112,7 @@ class AIChatSystem:
             "last_runtime_ms": 0,
             "last_selected_files": [],
         }
+        self.current_persona_filename = str(CONFIG.get('active_persona', 'shizuku.json') or 'shizuku.json').strip() or 'shizuku.json'
 
         # 实时搜索订阅存储
         project_root = PROJECT_ROOT
@@ -568,6 +569,13 @@ class AIChatSystem:
         CONFIG.update(new_conf)
         self.system_prompt = CONFIG.get('system_prompt', self.system_prompt)
         self.persona_runtime = CONFIG.get('persona_runtime', self.persona_runtime)
+        self.current_persona_state = None
+        self.current_persona_filename = selected['filename']
+        try:
+            if hasattr(self, 'agent_manager') and self.agent_manager:
+                self.agent_manager.set_persona_context(selected['filename'])
+        except Exception:
+            pass
 
         return f'{selected_label}.“{selected["name"]}”成功加载'
 
@@ -1205,6 +1213,34 @@ class AIChatSystem:
         summary = ' | '.join(errors[-6:]) if errors else 'unknown error'
         raise RuntimeError(f"All chat models failed: {summary}") from last_error
 
+    def _create_chat_completion_stream_with_retry(self, api_kwargs: dict, preferred_model: Optional[str] = None):
+        """带重试与模型回退的流式聊天调用。"""
+        model_candidates = self._get_chat_model_candidates(preferred_model)
+        max_retries = 3
+        last_error = None
+        errors = []
+
+        for model in model_candidates:
+            kwargs = dict(api_kwargs)
+            kwargs['model'] = model
+            kwargs['stream'] = True
+
+            for attempt in range(1, max_retries + 1):
+                try:
+                    response = self.client.chat.completions.create(**kwargs)
+                    return response, model
+                except Exception as exc:
+                    last_error = exc
+                    errors.append(f"{model}#{attempt}: {type(exc).__name__}: {str(exc)[:180]}")
+
+                    if attempt < max_retries and self._is_retryable_chat_error(exc):
+                        time.sleep(min(1.0 * (2 ** (attempt - 1)), 4.0))
+                        continue
+                    break
+
+        summary = ' | '.join(errors[-6:]) if errors else 'unknown error'
+        raise RuntimeError(f"All chat models failed: {summary}") from last_error
+
     def build_chat_context(self, user_input, max_tokens=2500, frontend_source='control_panel', system_prompt=None, persona_runtime=None, persona_filename=None):
         """
         构建智能上下文：
@@ -1479,12 +1515,18 @@ If the request involves modifying existing code, output the full modified file c
             attachments (list): 附件列表 [{'name':..., 'type':..., 'content':...}]
         """
         
-        # === 核心变更1：动态构建Agent上下文（如果启用Agent） ===
-        # 即使不是管理员，也可以读取Agent上下文，但不能执行写操作
-        try:
-            agent_context = self.agent_manager.get_agent_context()
-        except:
-            agent_context = ""
+        # ========== 优化：快速路径（简单聊天） ==========
+        # 对于非管理员、无特殊请求的简单聊天，跳过复杂处理以加快响应
+        normalized_input = str(user_input or '').strip()
+        is_simple_chat = (
+            not is_admin 
+            and not image 
+            and not attachments
+            and not any(kw in normalized_input.lower() for kw in ['运行', '执行', '跑起来', '调试', '自检', '检查', '启动', 'run', 'test', 'pytest', 'debug'])
+            and not AIChatSystem.should_search(normalized_input)
+        )
+        
+        agent_context = ""
 
         active_persona_filename = str(CONFIG.get('active_persona', 'shizuku.json') or 'shizuku.json').strip() or 'shizuku.json'
         if not persona_filename:
@@ -1498,8 +1540,23 @@ If the request involves modifying existing code, output the full modified file c
                 return f"角色卡加载失败: {str(e)}"
 
         effective_persona_filename = (persona_override or {}).get('filename') or active_persona_filename
+        if getattr(self, 'current_persona_filename', None) != effective_persona_filename:
+            self.current_persona_state = None
+        self.current_persona_filename = effective_persona_filename
+        try:
+            if hasattr(self, 'agent_manager') and self.agent_manager:
+                self.agent_manager.set_persona_context(effective_persona_filename)
+        except Exception:
+            pass
 
-        normalized_input = str(user_input or '').strip()
+        agent_context = ""
+        # 只在非简单聊天时加载 Agent 上下文
+        if not is_simple_chat:
+            try:
+                agent_context = self.agent_manager.get_agent_context(persona_filename=effective_persona_filename)
+            except:
+                agent_context = ""
+
         if frontend_source == 'onebot' and normalized_input:
             command_response = self._resolve_command_response(normalized_input, onebot_meta=onebot_meta)
             if command_response:
@@ -1519,8 +1576,8 @@ If the request involves modifying existing code, output the full modified file c
             persona_filename=effective_persona_filename
         )
         
-        # 手动将 agent_context 添加到 messages 的第一个系统消息中
-        if messages and messages[0]['role'] == 'system':
+        # 手动将 agent_context 添加到 messages 的第一个系统消息中（只在非简单聊天时）
+        if not is_simple_chat and messages and messages[0]['role'] == 'system':
             messages[0]['content'] += f"\n\n{agent_context}"
 
         image_description = None
@@ -1568,59 +1625,64 @@ If the request involves modifying existing code, output the full modified file c
 
         # 处理文本输入
         if user_input:
-            plugin_context = PluginContext(
-                user_input=user_input,
-                is_admin=is_admin,
-                frontend_source=frontend_source,
-                attachments=attachments,
-                metadata={
-                    "image_present": bool(image),
-                    "persona_filename": (persona_override or {}).get('filename')
-                },
-                chat_system=self
-            )
+            # 对于简单聊天，跳过插件处理和搜索逻辑
+            if not is_simple_chat:
+                plugin_context = PluginContext(
+                    user_input=user_input,
+                    is_admin=is_admin,
+                    frontend_source=frontend_source,
+                    attachments=attachments,
+                    metadata={
+                        "image_present": bool(image),
+                        "persona_filename": (persona_override or {}).get('filename')
+                    },
+                    chat_system=self
+                )
 
-            plugin_result = self.plugin_manager.process_input(plugin_context)
-            if plugin_result.handled and plugin_result.response is not None:
-                plugin_response = self.clean_dsml_markup(plugin_result.response)
-                plugin_response = self.plugin_manager.process_response(plugin_context, plugin_response)
-                self.db.save_chat(user_input, plugin_response, image_description, persona_filename=effective_persona_filename)
+                plugin_result = self.plugin_manager.process_input(plugin_context)
+                if plugin_result.handled and plugin_result.response is not None:
+                    plugin_response = self.clean_dsml_markup(plugin_result.response)
+                    plugin_response = self.plugin_manager.process_response(plugin_context, plugin_response)
+                    self.db.save_chat(user_input, plugin_response, image_description, persona_filename=effective_persona_filename)
+                    try:
+                        if user_input:
+                            self.agent_manager.record_action("user", user_input, persona_filename=effective_persona_filename)
+                        self.agent_manager.record_action("assistant", plugin_response, persona_filename=effective_persona_filename)
+                    except Exception:
+                        pass
+                    return plugin_response
+
+                if plugin_result.rewritten_input:
+                    user_input = plugin_result.rewritten_input
+                    plugin_context.user_input = user_input
+
+                # 判断是否需要搜索
+                if AIChatSystem.should_search(user_input):
+                    print(f"检测到搜索请求: {user_input}")
+                    search_result = AIChatSystem.search_with_ai_search(user_input)
+
+                    # 检查搜索是否成功
+                    if "搜索API错误" in search_result or "搜索失败" in search_result:
+                        # 如果搜索失败，使用普通聊天模式
+                        messages.append({"role": "user", "content": user_input})
+                    else:
+                        # 将搜索结果拼接到当前输入中
+                        search_context = f"用户问题: {user_input}\n{search_result}"
+                        messages.append({
+                            "role": "user",
+                            "content": search_context
+                        })
+                        print(f"搜索结果: {search_result[:100]}...")
+                else:
+                    messages.append({"role": "user", "content": user_input})
+
                 try:
-                    if user_input:
-                        self.agent_manager.record_action("user", user_input)
-                    self.agent_manager.record_action("assistant", plugin_response)
+                    self.agent_manager.record_action("user", user_input, persona_filename=effective_persona_filename)
                 except Exception:
                     pass
-                return plugin_response
-
-            if plugin_result.rewritten_input:
-                user_input = plugin_result.rewritten_input
-                plugin_context.user_input = user_input
-
-            # 判断是否需要搜索
-            if AIChatSystem.should_search(user_input):
-                print(f"检测到搜索请求: {user_input}")
-                search_result = AIChatSystem.search_with_ai_search(user_input)
-
-                # 检查搜索是否成功
-                if "搜索API错误" in search_result or "搜索失败" in search_result:
-                    # 如果搜索失败，使用普通聊天模式
-                    messages.append({"role": "user", "content": user_input})
-                else:
-                    # 将搜索结果拼接到当前输入中
-                    search_context = f"用户问题: {user_input}\n{search_result}"
-                    messages.append({
-                        "role": "user",
-                        "content": search_context
-                    })
-                    print(f"搜索结果: {search_result[:100]}...")
             else:
+                # 简单聊天快速路径：直接添加用户输入
                 messages.append({"role": "user", "content": user_input})
-
-            try:
-                self.agent_manager.record_action("user", user_input)
-            except Exception:
-                pass
         # 如果没有文本输入但有图片
         elif not user_input and image:
             messages.append({"role": "user", "content": "[用户发送了一张图片]"})
@@ -1630,12 +1692,23 @@ If the request involves modifying existing code, output the full modified file c
 
         try:
             # 使用DeepSeek-Chat模型生成回复（添加超时）
+            run_request = bool(
+                frontend_source == 'sandbox'
+                and user_input
+                and re.search(r'(运行|执行|跑起来|调试|自检|检查|启动|run|test|pytest|debug)', str(user_input), re.IGNORECASE)
+            )
+
+            def _extract_python_target(text):
+                m = re.search(r'([\w./\\-]+\.py)', str(text or ''))
+                if not m:
+                    return ''
+                return str(m.group(1)).replace('\\', '/')
             
             # --- AGENT EXTENSION ---
-            # 获取工具定义
+            # 获取工具定义（只在需要时获取）
             tools = None
             try:
-                if is_admin:
+                if is_admin and not is_simple_chat:
                     tools = self.agent_manager.get_tools_definitions(is_admin)
             except AttributeError:
                 # 如果没有初始化 agent_manager
@@ -1658,9 +1731,10 @@ If the request involves modifying existing code, output the full modified file c
             message = choice.message
             
             ai_response = self.clean_dsml_markup(message.content) # 默认回复，清理DSML标记
+            did_tool_execution = False
 
-            # 处理工具调用
-            if hasattr(message, 'tool_calls') and message.tool_calls:
+            # 处理工具调用（只在非简单聊天时处理）
+            if not is_simple_chat and hasattr(message, 'tool_calls') and message.tool_calls:
                 # 将助手的工具调用消息添加到历史
                 # 注意：openai python sdk 对象不能直接作为 dict 添加
                 # 需要转换格式
@@ -1668,6 +1742,7 @@ If the request involves modifying existing code, output the full modified file c
                 
                 tool_calls = message.tool_calls
                 for tool_call in tool_calls:
+                    did_tool_execution = True
                     function_name = tool_call.function.name
                     try:
                         # 清理工具参数中的DSML标记
@@ -1689,8 +1764,8 @@ If the request involves modifying existing code, output the full modified file c
                     )
                     
                     # 记录操作到 AgentMemory (Short Term)
-                    self.agent_manager.record_action("assistant", f"Called {function_name}")
-                    self.agent_manager.record_action("system", f"Result: {tool_result}")
+                    self.agent_manager.record_action("assistant", f"Called {function_name}", persona_filename=effective_persona_filename)
+                    self.agent_manager.record_action("system", f"Result: {tool_result}", persona_filename=effective_persona_filename)
 
                     # 将结果返回给 LLM
                     messages.append({
@@ -1717,6 +1792,50 @@ If the request involves modifying existing code, output the full modified file c
                     response = second_response
                 except Exception as e:
                     ai_response = f"工具执行完毕，但生成最终回复时出错: {str(e)}"
+
+            if is_admin and run_request and not did_tool_execution:
+                auto_result = ''
+                py_target = _extract_python_target(user_input)
+                if py_target:
+                    run_args = ["sys.executable", repr(py_target)]
+                    if '--self-test' in str(user_input):
+                        run_args.append("'--self-test'")
+                    elif py_target.lower().endswith('snake.py'):
+                        run_args.append("'--self-test'")
+
+                    code = (
+                        "import subprocess, sys\n"
+                        f"cmd = [{', '.join(run_args)}]\n"
+                        "result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)\n"
+                        "print('cmd:', ' '.join(cmd))\n"
+                        "print('returncode:', result.returncode)\n"
+                        "if result.stdout:\n    print('stdout:\\n' + result.stdout)\n"
+                        "if result.stderr:\n    print('stderr:\\n' + result.stderr)\n"
+                    )
+                    auto_result = self.agent_manager.execute_tool(
+                        'exec_python',
+                        {'code': code, 'filename': 'auto_execute_request.py'},
+                        is_admin=is_admin,
+                        frontend_source=frontend_source,
+                        user_input=user_input
+                    )
+                    self.agent_manager.record_action("assistant", "Called exec_python(auto_execute_request)", persona_filename=effective_persona_filename)
+                    self.agent_manager.record_action("system", f"Result: {auto_result}", persona_filename=effective_persona_filename)
+                else:
+                    auto_result = self.agent_manager.execute_tool(
+                        'run_project_debug',
+                        {'target': '.', 'run_tests': True},
+                        is_admin=is_admin,
+                        frontend_source=frontend_source,
+                        user_input=user_input
+                    )
+                    self.agent_manager.record_action("assistant", "Called run_project_debug(auto_execute_request)", persona_filename=effective_persona_filename)
+                    self.agent_manager.record_action("system", f"Result: {auto_result}", persona_filename=effective_persona_filename)
+
+                auto_text = str(auto_result or '')
+                if len(auto_text) > 4000:
+                    auto_text = auto_text[:4000] + "\n...truncated..."
+                ai_response = f"{ai_response}\n\n[自动执行结果]\n{auto_text}"
 
             # --- TOKEN COUNTING FIX BEGIN ---
             # 获取token使用情况并更新全局计数
@@ -1757,7 +1876,7 @@ If the request involves modifying existing code, output the full modified file c
             self.db.save_chat(user_input or "[图片]", ai_response, image_description, persona_filename=effective_persona_filename)
 
             try:
-                self.agent_manager.record_action("assistant", ai_response)
+                self.agent_manager.record_action("assistant", ai_response, persona_filename=effective_persona_filename)
             except Exception:
                 pass
 

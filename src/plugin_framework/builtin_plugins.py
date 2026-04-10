@@ -24,6 +24,51 @@ def _truncate(text, limit=260):
     return s[: limit - 3] + "..."
 
 
+def _looks_like_web_build_intent(text: str) -> bool:
+    s = str(text or "").lower()
+    if not s:
+        return False
+    web_artifacts = ["网站", "网页", "小网页", "页面", "前端", "web", "html", "css", "javascript", "js", "小程序", "应用"]
+    build_actions = ["创建", "生成", "制作", "搭建", "开发", "编写", "写一个", "做一个", "部署", "上线", "发布", "预览", "启动服务", "start_web_preview", "server"]
+    return any(k in s for k in web_artifacts) and any(k in s for k in build_actions)
+
+
+def _extract_city_from_weather_text(text: str) -> str:
+    s = str(text or "").strip()
+    if not s:
+        return ""
+
+    # Remove conversational prefixes to improve location extraction accuracy.
+    noise_prefixes = [
+        "我想知道", "我想了解", "请问", "麻烦", "帮我", "请帮我", "能不能", "可以", "想知道"
+    ]
+    for p in noise_prefixes:
+        s = s.replace(p, "")
+
+    def _normalize_city(city_text: str) -> str:
+        city = str(city_text or "").strip()
+        for p in ["今天", "现在", "当前", "明天", "后天", "今日", "此刻"]:
+            if city.startswith(p):
+                city = city[len(p):].strip()
+        return city
+
+    # Pattern: "沈阳天气怎么样" / "今天北京天气"
+    m = re.search(r'([\u4e00-\u9fffA-Za-z·\-]{2,20})(?:今天|现在|当前|明天|后天|今日|此刻)?(?:的)?天气', s)
+    if m:
+        city = _normalize_city(m.group(1) or "")
+        if city not in {"什么", "怎么", "如何", "这个", "那个", "这里", "那里"}:
+            return city
+
+    # Pattern: "天气: 上海"
+    m = re.search(r'天气\s*[:：]?\s*([\u4e00-\u9fffA-Za-z·\-]{2,20})', s)
+    if m:
+        city = _normalize_city(m.group(1) or "")
+        if city not in {"怎么样", "如何", "吗", "呢", "捏"}:
+            return city
+
+    return ""
+
+
 def _http_get(plugin_name, manager, url, timeout=8):
     ok, reason = manager.validate_url_for_plugin(plugin_name, url)
     if not ok:
@@ -253,7 +298,13 @@ def register(registry, manager):
         return re.sub(r"\s+", " ", response_text).strip()
 
     def rule_weather(ctx, match):
-        city = (match.group(1) or "").strip() if match else ""
+        # Avoid hijacking prompts like "做一个天气展示网页并部署".
+        if _looks_like_web_build_intent(getattr(ctx, "user_input", "")):
+            return PluginResult(handled=False)
+        raw_input = getattr(ctx, "user_input", "")
+        city = _extract_city_from_weather_text(raw_input)
+        if not city:
+            city = (match.group(1) or "").strip() if match else ""
         return cmd_weather(ctx, city)
 
     def rule_wiki(ctx, match):

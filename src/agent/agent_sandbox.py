@@ -17,6 +17,7 @@ import json
 import threading
 import uuid
 import shlex
+import textwrap
 
 OFFICE_BINARY_EXTS = {'.docx', '.pptx', '.xlsx', '.pdf'}
 
@@ -24,6 +25,20 @@ class SandboxError(Exception):
     pass
 
 class AgentSandbox:
+    TEXT_DECODE_CANDIDATES = (
+        'utf-8-sig',
+        'utf-8',
+        'utf-16',
+        'utf-16-le',
+        'utf-16-be',
+        'gb18030',
+        'gbk',
+        'cp936',
+        'big5',
+        'shift_jis',
+        'latin-1',
+    )
+
     def __init__(self, root_dir):
         # Allow operations ONLY within this 'root_dir'
         self.root_dir = os.path.abspath(root_dir)
@@ -307,11 +322,30 @@ class AgentSandbox:
         except Exception:
             return None, f"Missing dependency '{import_name}'. Install with: pip install {pip_hint}"
 
+    @classmethod
+    def _decode_text_bytes(cls, raw_bytes):
+        """Decode text bytes with fallback encodings to avoid conversion failures/garbled text."""
+        if isinstance(raw_bytes, str):
+            return raw_bytes
+        if not isinstance(raw_bytes, (bytes, bytearray)):
+            return str(raw_bytes or '')
+
+        for enc in cls.TEXT_DECODE_CANDIDATES:
+            try:
+                return bytes(raw_bytes).decode(enc)
+            except Exception:
+                continue
+        return bytes(raw_bytes).decode('utf-8', errors='replace')
+
+    def _read_text_file_with_fallback(self, safe_path):
+        with open(safe_path, 'rb') as f:
+            raw = f.read()
+        return self._decode_text_bytes(raw)
+
     def _read_text_from_file_for_conversion(self, safe_path):
         ext = os.path.splitext(safe_path)[1].lower()
         if ext in {'.txt', '.md', '.py', '.json'}:
-            with open(safe_path, 'r', encoding='utf-8') as f:
-                return f.read()
+            return self._read_text_file_with_fallback(safe_path)
 
         if ext == '.docx':
             docx_mod, err = self._load_optional_module('docx', 'python-docx')
@@ -367,6 +401,8 @@ class AgentSandbox:
             return "Error: target format is required"
 
         text_content = content
+        if isinstance(text_content, (bytes, bytearray)):
+            text_content = self._decode_text_bytes(text_content)
         if isinstance(content, (dict, list)):
             text_content = json.dumps(content, ensure_ascii=False, indent=2)
         text_content = str(text_content or '')
@@ -430,21 +466,53 @@ class AgentSandbox:
                 pagesize_mod, err_pagesize = self._load_optional_module('reportlab.lib.pagesizes', 'reportlab')
                 if canvas_mod is None or pagesize_mod is None:
                     return f"Error: {err_canvas or err_pagesize}"
+
+                # Prefer CJK-capable font to avoid Chinese/Japanese text rendering as garbled blocks.
+                pdfmetrics_mod, _ = self._load_optional_module('reportlab.pdfbase.pdfmetrics', 'reportlab')
+                cidfonts_mod, _ = self._load_optional_module('reportlab.pdfbase.cidfonts', 'reportlab')
+
+                title_font = 'Helvetica-Bold'
+                body_font = 'Helvetica'
+                if pdfmetrics_mod is not None and cidfonts_mod is not None:
+                    try:
+                        pdfmetrics_mod.registerFont(cidfonts_mod.UnicodeCIDFont('STSong-Light'))
+                        title_font = 'STSong-Light'
+                        body_font = 'STSong-Light'
+                    except Exception:
+                        pass
+
                 canvas = canvas_mod.Canvas(safe_path, pagesize=pagesize_mod.letter)
-                _, height = pagesize_mod.letter
+                width, height = pagesize_mod.letter
+                left = 40
+                right = 40
+                usable_width = max(120, int(width - left - right))
                 y = height - 40
+
+                def wrap_line(line_text):
+                    # ASCII is narrower; CJK is wider. This heuristic keeps lines inside page width.
+                    has_non_ascii = any(ord(ch) > 127 for ch in line_text)
+                    max_chars = max(16, usable_width // (11 if has_non_ascii else 6))
+                    return textwrap.wrap(line_text, width=max_chars) or ['']
+
                 if title:
-                    canvas.setFont('Helvetica-Bold', 14)
+                    canvas.setFont(title_font, 14)
                     canvas.drawString(40, y, str(title)[:100])
                     y -= 24
-                canvas.setFont('Helvetica', 10)
-                for line in text_content.splitlines() or [text_content]:
-                    if y < 40:
-                        canvas.showPage()
-                        canvas.setFont('Helvetica', 10)
-                        y = height - 40
-                    canvas.drawString(40, y, line[:140])
-                    y -= 14
+
+                canvas.setFont(body_font, 10)
+                normalized = text_content.replace('\r\n', '\n').replace('\r', '\n').expandtabs(4)
+                for raw_line in (normalized.splitlines() or [normalized]):
+                    for line in wrap_line(raw_line):
+                        if y < 40:
+                            canvas.showPage()
+                            canvas.setFont(body_font, 10)
+                            y = height - 40
+                        canvas.drawString(left, y, line)
+                        y -= 14
+
+                if y < 40:
+                    # Keep behavior deterministic when very long content exactly fills a page.
+                    canvas.showPage()
                 canvas.save()
                 return f"Success: Created {output_path}"
 
@@ -753,6 +821,9 @@ class AgentSandbox:
 
         env = os.environ.copy()
         env['PYTHONNOUSERSITE'] = '1'
+        # 添加 workspace_dir 到 PYTHONPATH，使 Agent 代码能正确导入模块
+        existing_pythonpath = env.get('PYTHONPATH', '')
+        env['PYTHONPATH'] = f"{self.workspace_dir}{os.pathsep}{existing_pythonpath}" if existing_pythonpath else self.workspace_dir
 
         try:
             result = subprocess.run(

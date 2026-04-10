@@ -194,6 +194,19 @@ def should_search(user_input: str) -> bool:
     """
     if not user_input:
         return False
+
+    normalized = user_input.strip().lower()
+
+    # Intent guard: web/app/page creation/deployment requests are coding tasks, not search tasks.
+    web_artifacts = [
+        '网站', '网页', '小网页', '页面', '前端', 'web', 'html', 'css', 'javascript', 'js', '小程序', '应用'
+    ]
+    build_actions = [
+        '创建', '生成', '制作', '搭建', '开发', '编写', '写一个', '做一个',
+        '部署', '上线', '发布', '运行', '启动服务', 'start_web_preview'
+    ]
+    if any(k in normalized for k in web_artifacts) and any(k in normalized for k in build_actions):
+        return False
         
     # 定义触发搜索的关键词模式
     search_keywords = [

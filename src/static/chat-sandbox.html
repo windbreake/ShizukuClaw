@@ -321,6 +321,7 @@
             .back-to-top-btn { right: 14px; bottom: 14px; }
         }
     </style>
+    <script src="/static/security-auth.js"></script>
 </head>
 <body>
     <div class="chat-container">
@@ -390,12 +391,17 @@
 
     <div id="wm-modal" class="wm-modal">
         <div class="wm-card">
-            <h3 style="margin:0 0 8px 0;color:#b02a37;">安全风险提示</h3>
-            <p style="margin:0 0 6px 0;">开启工作模式后，系统将允许代码执行与本地文件写入能力。</p>
-            <p style="margin:0;color:#6c757d;font-size:13px;">默认优先使用 Docker 隔离运行时，避免破坏宿主机。</p>
+            <h3 style="margin:0 0 8px 0;color:#b02a37;">🔐 安全模式系统</h3>
+            <p style="margin:0 0 6px 0;"><strong>当前系统已启用两层密码保护机制：</strong></p>
+            <ul style="margin:8px 0;padding-left:20px;font-size:13px;">
+                <li><strong>沙箱模式 (Level 0)</strong>：默认安全，代码在严格隔离环境运行</li>
+                <li><strong>工作模式 (Level 1)</strong>：需要工作模式密码，允许文件操作</li>
+                <li><strong>全局管理模式 (Level 2)</strong>：需要管理密码 + 风险确认，完全系统访问权限</li>
+            </ul>
+            <p style="margin:12px 0 6px 0;color:#6c757d;font-size:12px;">点击下方按钮进入相应安全级别。</p>
             <div class="wm-actions">
-                <button type="button" id="wm-cancel">取消</button>
-                <button type="button" id="wm-confirm" style="background:#dc3545;">我已知晓风险，开启工作模式</button>
+                <button type="button" id="wm-cancel">关闭</button>
+                <button type="button" id="wm-level2" style="background:#dc3545;display:none;">进入全局管理模式</button>
             </div>
         </div>
     </div>
@@ -465,6 +471,16 @@
                     `<span>AI 操作流程（${debug.events.length} 条）</span>`;
                 details.appendChild(summary);
 
+                if (debug.trace_md && debug.trace_md.path) {
+                    const traceMeta = document.createElement('div');
+                    traceMeta.className = 'ai-trace-item';
+                    const traceHead = document.createElement('div');
+                    traceHead.className = 'ai-trace-item-head';
+                    traceHead.innerHTML = `${iconForTrace('tool_result')}<span>临时过程文件</span><span class="ai-trace-badge">${escapeHtml(debug.trace_md.path)}</span>`;
+                    traceMeta.appendChild(traceHead);
+                    details.appendChild(traceMeta);
+                }
+
                 const list = document.createElement('div');
                 list.className = 'ai-trace-list';
 
@@ -505,13 +521,24 @@
 
             async function loadWorkModeStatus() {
                 try {
-                    const res = await fetch('/api/work_mode/status');
+                    const res = await fetch('/api/security/status');
                     const data = await res.json();
-                    if (!data.success) return;
-                    const enabled = !!data.sandbox_enabled;
-                    wmBadge.innerText = enabled ? '开启' : '关闭';
-                    wmBadge.style.background = enabled ? '#ffc107' : '#6c757d';
-                    wmBadge.style.color = enabled ? '#212529' : '#fff';
+
+                    // 更新工作模式徽章 - 显示当前安全级别
+                    const securityLevel = window.SecurityAuth.securityLevel;
+                    if (securityLevel === 2) {
+                        wmBadge.innerText = '全局管理';
+                        wmBadge.style.background = '#dc3545';
+                        wmBadge.style.color = '#fff';
+                    } else if (securityLevel === 1) {
+                        wmBadge.innerText = '工作';
+                        wmBadge.style.background = '#ffc107';
+                        wmBadge.style.color = '#212529';
+                    } else {
+                        wmBadge.innerText = '沙箱';
+                        wmBadge.style.background = '#6c757d';
+                        wmBadge.style.color = '#fff';
+                    }
 
                     const settings = data.chat_settings || {};
                     sandboxSettings.sandbox_show_agent_trace = !!settings.sandbox_show_agent_trace;
@@ -519,7 +546,7 @@
                     sandboxSettings.sandbox_show_back_to_top = !!settings.sandbox_show_back_to_top;
                     refreshBackToTopVisibility();
                 } catch (e) {
-                    console.warn('load work mode failed', e);
+                    console.warn('load security status failed', e);
                 }
             }
 
@@ -629,18 +656,42 @@
             }
 
             async function toggleSandboxWorkMode() {
-                const currentlyEnabled = wmBadge.innerText === '开启';
-                const res = await fetch('/api/work_mode/toggle', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({scope: 'sandbox', enable: !currentlyEnabled})
-                });
-                const data = await res.json();
-                if (!data.success) {
-                    alert(data.error || '切换失败');
-                    return;
+                // 先获取安全状态
+                try {
+                    const statusRes = await fetch('/api/security/status');
+                    const statusData = await statusRes.json();
+                    
+                    // 如果没有配置密码，提示用户
+                    if (!statusData.passwords_configured) {
+                        alert('系统未配置安全密码。请联系管理员设置密码。');
+                        return;
+                    }
+
+                    // 如果已启用 Level1，显示切换确认
+                    if (wmBadge.innerText === '工作') {
+                        const confirmed = confirm('确认退出工作模式？');
+                        if (!confirmed) return;
+                        
+                        wmBadge.innerText = '沙箱';
+                        wmBadge.style.background = '#6c757d';
+                        wmBadge.style.color = '#fff';
+                        window.SecurityAuth.level1SessionId = null;
+                        window.SecurityAuth.securityLevel = 0;
+                        return;
+                    }
+
+                    // 尝试进入 Level1
+                    const success = await window.SecurityAuth.showLevel1Dialog();
+                    if (success) {
+                        wmBadge.innerText = '工作';
+                        wmBadge.style.background = '#ffc107';
+                        wmBadge.style.color = '#212529';
+                        addMessage('✅ 已进入工作模式（Level 1）。可以执行文件操作。', false, null);
+                    }
+                } catch (err) {
+                    console.error('Toggle work mode failed:', err);
+                    alert(`切换失败: ${err.message}`);
                 }
-                loadWorkModeStatus();
             }
 
             function addMessage(text, isUser, options) {
@@ -677,6 +728,66 @@
                 refreshBackToTopVisibility();
             }
 
+            function createPendingAssistantMessage() {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message bot-message';
+
+                const contentDiv = document.createElement('div');
+                contentDiv.innerHTML = '正在输出中...';
+                messageDiv.appendChild(contentDiv);
+
+                const pendingDebug = {
+                    enabled: sandboxSettings.sandbox_show_agent_trace,
+                    collapsed: sandboxSettings.sandbox_trace_collapsed,
+                    events: [
+                        {
+                            type: 'assistant_message',
+                            label: '处理中',
+                            content: '模型正在思考与执行操作，完成后会将详细流程归档到本条消息。'
+                        }
+                    ]
+                };
+
+                let panel = buildTracePanel(pendingDebug);
+                if (panel) {
+                    panel.setAttribute('data-live-trace', '1');
+                    messageDiv.appendChild(panel);
+                }
+
+                const ts = document.createElement('div');
+                ts.className = 'timestamp';
+                ts.textContent = new Date().toLocaleTimeString();
+                messageDiv.appendChild(ts);
+
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                refreshBackToTopVisibility();
+
+                return {
+                    setText(text) {
+                        contentDiv.innerHTML = escapeHtml(text || '').replace(/\n/g, '<br>');
+                    },
+                    setError(text) {
+                        contentDiv.innerHTML = escapeHtml(text || '未知错误').replace(/\n/g, '<br>');
+                    },
+                    setDebug(debug) {
+                        const oldPanel = messageDiv.querySelector('[data-live-trace="1"], .ai-trace-panel');
+                        if (oldPanel) oldPanel.remove();
+
+                        const merged = {
+                            enabled: sandboxSettings.sandbox_show_agent_trace && !!(debug && debug.enabled),
+                            collapsed: debug && debug.collapsed !== undefined ? !!debug.collapsed : sandboxSettings.sandbox_trace_collapsed,
+                            events: debug && Array.isArray(debug.events) ? debug.events : [],
+                            trace_md: debug && debug.trace_md ? debug.trace_md : null,
+                        };
+                        const realPanel = buildTracePanel(merged);
+                        if (realPanel) {
+                            messageDiv.insertBefore(realPanel, ts);
+                        }
+                    }
+                };
+            }
+
             async function sendMessage() {
                 const message = userInput.value.trim();
                 const image = imagePreview.querySelector('img');
@@ -695,23 +806,47 @@
                 imagePreview.innerHTML = '';
                 imageUpload.value = '';
                 loadingIndicator.style.display = 'block';
+                const pendingAssistant = createPendingAssistantMessage();
 
                 try {
+                    // 准备请求体，包含当前的安全级别和会话信息
+                    const requestBody = {
+                        message: message,
+                        image: imageData,
+                        security_level: window.SecurityAuth.securityLevel,
+                        session_id: window.SecurityAuth.securityLevel === 1 ? 
+                                   window.SecurityAuth.level1SessionId : 
+                                   (window.SecurityAuth.securityLevel === 2 ? 
+                                    window.SecurityAuth.level2SessionId : null)
+                    };
+
                     const response = await fetch('/chat', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'X-Frontend-Source': 'sandbox'
                         },
-                        body: JSON.stringify({
-                            message: message,
-                            image: imageData
-                        })
+                        body: JSON.stringify(requestBody)
                     });
 
                     const data = await response.json();
+                    
+                    // 检查会话是否过期
+                    if (response.status === 401) {
+                        pendingAssistant.setError('❌ 安全会话已过期，请重新选择安全级别');
+                        pendingAssistant.setDebug(null);
+                        window.SecurityAuth.level1SessionId = null;
+                        window.SecurityAuth.level2SessionId = null;
+                        window.SecurityAuth.securityLevel = 0;
+                        wmBadge.innerText = '沙箱';
+                        wmBadge.style.background = '#6c757d';
+                        wmBadge.style.color = '#fff';
+                        return;
+                    }
+
                     if (data.success) {
-                        addMessage(data.reply, false, {debug: data.debug || null});
+                        pendingAssistant.setText(data.reply || '');
+                        pendingAssistant.setDebug(data.debug || null);
                         if (data.debug && data.debug.show_back_to_top !== undefined) {
                             sandboxSettings.sandbox_show_back_to_top = !!data.debug.show_back_to_top;
                         }
@@ -720,10 +855,12 @@
                             quickOpenUrlInput.value = foundUrl[0];
                         }
                     } else {
-                        addMessage(`出错啦: ${data.error || '未知错误'}`, false, null);
+                        pendingAssistant.setError(`出错啦: ${data.error || '未知错误'}`);
+                        pendingAssistant.setDebug(null);
                     }
                 } catch (error) {
-                    addMessage(`网络错误: ${error.message}`, false, null);
+                    pendingAssistant.setError(`网络错误: ${error.message}`);
+                    pendingAssistant.setDebug(null);
                 } finally {
                     loadingIndicator.style.display = 'none';
                     refreshApprovals();
@@ -731,15 +868,54 @@
                 }
             }
 
-            toggleWorkmodeBtn.addEventListener('click', function() {
-                wmModal.classList.add('show');
+            // 工作模式按钮点击：显示当前状态和操作选项
+            toggleWorkmodeBtn.addEventListener('click', async function() {
+                const currentLevel = window.SecurityAuth.securityLevel;
+                
+                // 如果还在沙箱模式，进入工作模式
+                if (currentLevel === 0) {
+                    wmModal.classList.add('show');
+                } 
+                // 如果在工作模式，显示切换菜单（可以升级到全局管理或退出）
+                else if (currentLevel === 1) {
+                    const choice = confirm('当前在工作模式。\n\n按"确定"进入全局管理模式，按"取消"返回沙箱模式？');
+                    if (choice) {
+                        // 尝试进入 Level 2
+                        const success = await window.SecurityAuth.showLevel2Dialog();
+                        if (success) {
+                            wmBadge.innerText = '全局管理';
+                            wmBadge.style.background = '#dc3545';
+                            wmBadge.style.color = '#fff';
+                            addMessage('🚨 已进入全局管理模式（Level 2）。具有完全系统访问权限。', false, null);
+                        }
+                    } else {
+                        // 退出到沙箱模式
+                        wmBadge.innerText = '沙箱';
+                        wmBadge.style.background = '#6c757d';
+                        wmBadge.style.color = '#fff';
+                        window.SecurityAuth.level1SessionId = null;
+                        window.SecurityAuth.level2SessionId = null;
+                        window.SecurityAuth.securityLevel = 0;
+                    }
+                }
+                // 如果在全局管理模式，只需退出
+                else if (currentLevel === 2) {
+                    const confirmed = confirm('确认退出全局管理模式，返回沙箱模式？');
+                    if (confirmed) {
+                        wmBadge.innerText = '沙箱';
+                        wmBadge.style.background = '#6c757d';
+                        wmBadge.style.color = '#fff';
+                        window.SecurityAuth.level1SessionId = null;
+                        window.SecurityAuth.level2SessionId = null;
+                        window.SecurityAuth.securityLevel = 0;
+                    }
+                }
             });
+            
             wmCancel.addEventListener('click', function() {
                 wmModal.classList.remove('show');
-            });
-            wmConfirm.addEventListener('click', async function() {
-                await toggleSandboxWorkMode();
-                wmModal.classList.remove('show');
+                // 点击关闭后主动进入 Level 1 工作模式
+                toggleSandboxWorkMode();
             });
 
             uploadButton.addEventListener('click', function() {
@@ -798,6 +974,28 @@
                 chatMessages.scrollTo({top: 0, behavior: 'smooth'});
             });
 
+            // 初始化安全系统状态
+            (async function initSecuritySystem() {
+                try {
+                    const statusRes = await fetch('/api/security/status');
+                    const statusData = await statusRes.json();
+                    
+                    if (statusData.passwords_configured) {
+                        addMessage(
+                            '🔐 安全系统已启用。系统支持三个安全级别：\n' +
+                            '• 沙箱模式 (默认)：严格隔离\n' +
+                            '• 工作模式 (Level 1)：文件操作\n' +
+                            '• 全局管理 (Level 2)：完全系统访问\n' +
+                            '点击左侧"切换工作模式"按钮选择安全级别。',
+                            false,
+                            null
+                        );
+                    }
+                } catch (err) {
+                    console.warn('Security system init failed:', err);
+                }
+            })();
+            
             loadWorkModeStatus();
             refreshApprovals();
             setInterval(refreshApprovals, 10000);

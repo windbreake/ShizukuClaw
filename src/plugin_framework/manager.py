@@ -528,7 +528,13 @@ class PluginManager:
                     continue
                 result = self._run_with_policy(plugin_name, lambda: rule.handler(context, match))
                 if isinstance(result, PluginResult):
-                    return result
+                    # Only intercept the flow when plugin explicitly handled it.
+                    if result.rewritten_input:
+                        context.user_input = result.rewritten_input
+                        user_input = result.rewritten_input
+                    if result.handled:
+                        return result
+                    continue
             except Exception as exc:
                 self.logger.error("Plugin regex rule failed (%s): %s", plugin_name, exc)
                 self._dispatch_error_handlers(context, exc)

@@ -21,6 +21,12 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="static/css/style.css">
     <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
         .launcher-diagnostics-box {
             min-height: 220px;
             font-family: 'Consolas', monospace;
@@ -38,8 +44,211 @@
         .h-250 { height: 250px; }
         .h-100 { height: 100px; }
         .text-truncate-80 { max-width: 80px; }
-        .sandbox-chat-card { min-height: 600px; }
-        .chat-box-body { flex: 1; min-height: 400px; border-radius: 0.5rem; }
+        
+        /* Sandbox Chat Layout - Only center area scrolls */
+        #v-sandbox {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+            gap: 0.6rem;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        
+        #v-sandbox > h3 { 
+            flex: 0 0 auto;
+            margin-bottom: 0;
+            margin-top: 0;
+            font-size: 1.3rem;
+        }
+        
+        #v-sandbox > .alert { 
+            flex: 0 0 auto;
+            margin-bottom: 0;
+            padding: 10px 12px;
+        }
+        
+        #v-sandbox > .card:not(.sandbox-chat-card) { 
+            flex: 0 0 auto;
+            margin-bottom: 0;
+            padding: 0;
+        }
+        
+        #v-sandbox > .card:not(.sandbox-chat-card) .card-body {
+            padding: 0.75rem;
+        }
+        
+        #v-sandbox > .card:not(.sandbox-chat-card) .card-header {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.95rem;
+        }
+        
+        .sandbox-chat-card { 
+            flex: 1 1 auto; 
+            min-height: 0;
+            display: flex; 
+            flex-direction: column;
+            overflow: hidden;
+            margin-bottom: 0;
+        }
+        
+        .card-footer {
+            flex: 0 0 auto;
+        }
+        
+        .chat-box-body { 
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            border-radius: 0.5rem;
+            padding: 12px 15px;
+        }
+
+        #sandbox-persona-cards {
+            max-height: 120px;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+
+        .sandbox-collapse-toggle {
+            --toggle-accent: #0ea5e9;
+            align-self: flex-start;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            border-radius: 12px;
+            border: 1px solid #dbe3f1;
+            background: #ffffff;
+            color: #243246;
+            font-weight: 600;
+            padding: 0.36rem 0.7rem;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+            transition: all 0.2s ease;
+        }
+
+        .sandbox-collapse-toggle::before {
+            content: '';
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: var(--toggle-accent);
+            box-shadow: 0 0 0 4px color-mix(in srgb, var(--toggle-accent) 16%, transparent);
+            flex: 0 0 auto;
+        }
+
+        .sandbox-collapse-toggle:hover {
+            border-color: color-mix(in srgb, var(--toggle-accent) 45%, #dbe3f1);
+            background: color-mix(in srgb, var(--toggle-accent) 8%, #ffffff);
+            color: #111827;
+            transform: translateY(-1px);
+        }
+
+        .sandbox-collapse-toggle[aria-expanded="true"] {
+            border-color: color-mix(in srgb, var(--toggle-accent) 60%, #dbe3f1);
+            background: color-mix(in srgb, var(--toggle-accent) 14%, #ffffff);
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+        }
+
+        .sandbox-collapse-toggle[aria-controls="sandbox-persona-preview-collapse"] {
+            --toggle-accent: #6366f1;
+        }
+
+        .sandbox-collapse-toggle .fa-chevron-down {
+            transition: transform 0.2s ease;
+        }
+
+        .sandbox-collapse-toggle[aria-expanded="true"] .fa-chevron-down {
+            transform: rotate(180deg);
+        }
+
+        #sandbox-top-controls,
+        #sandbox-persona-preview-collapse {
+            transform-origin: top center;
+        }
+
+        #sandbox-top-controls.collapse.show,
+        #sandbox-persona-preview-collapse.collapse.show {
+            animation: sandboxPanelReveal 0.2s ease;
+        }
+
+        #sandbox-top-controls.collapsing,
+        #sandbox-persona-preview-collapse.collapsing {
+            transition: height 0.24s ease, opacity 0.18s ease;
+            opacity: 0.4;
+        }
+
+        @keyframes sandboxPanelReveal {
+            from {
+                opacity: 0;
+                transform: translateY(-6px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .sandbox-preview-card {
+            border: 1px solid #e3e8f4;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+        }
+
+        .sandbox-preview-card .card-header {
+            background: linear-gradient(90deg, #f7f9ff 0%, #ffffff 100%);
+            border-bottom: 1px solid #e8ecf7;
+        }
+
+        .sandbox-chat-card {
+            flex: 1 1 0;
+            min-height: 0;
+        }
+
+        .sandbox-chat-card .chat-box-body {
+            flex: 1 1 auto;
+            min-height: 220px;
+        }
+        
+        .chat-box-body .chat-row {
+            gap: 2px;
+        }
+        
+        .chat-box-body .message {
+            max-width: 85%;
+            padding: 8px 12px;
+            word-break: break-word;
+        }
+        
+        .chat-box-body .message img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            margin-top: 4px;
+            margin-bottom: 4px;
+        }
+        
+        .chat-box-body .message-meta {
+            font-size: 0.7rem;
+            padding: 0 4px;
+        }
+        
+        .chat-box-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-box-body::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .chat-box-body::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 10px;
+        }
+        .chat-box-body::-webkit-scrollbar-thumb:hover {
+            background: #888;
+        }
+        
         .typing-indicator-hidden { display: none; }
         .emoji-picker-popover { bottom: 80px; left: 10px; width: 300px; z-index: 1050; }
         .emoji-list-scroll { max-height: 200px; overflow-y: auto; }
@@ -87,6 +296,136 @@
             font-size: 0.9rem;
         }
         .onebot-ws-url { font-weight: 500; color: #0d6efd; }
+        .ai-trace-panel {
+            margin-top: 4px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            background: #f8f9fa;
+            width: 100%;
+            max-width: 400px;
+        }
+        .ai-trace-panel > summary {
+            cursor: pointer;
+            padding: 6px 10px;
+            font-size: 11px;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            -webkit-user-select: none;
+            user-select: none;
+            background: #f0f0f0;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .ai-trace-panel[open] > summary {
+            background: #e7f3ff;
+            color: #0066cc;
+        }
+        .ai-trace-list {
+            padding: 6px 8px;
+            display: grid;
+            gap: 6px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .ai-trace-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .ai-trace-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .ai-trace-list::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 2px;
+        }
+        .ai-trace-list::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+        .ai-trace-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background: #fff;
+            font-size: 11px;
+        }
+        .ai-trace-item-head {
+            padding: 4px 6px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 10px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-wrap: wrap;
+            font-weight: 500;
+        }
+        .ai-trace-item-body {
+            margin: 0;
+            padding: 4px 6px;
+            font-size: 10px;
+            line-height: 1.3;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #333;
+            font-family: 'Consolas', 'Courier New', monospace;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        .ai-trace-item-body::-webkit-scrollbar {
+            width: 3px;
+        }
+        .ai-trace-item-body::-webkit-scrollbar-thumb {
+            background: #ddd;
+            border-radius: 1px;
+        }
+        .ai-trace-badge {
+            font-size: 11px;
+            color: #6c757d;
+            border: 1px solid #ced4da;
+            border-radius: 999px;
+            padding: 0 6px;
+            background: #fff;
+        }
+
+        /* Main content area - flex layout */
+        #content {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 60px);
+            overflow: hidden;
+        }
+
+        .tab-content {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+        }
+
+        .tab-pane {
+            display: none;
+            padding: 1rem;
+        }
+
+        .tab-pane.show {
+            display: block;
+        }
+        
+        /* 只有沙箱标签页使用flex布局和100%高度 */
+        #v-sandbox {
+            display: none !important;
+            height: auto;
+            overflow: visible;
+            padding: 0;
+        }
+        
+        #v-sandbox.show {
+            display: flex !important;
+            flex-direction: column;
+            height: 100%;
+            overflow: auto;
+            gap: 0.6rem;
+            padding: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -332,39 +671,59 @@
 
         <!-- Sandbox Chat Tab -->
         <div class="tab-pane fade" id="v-sandbox" role="tabpanel">
-            <h3 class="mb-4">💬 沙箱对话测试</h3>
-            <div class="alert alert-warning d-flex justify-content-between align-items-center py-2" role="alert">
-                <div>
-                    <i class="fas fa-shield-alt me-2"></i>
-                    沙箱工作模式：<span id="sandbox-workmode-badge" class="badge bg-secondary">关闭</span>
-                    <small class="text-muted ms-2">仅影响沙箱会话，不影响其他前端。</small>
-                </div>
-                <button id="sandbox-workmode-toggle-btn" class="btn btn-sm btn-outline-danger" onclick="onSandboxWorkModeClick()">开启沙箱工作模式</button>
+            <div class="d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">💬 沙箱对话测试</h3>
+                <button class="btn sandbox-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#sandbox-top-controls" aria-expanded="false" aria-controls="sandbox-top-controls">
+                    <i class="fas fa-sliders-h me-1"></i> 顶部设置
+                    <i class="fas fa-chevron-down ms-1"></i>
+                </button>
             </div>
-            <div class="card border-0 shadow-sm mb-3">
-                <div class="card-body py-2">
-                    <div class="row g-2 align-items-center">
-                        <div class="col-md-6">
-                            <label class="form-label small mb-1">当前角色卡</label>
-                            <select id="sandbox-persona-select" class="form-select form-select-sm" onchange="onSandboxPersonaChange()" title="选择当前角色卡" aria-label="选择当前角色卡">
-                                <option value="">加载中...</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small mb-1">对话界面风格</label>
-                            <div id="sandbox-persona-theme" class="small text-muted">默认</div>
-                        </div>
-                        <div class="col-md-2 d-grid">
-                            <button class="btn btn-outline-secondary btn-sm mt-md-4" onclick="loadSandboxPersonas()"><i class="fas fa-sync me-1"></i> 刷新</button>
+
+            <div id="sandbox-top-controls" class="collapse">
+                <div class="alert alert-warning d-flex justify-content-between align-items-center py-2 mt-2" role="alert">
+                    <div>
+                        <i class="fas fa-shield-alt me-2"></i>
+                        沙箱工作模式：<span id="sandbox-workmode-badge" class="badge bg-secondary">关闭</span>
+                        <small class="text-muted ms-2">仅影响沙箱会话，不影响其他前端。</small>
+                    </div>
+                    <button id="sandbox-workmode-toggle-btn" class="btn btn-sm btn-outline-danger" onclick="onSandboxWorkModeClick()">开启沙箱工作模式</button>
+                </div>
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-body py-2">
+                        <div class="row g-2 align-items-center">
+                            <div class="col-md-6">
+                                <label class="form-label small mb-1">当前角色卡</label>
+                                <select id="sandbox-persona-select" class="form-select form-select-sm" onchange="onSandboxPersonaChange()" title="选择当前角色卡" aria-label="选择当前角色卡">
+                                    <option value="">加载中...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-1">对话界面风格</label>
+                                <div id="sandbox-persona-theme" class="small text-muted">默认</div>
+                            </div>
+                            <div class="col-md-2 d-grid">
+                                <button class="btn btn-outline-secondary btn-sm mt-md-4" onclick="loadSandboxPersonas()"><i class="fas fa-sync me-1"></i> 刷新</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="card border-0 shadow-sm mb-3">
-                <div class="card-header bg-white py-2"><i class="fas fa-id-card me-2 text-primary"></i>角色卡预览</div>
-                <div class="card-body py-2">
-                    <div class="row g-2" id="sandbox-persona-cards">
-                        <div class="col-12 text-muted small">加载中...</div>
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="small text-muted"><i class="fas fa-id-card me-1"></i>角色卡预览区域</div>
+                <button class="btn sandbox-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#sandbox-persona-preview-collapse" aria-expanded="false" aria-controls="sandbox-persona-preview-collapse">
+                    <i class="fas fa-address-card me-1"></i> 角色卡预览
+                    <i class="fas fa-chevron-down ms-1"></i>
+                </button>
+            </div>
+
+            <div id="sandbox-persona-preview-collapse" class="collapse">
+                <div class="card border-0 mb-3 sandbox-preview-card">
+                    <div class="card-header py-2"><i class="fas fa-id-card me-2 text-primary"></i>角色卡预览</div>
+                    <div class="card-body py-2">
+                        <div class="row g-2" id="sandbox-persona-cards">
+                            <div class="col-12 text-muted small">加载中...</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -385,7 +744,7 @@
                     
                     <!-- Typing Indicator -->
                     <div id="typing-indicator" class="text-muted small mb-2 typing-indicator-hidden">
-                        <i class="fas fa-pen-nib fa-spin me-1 text-primary"></i> 小雫正在输入...
+                        <i class="fas fa-pen-nib fa-spin me-1 text-primary"></i> 小雫正在回复...
                     </div>
 
                     <div class="input-group">
@@ -641,6 +1000,14 @@
                                             <div class="form-check form-switch mb-2">
                                                 <input class="form-check-input" type="checkbox" id="chat-settings-sandbox-use-docker" checked>
                                                 <label class="form-check-label" for="chat-settings-sandbox-use-docker">沙箱优先使用 Docker 安全运行时</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="chat-settings-sandbox-agent-autonomous" checked>
+                                                <label class="form-check-label" for="chat-settings-sandbox-agent-autonomous">允许沙箱 Agent 自主执行终端/改码/检查</label>
+                                            </div>
+                                            <div class="mt-2">
+                                                <label class="form-label small" for="chat-settings-sandbox-trace-retention-days">临时流程文件保留天数（0 为不清理）</label>
+                                                <input class="form-control form-control-sm" type="number" min="0" max="3650" step="1" id="chat-settings-sandbox-trace-retention-days" value="7">
                                             </div>
                                         </div>
                                     </div>
@@ -1220,12 +1587,10 @@
             <div class="row g-4">
                 <div class="col-lg-4">
                     <div class="card shadow-sm border-0 h-100">
-                        <div class="card-header bg-white"><i class="fas fa-server me-2 text-info"></i>快速添加服务器</div>
+                        <div class="card-header bg-white"><i class="fas fa-server me-2 text-info"></i>新增 MCP 服务器</div>
                         <div class="card-body">
-                            <div class="mb-2"><input id="mcp-name" class="form-control form-control-sm" placeholder="服务器名称"></div>
-                            <div class="mb-2"><input id="mcp-command" class="form-control form-control-sm" placeholder="命令或 URL"></div>
-                            <div class="mb-2"><input id="mcp-type" class="form-control form-control-sm" placeholder="stdio / http / sse"></div>
-                            <button class="btn btn-info btn-sm w-100 text-white" onclick="createQuickMcp()"><i class="fas fa-plus me-1"></i> 添加服务器</button>
+                            <div class="small text-muted mb-3">采用 JSON 配置模式（类似 AstrBot），支持模板一键填充。</div>
+                            <button class="btn btn-info btn-sm w-100 text-white" onclick="openMcpJsonCreateModal()"><i class="fas fa-plus me-1"></i> 新增服务器</button>
                         </div>
                     </div>
                 </div>
@@ -1304,7 +1669,7 @@
                                     <div class="input-group input-group-sm maxw-560">
                                         <span class="input-group-text">Smithery MCP ID / URL</span>
                                         <input id="mcpmarket-url-input" class="form-control" placeholder="例如: notion 或 https://server.smithery.ai/github">
-                                        <button class="btn btn-primary" type="button" onclick="importMcpRegistryItem()">安装并接入</button>
+                                        <button class="btn btn-primary" type="button" onclick="importMcpRegistryItem()">生成模板并打开</button>
                                     </div>
                                 </div>
                             </div>
@@ -1662,6 +2027,32 @@
                 </div>
             </div>
 
+            <div class="modal fade" id="agent-deploy-modal" tabindex="-1" aria-labelledby="agent-deploy-modal-label" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content border-0 shadow">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title mb-1" id="agent-deploy-modal-label">Agent 一键部署终端</h5>
+                                <div class="small text-muted" id="agent-deploy-command-label">等待启动 Agent 部署任务</div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                                <span class="badge bg-secondary" id="agent-deploy-status-badge">等待开始</span>
+                                <span class="small text-muted" id="agent-deploy-job-id"></span>
+                            </div>
+                            <div class="border rounded bg-dark text-light p-3 install-log-box" id="agent-deploy-log">尚未开始部署...</div>
+                            <div class="small text-muted mt-2">这里会持续显示 Agent 的执行步骤、结果和最终回复，关闭后仍会在后台继续运行。</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+                            <button type="button" class="btn btn-primary" onclick="closeAgentDeployToBackground()">关闭并转到后台</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="modal fade" id="dify-install-modal" tabindex="-1" aria-labelledby="dify-install-modal-label" aria-hidden="true">
                 <div class="modal-dialog modal-lg modal-dialog-scrollable">
                     <div class="modal-content border-0 shadow">
@@ -1999,12 +2390,49 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="static/js/panel-helpers.js"></script>
 <script src="static/js/app.js"></script>
 <script>
     // --- Unified Logic ---
     let workModeAction = null;
     let unifiedActionModalResolver = null;
     let currentOnebotConfig = null;
+
+    function initSandboxCollapsePreferences() {
+        if (typeof bootstrap === 'undefined') return;
+
+        const collapseItems = [
+            { id: 'sandbox-top-controls', key: 'sandbox.collapse.topControls' },
+            { id: 'sandbox-persona-preview-collapse', key: 'sandbox.collapse.personaPreview' }
+        ];
+
+        collapseItems.forEach(item => {
+            const el = document.getElementById(item.id);
+            if (!el) return;
+
+            const ins = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
+            const saved = localStorage.getItem(item.key);
+
+            // 默认收起；若用户曾展开，则恢复展开状态。
+            if (saved === '1') {
+                ins.show();
+            } else {
+                ins.hide();
+            }
+
+            el.addEventListener('shown.bs.collapse', () => {
+                localStorage.setItem(item.key, '1');
+            });
+
+            el.addEventListener('hidden.bs.collapse', () => {
+                localStorage.setItem(item.key, '0');
+            });
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initSandboxCollapsePreferences();
+    });
 
     function showUnifiedActionModal(options = {}) {
         const {
@@ -2181,15 +2609,7 @@
         
         if (!msg && !fileInput.files.length) return;
 
-        // UI Update
-        const pendingMessageId = appendMessage(msg, true, { status: '发送中' });
-        if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
-        input.value = '';
-        updateTypingIndicatorName(sandboxPersonaDisplayName);
-        document.getElementById('typing-indicator').style.display = 'block';
-        document.getElementById('emoji-picker').classList.add('d-none');
-
-        // File handling
+        // File handling - read before UI update
         let attachments = [];
         if(fileInput.files.length > 0) {
             for(let i=0; i<fileInput.files.length; i++) {
@@ -2213,7 +2633,27 @@
             document.getElementById('file-preview-area').innerHTML = '';
         }
 
-        postChat(msg, attachments, pendingMessageId);
+        // UI Update - pass attachments to appendMessage
+        const pendingMessageId = appendMessage(msg, true, { status: '发送中', attachments: attachments });
+        const pendingBotMessageId = appendMessage('正在执行中...', false, {
+            debug: {
+                enabled: true,
+                collapsed: false,  // 改为false，让Agent追踪默认展开
+                events: [{
+                    type: 'assistant_message',
+                    label: '处理中',
+                    content: '正在执行任务并收集详细过程，请稍候。'
+                }]
+            }
+        });
+        if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
+        input.value = '';
+        updateTypingIndicatorName(sandboxPersonaDisplayName);
+        // 输入框上方不再展示“正在回复”提示，避免干扰。
+        document.getElementById('typing-indicator').style.display = 'none';
+        document.getElementById('emoji-picker').classList.add('d-none');
+
+        postChat(msg, attachments, pendingMessageId, pendingBotMessageId);
     }
 
     function readFileAsBase64(file) {
@@ -2246,7 +2686,7 @@
         if (!el) return;
         const display = normalizePersonaDisplayName(name || sandboxPersonaDisplayName);
         sandboxPersonaDisplayName = display;
-        el.innerHTML = `<i class="fas fa-pen-nib fa-spin me-1 text-primary"></i> ${display}正在输入...`;
+        el.innerHTML = `<i class="fas fa-pen-nib fa-spin me-1 text-primary"></i> ${display}正在回复...`;
     }
 
     function applySandboxTheme(theme) {
@@ -2518,7 +2958,7 @@
         }
     }
 
-    async function postChat(msg, attachments, pendingMessageId = null) {
+    async function postChat(msg, attachments, pendingMessageId = null, pendingBotMessageId = null) {
         try {
             // Adapt to backend API which expects 'image' for single image or we need to update backend
             // For now, let's send 'image' if there's one image, or 'attachments' list
@@ -2540,6 +2980,8 @@
                 payload.attachments = attachments;
             }
 
+            payload.stream = true;
+
             const res = await fetch('/chat', {
                 method: 'POST',
                 headers: {
@@ -2548,25 +2990,126 @@
                 },
                 body: JSON.stringify(payload)
             });
-            const data = await res.json();
             document.getElementById('typing-indicator').style.display = 'none';
+
+            const contentType = (res.headers.get('content-type') || '').toLowerCase();
+            if (res.ok && (contentType.includes('text/plain') || contentType.includes('text/event-stream')) && res.body) {
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let fullText = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    fullText += decoder.decode(value, { stream: true });
+                    if (pendingBotMessageId) {
+                        updateBotMessage(pendingBotMessageId, fullText);
+                    }
+                }
+
+                fullText += decoder.decode();
+                fullText = fullText.replace(/^正在生成回复，请稍候...\n?/, '');
+
+                if (pendingBotMessageId) {
+                    updateBotMessage(pendingBotMessageId, fullText.trim());
+                } else {
+                    appendMessage(fullText.trim(), false);
+                }
+                if (pendingMessageId) updateMessageStatus(pendingMessageId, '已送达');
+                if (pendingMessageId) updateMessageStatus(pendingMessageId, '已读');
+                if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
+                return;
+            }
+
+            const data = await res.json();
             
             if(data.success) {
                 if (pendingMessageId) updateMessageStatus(pendingMessageId, '已送达');
-                appendMessage(data.reply, false);
+                if (pendingBotMessageId) {
+                    updateBotMessage(pendingBotMessageId, data.reply, {debug: data.debug || null});
+                } else {
+                    appendMessage(data.reply, false, {debug: data.debug || null});
+                }
                 if (pendingMessageId) updateMessageStatus(pendingMessageId, '已读');
                 if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
             } else {
                 if (pendingMessageId) updateMessageStatus(pendingMessageId, '发送失败');
-                appendMessage("Error: " + data.error, false);
+                if (pendingBotMessageId) {
+                    updateBotMessage(pendingBotMessageId, "Error: " + data.error, null);
+                } else {
+                    appendMessage("Error: " + data.error, false);
+                }
                 if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
             }
         } catch(e) {
             document.getElementById('typing-indicator').style.display = 'none';
             if (pendingMessageId) updateMessageStatus(pendingMessageId, '发送失败');
-            appendMessage("Network Error: " + e, false);
+            if (pendingBotMessageId) {
+                updateBotMessage(pendingBotMessageId, "Network Error: " + e, null);
+            } else {
+                appendMessage("Network Error: " + e, false);
+            }
             if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
         }
+    }
+
+    function iconForTrace(type) {
+        if (type === 'tool_call') {
+            return '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M11 4h2v8h4l-5 8-5-8h4V4z"/></svg>';
+        }
+        if (type === 'tool_result') {
+            return '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M9 16.2l-3.5-3.5L4 14.2l5 5 11-11-1.5-1.5z"/></svg>';
+        }
+        return '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>';
+    }
+
+    function buildTracePanel(debug) {
+        if (!debug || !debug.enabled || !Array.isArray(debug.events) || debug.events.length === 0) {
+            return null;
+        }
+
+        const details = document.createElement('details');
+        details.className = 'ai-trace-panel';
+        details.open = true;  // 默认展开，实时显示执行过程
+
+        const summary = document.createElement('summary');
+        summary.innerHTML =
+            '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3 5h18v2H3zm0 6h18v2H3zm0 6h18v2H3z"/></svg>' +
+            `<span>AI 操作流程（${debug.events.length} 条）</span>`;
+        details.appendChild(summary);
+
+        const list = document.createElement('div');
+        list.className = 'ai-trace-list';
+        if (debug.trace_md && debug.trace_md.path) {
+            const traceMeta = document.createElement('div');
+            traceMeta.className = 'ai-trace-item';
+            const traceHead = document.createElement('div');
+            traceHead.className = 'ai-trace-item-head';
+            traceHead.innerHTML = `${iconForTrace('tool_result')}<span>临时过程文件</span><span class="ai-trace-badge">${escapeHtml(debug.trace_md.path)}</span>`;
+            traceMeta.appendChild(traceHead);
+            list.appendChild(traceMeta);
+        }
+
+        debug.events.forEach((event) => {
+            const item = document.createElement('div');
+            item.className = 'ai-trace-item';
+
+            const head = document.createElement('div');
+            head.className = 'ai-trace-item-head';
+            head.innerHTML = `${iconForTrace(event.type)}<span>${escapeHtml(event.label || '步骤')}</span>` +
+                ((event.tool_name || '') ? `<span class="ai-trace-badge">${escapeHtml(event.tool_name)}</span>` : '');
+
+            const body = document.createElement('pre');
+            body.className = 'ai-trace-item-body';
+            body.textContent = String(event.content || '').slice(0, 6000);
+
+            item.appendChild(head);
+            item.appendChild(body);
+            list.appendChild(item);
+        });
+
+        details.appendChild(list);
+        return details;
     }
 
     function normalizeEmojiText(text) {
@@ -2606,11 +3149,32 @@
         const bubble = document.createElement('div');
         bubble.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
         const safeText = normalizeEmojiText(text);
-        // Basic Markdown Support via marked.js if needed, or simple text
+        
+        // 显示文本内容
         if(window.marked && !isUser) {
             bubble.innerHTML = marked.parse(safeText);
         } else {
             bubble.textContent = safeText;
+        }
+        
+        // 显示附件图片（用户消息）
+        if (isUser && options.attachments && Array.isArray(options.attachments)) {
+            options.attachments.forEach(att => {
+                if (att.type === 'image' && att.content) {
+                    const img = document.createElement('img');
+                    img.src = att.content;  // Base64 or Data URL
+                    img.alt = att.name || '已发送的图片';
+                    img.style.display = 'block';
+                    bubble.appendChild(img);
+                }
+            });
+        }
+
+        if (!isUser && options && options.debug) {
+            const panel = buildTracePanel(options.debug);
+            if (panel) {
+                row.appendChild(panel);
+            }
         }
 
         const meta = document.createElement('div');
@@ -2631,6 +3195,38 @@
         box.appendChild(row);
         box.scrollTop = box.scrollHeight;
         return messageId;
+    }
+
+    function updateBotMessage(messageId, text, options = {}) {
+        const row = document.querySelector(`.chat-row[data-message-id="${messageId}"]`);
+        if (!row) {
+            appendMessage(text, false, options);
+            return;
+        }
+
+        const bubble = row.querySelector('.message.bot-message');
+        const safeText = normalizeEmojiText(text || '');
+        if (bubble) {
+            if (window.marked) {
+                bubble.innerHTML = marked.parse(safeText);
+            } else {
+                bubble.textContent = safeText;
+            }
+        }
+
+        const hasDebugOption = Object.prototype.hasOwnProperty.call(options, 'debug');
+        if (hasDebugOption) {
+            const oldPanel = row.querySelector('.ai-trace-panel');
+            if (oldPanel) oldPanel.remove();
+            if (options && options.debug) {
+                const panel = buildTracePanel(options.debug);
+                if (panel) {
+                    const meta = row.querySelector('.message-meta');
+                    if (meta) row.insertBefore(panel, meta);
+                    else row.appendChild(panel);
+                }
+            }
+        }
     }
 
     
@@ -2906,7 +3502,12 @@
         }
     }
 
-    function openMcpMarketFromConfig() {
+    function openMcpMarketFromConfig(configUrl = '') {
+        const url = String(configUrl || '').trim();
+        if (url && /^https?:\/\//i.test(url)) {
+            window.open(url, '_blank', 'noopener');
+            return;
+        }
         const tab = document.getElementById('v-mcp-tab');
         if (tab) tab.click();
         setTimeout(() => loadMcpManager(), 0);
@@ -2916,6 +3517,19 @@
         const tab = document.getElementById('v-skills-tab');
         if (tab) tab.click();
         setTimeout(() => loadSkillStatus(), 0);
+    }
+
+    function openMarketConfigUrl(url, fallbackName = '') {
+        const target = String(url || '').trim();
+        if (!target) {
+            toastr.info(fallbackName ? `${fallbackName} 暂无可用配置 URL` : '暂无可用配置 URL');
+            return;
+        }
+        if (!/^https?:\/\//i.test(target)) {
+            toastr.warning('配置 URL 格式无效');
+            return;
+        }
+        window.open(target, '_blank', 'noopener');
     }
 
     function openDifyMarketFromConfig() {
@@ -3937,10 +4551,17 @@
                 const traceCollapsed = document.getElementById('chat-settings-sandbox-trace-collapsed');
                 const backToTop = document.getElementById('chat-settings-sandbox-backtotop');
                 const useDocker = document.getElementById('chat-settings-sandbox-use-docker');
+                const agentAutonomous = document.getElementById('chat-settings-sandbox-agent-autonomous');
+                const traceRetentionDays = document.getElementById('chat-settings-sandbox-trace-retention-days');
                 if (traceEnabled) traceEnabled.checked = !!chatSettings.sandbox_show_agent_trace;
                 if (traceCollapsed) traceCollapsed.checked = !!chatSettings.sandbox_trace_collapsed;
                 if (backToTop) backToTop.checked = !!chatSettings.sandbox_show_back_to_top;
                 if (useDocker) useDocker.checked = !!chatSettings.sandbox_use_docker_runtime;
+                if (agentAutonomous) agentAutonomous.checked = !!chatSettings.sandbox_agent_autonomous;
+                if (traceRetentionDays) {
+                    const days = Number.parseInt(chatSettings.sandbox_trace_retention_days, 10);
+                    traceRetentionDays.value = Number.isFinite(days) && days >= 0 ? String(days) : '7';
+                }
             }
 
             if (data.reply_policy) {
@@ -4116,6 +4737,10 @@
         const sandboxTraceCollapsed = !!document.getElementById('chat-settings-sandbox-trace-collapsed')?.checked;
         const sandboxBackToTop = !!document.getElementById('chat-settings-sandbox-backtotop')?.checked;
         const sandboxUseDocker = !!document.getElementById('chat-settings-sandbox-use-docker')?.checked;
+        const sandboxAgentAutonomous = !!document.getElementById('chat-settings-sandbox-agent-autonomous')?.checked;
+        const retentionInput = document.getElementById('chat-settings-sandbox-trace-retention-days');
+        const retentionRaw = Number.parseInt(retentionInput?.value || '7', 10);
+        const sandboxTraceRetentionDays = Number.isFinite(retentionRaw) ? Math.min(3650, Math.max(0, retentionRaw)) : 7;
         const replyPolicy = {
             group_mode: document.getElementById('wm-reply-group-mode')?.value || 'mention_or_keyword',
             private_mode: document.getElementById('wm-reply-private-mode')?.value || 'always',
@@ -4139,7 +4764,9 @@
                 sandbox_show_agent_trace: sandboxTraceEnabled,
                 sandbox_trace_collapsed: sandboxTraceCollapsed,
                 sandbox_show_back_to_top: sandboxBackToTop,
-                sandbox_use_docker_runtime: sandboxUseDocker
+                sandbox_use_docker_runtime: sandboxUseDocker,
+                sandbox_agent_autonomous: sandboxAgentAutonomous,
+                sandbox_trace_retention_days: sandboxTraceRetentionDays
             },
             reply_policy: replyPolicy
         };
@@ -4266,6 +4893,13 @@
     let difyCliRequestInflight = false;
     let extraCliRequestInflight = { kimi: false, minimax: false };
     let skillhubInstallJobState = {
+        jobId: '',
+        pollTimer: null,
+        active: false,
+        startedAt: 0,
+        modal: null,
+    };
+    let agentDeployJobState = {
         jobId: '',
         pollTimer: null,
         active: false,
@@ -4604,7 +5238,7 @@
 
     async function loadPluginStatus() {
         const cards = document.getElementById('plugins-cards');
-        if (cards) cards.innerHTML = '<div class="col-12 text-muted">Loading...</div>';
+        if (cards) cards.innerHTML = '<div class="col-12 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>加载中...</div>';
         try {
             const data = await fetchJsonSafe(pluginApi('/api/plugins/status'));
             if (!data.success) throw new Error(data.error || 'load failed');
@@ -4619,24 +5253,44 @@
                 badge.className = `badge ${status.enabled ? 'bg-success' : 'bg-secondary'}`;
             }
 
-            renderPluginCards(plugins);
-
-            if (!plugins.length) {
+            if (!plugins || !plugins.length) {
+                if (cards) {
+                    cards.innerHTML = `
+                        <div class="col-12">
+                            <div class="text-center py-5">
+                                <i class="fas fa-puzzle-piece fa-3x text-muted opacity-50 mb-3 d-block"></i>
+                                <h6 class="text-muted mb-2">暂无已安装的插件</h6>
+                                <p class="small text-muted mb-0">点击上方按钮从项目或 ZIP 文件加载插件</p>
+                            </div>
+                        </div>
+                    `;
+                }
                 currentPluginName = '';
                 closePluginSettingsModal();
                 return;
             }
+
+            renderPluginCards(plugins);
 
             if (!currentPluginName || !plugins.some(x => x.name === currentPluginName)) {
                 currentPluginName = '';
                 closePluginSettingsModal();
                 return;
             }
-
-            renderPluginCards(plugins);
         } catch (e) {
             const cards = document.getElementById('plugins-cards');
-            if (cards) cards.innerHTML = `<div class="col-12 text-danger">${e.message}</div>`;
+            if (cards) {
+                cards.innerHTML = `
+                    <div class="col-12">
+                        <div class="alert alert-warning mb-0 py-4" role="alert">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>加载插件失败</strong><br/>
+                            <small class="text-muted">${escapeHtml(e.message || '未知错误')}</small>
+                        </div>
+                    </div>
+                `;
+            }
+            console.error('插件状态加载失败:', e);
         }
     }
 
@@ -5111,7 +5765,7 @@
 
     async function loadSkillStatus() {
         const cards = document.getElementById('skills-cards');
-        if (cards) cards.innerHTML = '<div class="col-12 text-muted">Loading...</div>';
+        if (cards) cards.innerHTML = '<div class="col-12 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>加载中...</div>';
         try {
             const data = await fetchJsonSafe('/api/skills/status');
             if (!data.success) throw new Error(data.error || 'load failed');
@@ -5126,11 +5780,38 @@
                 badge.className = `badge ${status.enabled ? 'bg-success' : 'bg-secondary'}`;
             }
 
-            renderSkillCards(skills);
+            // 如果 skills 为空，显示空状态
+            if (!skills || !skills.length) {
+                if (cards) {
+                    cards.innerHTML = `
+                        <div class="col-12">
+                            <div class="text-center py-5">
+                                <i class="fas fa-wand-magic-sparkles fa-3x text-muted opacity-50 mb-3 d-block"></i>
+                                <h6 class="text-muted mb-2">暂无已安装的 Skill</h6>
+                                <p class="small text-muted mb-0">点击上方按钮从市场加载或导入 Skill</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                renderSkillCards(skills);
+            }
+            
             await loadSkillMarketCocoloop(false);
             await loadDifyMarket(false);
         } catch (e) {
-            if (cards) cards.innerHTML = `<div class="col-12 text-danger">${e.message}</div>`;
+            if (cards) {
+                cards.innerHTML = `
+                    <div class="col-12">
+                        <div class="alert alert-warning mb-0 py-4" role="alert">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>加载 Skill 失败</strong><br/>
+                            <small class="text-muted">${escapeHtml(e.message || '未知错误')}</small>
+                        </div>
+                    </div>
+                `;
+            }
+            console.error('Skill 状态加载失败:', e);
         }
     }
 
@@ -5652,6 +6333,13 @@
                 .trim();
         }
 
+            function escapeJsArg(value) {
+                return String(value || '')
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/\r?\n/g, ' ');
+            }
+
         wrap.innerHTML = list.map(item => {
             const src = String(item.source || '').toLowerCase();
             const isSkillhubMarket = skillMarketSource === 'skillhub';
@@ -5660,9 +6348,12 @@
             const displayName = cleanMarketText(item.name) || (isSkillhub ? 'SkillHub' : 'GitHub Skill');
             const displayAuthor = cleanMarketText(item.author) || '-';
             const displayDescription = cleanMarketText(item.description) || (isSkillhub ? '来自 SkillHub 商店' : '来自 GitHub 开源市场');
+            const skillRef = String(item.skillhub_id || item.id || '').trim();
+            const externalUrl = String(item.external_url || '').trim();
             const actionBtn = isSkillhub
-                ? `<button class="btn btn-sm btn-success" onclick="installSkillhubSkill('${escapeHtml(item.skillhub_id || item.id || '')}', '${escapeHtml(displayName || '')}')"><i class="fas fa-bolt me-1"></i>安装并使用</button>`
+                ? `<button class="btn btn-sm btn-success" onclick="installSkillhubSkill('${escapeHtml(skillRef)}', '${escapeHtml(displayName || '')}', '${escapeHtml(externalUrl)}')"><i class="fas fa-bolt me-1"></i>安装并使用</button>`
                 : `<button class="btn btn-sm btn-success" onclick="installCocoloopSkill('${escapeHtml(item.external_url || '')}')"><i class="fas fa-circle-info me-1"></i>配置指导</button>`;
+            const deployAction = `agentDeploySkillFromMarket('${escapeJsArg(skillRef)}', '${escapeJsArg(displayName || '')}', '${escapeJsArg(externalUrl)}', '${isSkillhub ? 'skillhub' : 'github'}')`;
             return `
             <div class="col-xl-4 col-md-6">
                 <div class="card h-100 plugin-card plugin-entry-card">
@@ -5686,6 +6377,7 @@
                         <div class="mt-auto d-flex gap-2">
                             ${item.external_url ? `<a class="btn btn-sm btn-outline-primary" href="${escapeHtml(item.external_url)}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt me-1"></i>打开详情</a>` : ''}
                             ${actionBtn}
+                            <button class="btn btn-sm btn-outline-warning" onclick="${deployAction}"><i class="fas fa-robot me-1"></i>Agent 一键部署</button>
                         </div>
                     </div>
                 </div>
@@ -5719,6 +6411,7 @@
             const homeUrl = escapeHtml(item.homepage || '');
             const repoUrl = escapeHtml(item.repository || '');
             const registryUrl = escapeHtml(item.registry_url || '#');
+            const configUrl = String(item.registry_url || item.url || item.connection_url || item.homepage || '').trim();
             
             // 构建链接HTML
             let linksHtml = '';
@@ -5728,10 +6421,11 @@
             if (registryUrl && registryUrl !== '#') linksHtml += `<a href="${registryUrl}" target="_blank" class="badge bg-primary me-2" title="打开注册表页面"><i class="fas fa-link me-1"></i>注册表</a>`;
             
             // 构建操作按钮
-            const installAction = `installMcpMarketItem('${escapeHtml(item.id || '')}')`;
+            const installAction = `openMcpJsonCreateModalFromMarket('${escapeJsArg(item.id || '')}')`;
+            const configAction = configUrl ? `<button class="btn btn-sm btn-outline-primary" onclick="openMarketConfigUrl('${escapeJsArg(configUrl)}', '${escapeJsArg(item.name || item.id || '')}')"><i class="fas fa-arrow-up-right-from-square me-1"></i>打开配置</button>` : '';
             const actionBtn = !installable
                 ? `<a class="btn btn-sm btn-outline-secondary" href="${registryUrl}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt me-1"></i>浏览</a>`
-                : `<button class="btn btn-sm ${installed ? 'btn-outline-success' : 'btn-primary'}" onclick="${installAction}" ${installed ? 'disabled' : ''} title="${item.user_config_required ? '可能需要授权或额外配置' : ''}"><i class="fas ${installed ? 'fa-check' : 'fa-bolt'} me-1"></i>${installed ? '已接入' : '安装并接入'}</button>`;
+                : `<button class="btn btn-sm ${installed ? 'btn-outline-success' : 'btn-primary'}" onclick="${installAction}" title="${item.user_config_required ? '可能需要授权或额外配置' : ''}"><i class="fas ${installed ? 'fa-check' : 'fa-file-code'} me-1"></i>${installed ? '已接入（可改模板）' : '使用模板'}</button>`;
             
             return `
                 <div class="col-xl-4 col-md-6">
@@ -5763,7 +6457,10 @@
                             
                             <!-- 操作按钮 -->
                             <div class="mt-auto">
-                                ${actionBtn}
+                                <div class="d-flex gap-2 flex-wrap">
+                                    ${configAction}
+                                    ${actionBtn}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -6056,7 +6753,7 @@
         await loadSkillMarketCocoloop(showToast);
     }
 
-    async function installSkillhubSkill(skillId, fallbackName = '') {
+    async function installSkillhubSkill(skillId, fallbackName = '', externalUrl = '') {
         if (skillhubInstallInflight) {
             toastr.info('Skill 安装进行中，请稍候...');
             return;
@@ -6070,7 +6767,7 @@
             const data = await fetchJsonSafe('/api/skills/market/skillhub/install', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({skill_id: skillId, name: fallbackName})
+                body: JSON.stringify({skill_id: skillId, name: fallbackName, external_url: externalUrl, source: 'skillhub'})
             });
             if (!data.success) throw new Error(data.error || 'install failed');
             toastr.success(data.message || `Skill 安装成功: ${skillId}`);
@@ -6080,6 +6777,147 @@
         } finally {
             skillhubInstallInflight = false;
         }
+    }
+
+    async function agentDeploySkillFromMarket(skillId, name = '', externalUrl = '', source = 'github') {
+        const ref = String(skillId || '').trim();
+        const url = String(externalUrl || '').trim();
+        const displayName = String(name || ref || url || 'skill').trim();
+        if (!ref && !url && !displayName) {
+            toastr.warning('缺少可部署的技能标识');
+            return;
+        }
+
+        const confirmed = await showUnifiedActionModal({
+            title: 'Agent 一键部署',
+            message: `确认让 Agent 在沙箱中自动部署技能：${displayName}？`,
+            level: 'warning',
+            confirmText: '开始部署',
+            cancelText: '取消',
+            confirmClass: 'btn-warning'
+        });
+        if (!confirmed) return;
+
+        try {
+            const data = await fetchJsonSafe('/api/skills/market/agent-deploy', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    source: String(source || 'github').toLowerCase(),
+                    skill_id: ref,
+                    name: displayName,
+                    external_url: url
+                })
+            });
+            if (!data.success) throw new Error(data.error || 'agent deploy failed');
+            openAgentDeployModal(data);
+            toastr.success('Agent 一键部署任务已启动');
+        } catch (e) {
+            toastr.error('Agent 一键部署失败: ' + e.message);
+        }
+    }
+
+    function _agentDeployStatusMeta(status) {
+        const value = String(status || '').toLowerCase();
+        if (value === 'success') return {text: '部署完成', className: 'bg-success'};
+        if (value === 'error') return {text: '部署失败', className: 'bg-danger'};
+        if (value === 'running') return {text: '正在部署', className: 'bg-primary'};
+        if (value === 'queued') return {text: '排队中', className: 'bg-secondary'};
+        return {text: '等待开始', className: 'bg-secondary'};
+    }
+
+    function _agentDeployRenderLogs(lines) {
+        const logEl = document.getElementById('agent-deploy-log');
+        if (!logEl) return;
+        const list = Array.isArray(lines) ? lines : [];
+        logEl.textContent = list.length ? list.join('\n') : '尚未开始部署...';
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function _agentDeployUpdateModal(job) {
+        if (!job) return;
+        const badge = document.getElementById('agent-deploy-status-badge');
+        const cmd = document.getElementById('agent-deploy-command-label');
+        const jobId = document.getElementById('agent-deploy-job-id');
+        const meta = _agentDeployStatusMeta(job.status);
+        if (badge) {
+            badge.textContent = meta.text;
+            badge.className = `badge ${meta.className}`;
+        }
+        if (cmd) {
+            cmd.textContent = job.command_display || 'Agent 一键部署终端';
+        }
+        if (jobId) {
+            jobId.textContent = job.job_id ? `Job: ${job.job_id}` : '';
+        }
+        _agentDeployRenderLogs(job.logs || []);
+    }
+
+    function _agentDeployStopPolling() {
+        if (agentDeployJobState.pollTimer) {
+            clearInterval(agentDeployJobState.pollTimer);
+            agentDeployJobState.pollTimer = null;
+        }
+    }
+
+    async function _agentDeployPollJob() {
+        const jobId = agentDeployJobState.jobId;
+        if (!jobId) return;
+        try {
+            const data = await fetchJsonSafe(`/api/skills/market/agent-deploy/jobs/${encodeURIComponent(jobId)}`);
+            if (!data.success) throw new Error(data.error || 'poll failed');
+            _agentDeployUpdateModal(data);
+            if (data.status === 'success') {
+                _agentDeployStopPolling();
+                agentDeployJobState.active = false;
+                toastr.success(data.message || 'Agent 一键部署完成');
+                await loadSkillStatus();
+            } else if (data.status === 'error') {
+                _agentDeployStopPolling();
+                agentDeployJobState.active = false;
+                toastr.error(data.message || 'Agent 一键部署失败');
+                await loadSkillStatus();
+            }
+        } catch (e) {
+            const badge = document.getElementById('agent-deploy-status-badge');
+            if (badge) {
+                badge.textContent = '轮询失败';
+                badge.className = 'badge bg-warning text-dark';
+            }
+        }
+    }
+
+    function openAgentDeployModal(data) {
+        const modalEl = document.getElementById('agent-deploy-modal');
+        if (!modalEl) return;
+        agentDeployJobState.jobId = data.job_id || '';
+        agentDeployJobState.startedAt = Date.now();
+        agentDeployJobState.active = true;
+        _agentDeployUpdateModal(data);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl, {backdrop: true, keyboard: true});
+        agentDeployJobState.modal = modal;
+        modal.show();
+        _agentDeployStopPolling();
+        agentDeployJobState.pollTimer = setInterval(_agentDeployPollJob, 1000);
+        _agentDeployPollJob();
+    }
+
+    function closeAgentDeployToBackground() {
+        const modalEl = document.getElementById('agent-deploy-modal');
+        if (!modalEl) return;
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        _agentDeployStopPolling();
+        agentDeployJobState.active = false;
+        toastr.info('Agent 一键部署仍在后台运行，可稍后重新打开查看日志');
+    }
+
+    const agentDeployModalEl = document.getElementById('agent-deploy-modal');
+    if (agentDeployModalEl) {
+        agentDeployModalEl.addEventListener('hidden.bs.modal', () => {
+            _agentDeployStopPolling();
+            agentDeployJobState.active = false;
+        });
     }
 
     async function reloadSkillsFromPanel() {
@@ -6730,7 +7568,12 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
     }
-
+    function escapeJsArg(value) {
+        return String(value || '')
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\r?\n/g, ' ');
+    }
     // 4. Other Utils (Agent, Logs, DB)
     async function fetchAgentStatus() {
         return loadSystemCenterStatus();
@@ -6739,55 +7582,69 @@
     async function loadSystemCenterStatus() {
         try {
             const res = await fetch('/api/systems/system-status');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            
             const data = await res.json();
-            if(data.code === 0 && data.data) {
-                const stats = data.data;
-                const taskCount = Number(stats.task_scheduler?.total_tasks || 0);
-                const mcpCount = Number(stats.mcp?.servers || 0);
-                const kbCount = Number(stats.knowledge_base?.entries || 0);
-                const instrCount = Number(stats.instructions?.instructions || 0);
+            if(!data.code === 0 || !data.data) throw new Error(data.message || 'No status data');
+            
+            const stats = data.data;
+            const taskCount = Number(stats.task_scheduler?.total_tasks || 0);
+            const mcpCount = Number(stats.mcp?.servers || 0);
+            const kbCount = Number(stats.knowledge_base?.entries || 0);
+            const instrCount = Number(stats.instructions?.instructions || 0);
 
-                const taskEl = document.getElementById('sys-task-count');
-                const mcpEl = document.getElementById('sys-mcp-count');
-                const kbEl = document.getElementById('sys-kb-count');
-                const instrEl = document.getElementById('sys-instr-count');
-                if (taskEl) taskEl.textContent = taskCount;
-                if (mcpEl) mcpEl.textContent = mcpCount;
-                if (kbEl) kbEl.textContent = kbCount;
-                if (instrEl) instrEl.textContent = instrCount;
+            const taskEl = document.getElementById('sys-task-count');
+            const mcpEl = document.getElementById('sys-mcp-count');
+            const kbEl = document.getElementById('sys-kb-count');
+            const instrEl = document.getElementById('sys-instr-count');
+            if (taskEl) taskEl.textContent = taskCount;
+            if (mcpEl) mcpEl.textContent = mcpCount;
+            if (kbEl) kbEl.textContent = kbCount;
+            if (instrEl) instrEl.textContent = instrCount;
 
-                const planViewer = document.getElementById('plan-viewer');
-                if (planViewer) {
-                    planViewer.innerHTML = `
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <div class="border rounded p-3 bg-white h-100">
-                                    <div class="fw-semibold mb-2">系统概览</div>
-                                    <div class="small text-muted">日志条目：${stats.logging?.log_entries || 0}</div>
-                                    <div class="small text-muted">定时任务：${taskCount}</div>
-                                    <div class="small text-muted">MCP 服务器：${mcpCount}</div>
-                                    <div class="small text-muted">知识条目：${kbCount}</div>
-                                    <div class="small text-muted">自定义指令：${instrCount}</div>
-                                </div>
+            const planViewer = document.getElementById('plan-viewer');
+            if (planViewer) {
+                planViewer.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 bg-white h-100">
+                                <div class="fw-semibold mb-2">系统概览</div>
+                                <div class="small text-muted">日志条目：${stats.logging?.log_entries || 0}</div>
+                                <div class="small text-muted">定时任务：${taskCount}</div>
+                                <div class="small text-muted">MCP 服务器：${mcpCount}</div>
+                                <div class="small text-muted">知识条目：${kbCount}</div>
+                                <div class="small text-muted">自定义指令：${instrCount}</div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="border rounded p-3 bg-white h-100">
-                                    <div class="fw-semibold mb-2">快捷入口</div>
-                                    <div class="d-grid gap-2">
-                                        <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('v-tasks-tab').click()">打开定时任务</button>
-                                        <button class="btn btn-sm btn-outline-info" onclick="document.getElementById('v-mcp-tab').click()">打开 MCP 系统</button>
-                                        <button class="btn btn-sm btn-outline-success" onclick="document.getElementById('v-knowledge-tab').click()">打开知识库</button>
-                                        <button class="btn btn-sm btn-outline-warning" onclick="document.getElementById('v-instructions-tab').click()">打开指令中心</button>
-                                    </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 bg-white h-100">
+                                <div class="fw-semibold mb-2">快捷入口</div>
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('v-tasks-tab').click()">打开定时任务</button>
+                                    <button class="btn btn-sm btn-outline-info" onclick="document.getElementById('v-mcp-tab').click()">打开 MCP 系统</button>
+                                    <button class="btn btn-sm btn-outline-success" onclick="document.getElementById('v-knowledge-tab').click()">打开知识库</button>
+                                    <button class="btn btn-sm btn-outline-warning" onclick="document.getElementById('v-instructions-tab').click()">打开指令中心</button>
                                 </div>
                             </div>
                         </div>
-                    `;
-                }
-
-                return stats;
+                    </div>
+                `;
             }
-        } catch(e) {}
+
+            return stats;
+        } catch(e) {
+            console.error('系统中枢状态加载失败:', e);
+            const planViewer = document.getElementById('plan-viewer');
+            if (planViewer) {
+                planViewer.innerHTML = `
+                    <div class="alert alert-warning mb-0" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>系统状态加载失败</strong><br/>
+                        <small class="text-muted">${escapeHtml(e.message || '未知错误')}</small>
+                    </div>
+                `;
+            }
+        }
     }
 
     async function loadTaskManager() {
@@ -6800,7 +7657,14 @@
             if (badge) badge.textContent = tasks.length;
             if (!body) return;
             if (!tasks.length) {
-                body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">暂无任务</td></tr>';
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">
+                            <i class="fas fa-tasks fa-2x opacity-50 mb-2 d-block"></i>
+                            <small>暂无任务 - 点击上方"创建提醒"添加任务</small>
+                        </td>
+                    </tr>
+                `;
                 return;
             }
             body.innerHTML = tasks.map(task => `
@@ -6813,7 +7677,17 @@
                 </tr>
             `).join('');
         } catch (e) {
-            toastr.error('加载任务失败: ' + e.message);
+            console.error('加载任务失败:', e);
+            const body = document.getElementById('tasks-body');
+            if (body) {
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-3 small">
+                            加载失败: ${escapeHtml(e.message || '未知错误')}
+                        </td>
+                    </tr>
+                `;
+            }
         }
     }
 
@@ -6901,6 +7775,8 @@
     async function loadRealtimeSearchPanel() {
         try {
             const res = await fetch('/api/realtime_search/subscriptions');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            
             const data = await res.json();
             const subs = (data.success && Array.isArray(data.data)) ? data.data : [];
 
@@ -6911,7 +7787,14 @@
 
             if (body) {
                 if (!subs.length) {
-                    body.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">暂无订阅</td></tr>';
+                    body.innerHTML = `
+                        <tr>
+                            <td colspan="3" class="text-center py-5">
+                                <i class="fas fa-satellite fa-2x text-muted opacity-50 mb-2 d-block"></i>
+                                <small class="text-muted">暂无实时订阅 - 点击上方"添加订阅"创建</small>
+                            </td>
+                        </tr>
+                    `;
                 } else {
                     body.innerHTML = subs.map(sub => `
                         <tr>
@@ -6943,7 +7826,19 @@
                 }
             }
         } catch (e) {
-            toastr.error('加载实时订阅失败: ' + e.message);
+            console.error('实时订阅加载失败:', e);
+            const body = document.getElementById('realtime-sub-body');
+            if (body) {
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="text-center py-3">
+                            <div class="alert alert-warning mb-0 py-2" role="alert">
+                                <small class="text-muted">${escapeHtml(e.message || '加载失败')}</small>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
         }
     }
 
@@ -7073,15 +7968,17 @@
             const query = encodeURIComponent(mcpMarketPageState.query || '');
             const mcpPage = Number(mcpMarketPageState.page || 1);
             const mcpPageSize = Number(mcpMarketPageState.pageSize || 24);
+            
             const settled = await Promise.allSettled([
-                fetch('/api/systems/mcp/servers'),
-                fetch(`/api/systems/mcp/market/smithery/search?page=${mcpPage}&page_size=${mcpPageSize}&query=${query}`)
+                fetch('/api/systems/mcp/servers').catch(() => ({ ok: false })),
+                fetch(`/api/systems/mcp/market/smithery/search?page=${mcpPage}&page_size=${mcpPageSize}&query=${query}`).catch(() => ({ ok: false }))
             ]);
 
             async function safeJsonFromSettled(item, fallback = {}) {
                 try {
                     if (!item || item.status !== 'fulfilled' || !item.value) return fallback;
                     const res = item.value;
+                    if (!res.ok) return fallback;
                     const text = await res.text();
                     try {
                         return JSON.parse(text);
@@ -7110,6 +8007,7 @@
             const marketSearch = (document.getElementById('mcp-market-search')?.value || '').trim().toLowerCase();
             const marketTag = (document.getElementById('mcp-market-tag-filter')?.value || '').trim().toLowerCase();
             const uninstalledOnly = !!document.getElementById('mcp-market-installed-only')?.checked;
+            
             if (badge) badge.textContent = servers.length;
             if (marketBadge) marketBadge.textContent = marketItems.length;
             if (!body) return;
@@ -7137,7 +8035,14 @@
             renderMcpMarketCards(filteredMarket, existingNames);
 
             if (!servers.length) {
-                body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">暂无 MCP 服务器</td></tr>';
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center py-5">
+                            <i class="fas fa-cube fa-2x text-muted opacity-50 mb-2 d-block"></i>
+                            <small class="text-muted">暂无 MCP 服务器 - 从市场安装或快速创建</small>
+                        </td>
+                    </tr>
+                `;
                 return;
             }
             body.innerHTML = servers.map(server => `
@@ -7155,6 +8060,7 @@
                 </tr>
             `).join('');
         } catch (e) {
+            console.error('MCP manager error:', e);
             toastr.error('加载 MCP 失败: ' + e.message);
         }
     }
@@ -7369,39 +8275,239 @@
             toastr.warning('请先输入 Registry 条目 ID');
             return;
         }
-        await installMcpMarketItem(itemId);
+        openMcpJsonCreateModalByRef(itemId);
+    }
+
+    function getMcpMarketItemById(itemId) {
+        const page = mcpMarketPageState || {data: []};
+        const arr = Array.isArray(page.data) ? page.data : [];
+        return arr.find(i => String(i.id || '') === String(itemId || '')) || null;
+    }
+
+    function buildMcpJsonTemplate(transport = 'stdio', item = null) {
+        const mode = String(transport || 'stdio').toLowerCase();
+        const info = item || {};
+        const connectionUrl = String(info.connection_url || info.url || info.registry_url || '').trim();
+
+        if (mode === 'streamable_http' || mode === 'http') {
+            return {
+                transport: 'streamable_http',
+                url: connectionUrl || 'your mcp server url',
+                headers: {},
+                timeout: 5,
+                sse_read_timeout: 300
+            };
+        }
+        if (mode === 'sse') {
+            return {
+                transport: 'sse',
+                url: connectionUrl || 'your mcp server url',
+                headers: {},
+                timeout: 5,
+                sse_read_timeout: 300
+            };
+        }
+        return {
+            command: 'python',
+            args: ['-m', 'your_module']
+        };
+    }
+
+    function ensureMcpJsonCreateModal() {
+        let modal = document.getElementById('mcp-json-create-modal');
+        if (modal) return modal;
+
+        modal = document.createElement('div');
+        modal.id = 'mcp-json-create-modal';
+        modal.className = 'modal fade';
+        modal.setAttribute('tabindex', '-1');
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="fas fa-plus me-2"></i>新增 MCP 服务器</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <input id="mcp-json-server-name" class="form-control" placeholder="服务器名称">
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <label class="form-label mb-0">服务器配置（JSON）</label>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="template chooser">
+                                <button class="btn btn-outline-primary" type="button" onclick="applyMcpJsonTemplate('stdio')">Stdio 模板</button>
+                                <button class="btn btn-outline-primary" type="button" onclick="applyMcpJsonTemplate('streamable_http')">Streamable HTTP 模板</button>
+                                <button class="btn btn-outline-primary" type="button" onclick="applyMcpJsonTemplate('sse')">SSE 模板</button>
+                            </div>
+                        </div>
+                        <textarea id="mcp-json-config" class="form-control font-monospace" rows="14"></textarea>
+                        <div class="small text-muted mt-2">说明：请填写标准 JSON。支持 stdio / streamable_http / sse。</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-outline-primary" onclick="testMcpJsonConfig()">测试连接</button>
+                        <button type="button" class="btn btn-primary" onclick="saveMcpJsonConfig()">保存</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        return modal;
+    }
+
+    function applyMcpJsonTemplate(transport = 'stdio') {
+        const el = document.getElementById('mcp-json-config');
+        if (!el) return;
+        const t = buildMcpJsonTemplate(transport, window._mcpJsonSelectedMarketItem || null);
+        el.value = JSON.stringify(t, null, 2);
+    }
+
+    function openMcpJsonCreateModal() {
+        window._mcpJsonSelectedMarketItem = null;
+        const modalEl = ensureMcpJsonCreateModal();
+        const nameEl = document.getElementById('mcp-json-server-name');
+        if (nameEl) nameEl.value = '';
+        applyMcpJsonTemplate('stdio');
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    function openMcpJsonCreateModalFromMarket(itemId) {
+        const item = getMcpMarketItemById(itemId);
+        if (!item) {
+            toastr.error('未找到该市场条目');
+            return;
+        }
+        window._mcpJsonSelectedMarketItem = item;
+        const modalEl = ensureMcpJsonCreateModal();
+        const nameEl = document.getElementById('mcp-json-server-name');
+        if (nameEl) nameEl.value = String(item.name || item.id || 'MCP Server');
+
+        let transport = 'stdio';
+        const t = String(item.type || '').toLowerCase();
+        if (t.includes('sse')) transport = 'sse';
+        else if (t.includes('http') || String(item.connection_url || '').startsWith('http')) transport = 'streamable_http';
+        applyMcpJsonTemplate(transport);
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    function openMcpJsonCreateModalByRef(rawRef) {
+        const ref = String(rawRef || '').trim();
+        if (!ref) return;
+        const modalEl = ensureMcpJsonCreateModal();
+        const nameEl = document.getElementById('mcp-json-server-name');
+        if (nameEl) nameEl.value = ref;
+        window._mcpJsonSelectedMarketItem = { id: ref, name: ref, url: ref };
+        const transport = /^https?:\/\//i.test(ref) ? 'streamable_http' : 'stdio';
+        applyMcpJsonTemplate(transport);
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    async function testMcpJsonConfig() {
+        const cfgEl = document.getElementById('mcp-json-config');
+        if (!cfgEl) return;
+        let cfg;
+        try {
+            cfg = JSON.parse(cfgEl.value || '{}');
+        } catch {
+            toastr.error('JSON 格式错误，请先修正');
+            return;
+        }
+
+        const transport = String(cfg.transport || '').toLowerCase();
+        const normalizedTransport = transport === 'http' ? 'streamable_http' : transport;
+        if (!['stdio', 'streamable_http', 'sse'].includes(normalizedTransport)) {
+            toastr.warning('transport 必须是 stdio/streamable_http/sse');
+            return;
+        }
+
+        if ((normalizedTransport === 'streamable_http' || normalizedTransport === 'sse') && !String(cfg.url || '').trim()) {
+            toastr.warning('streamable_http/sse 模式需要提供 url');
+            return;
+        }
+        if (normalizedTransport === 'stdio' && !String(cfg.command || '').trim()) {
+            toastr.warning('stdio 模式需要提供 command');
+            return;
+        }
+        toastr.success('配置结构校验通过');
+    }
+
+    async function saveMcpJsonConfig() {
+        const name = (document.getElementById('mcp-json-server-name')?.value || '').trim();
+        const cfgEl = document.getElementById('mcp-json-config');
+        if (!name || !cfgEl) {
+            toastr.warning('请先填写服务器名称和配置');
+            return;
+        }
+
+        let cfg;
+        try {
+            cfg = JSON.parse(cfgEl.value || '{}');
+        } catch {
+            toastr.error('JSON 格式错误，请先修正');
+            return;
+        }
+
+        const transport = String(cfg.transport || '').toLowerCase();
+        const normalizedTransport = transport === 'http' ? 'streamable_http' : transport;
+        if (!['stdio', 'streamable_http', 'sse'].includes(normalizedTransport)) {
+            toastr.warning('transport 必须是 stdio/streamable_http/sse');
+            return;
+        }
+
+        const payload = {
+            name,
+            type: normalizedTransport === 'streamable_http' ? 'http' : normalizedTransport,
+            description: String((window._mcpJsonSelectedMarketItem || {}).description || ''),
+            protocol_version: '1.0',
+            headers: (cfg.headers && typeof cfg.headers === 'object') ? cfg.headers : {},
+            capabilities: {
+                source: 'smithery-cli-market',
+                market_item_id: String((window._mcpJsonSelectedMarketItem || {}).id || '')
+            },
+            enabled: true
+        };
+
+        if (normalizedTransport === 'stdio') {
+            payload.command = String(cfg.command || '').trim();
+            payload.args = Array.isArray(cfg.args) ? cfg.args : [];
+        } else {
+            payload.url = String(cfg.url || '').trim();
+            payload.command = '';
+            payload.args = [];
+        }
+
+        if (!payload.command && normalizedTransport === 'stdio') {
+            toastr.warning('stdio 模式需要 command');
+            return;
+        }
+        if (!payload.url && (normalizedTransport === 'streamable_http' || normalizedTransport === 'sse')) {
+            toastr.warning('streamable_http/sse 模式需要 url');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/systems/mcp/servers', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok || data.code !== 0) {
+                throw new Error(data.message || '保存失败');
+            }
+            toastr.success('MCP 服务器已保存');
+            const modalEl = document.getElementById('mcp-json-create-modal');
+            const inst = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+            if (inst) inst.hide();
+            await loadMcpManager();
+        } catch (e) {
+            toastr.error('保存 MCP 服务器失败: ' + e.message);
+        }
     }
 
     async function installMcpMarketItem(itemId) {
-        if (!itemId) return;
-        try {
-            // 从市场数据中找到该项
-            const currentPage = mcpMarketPageState || {data: [], page: 1, total: 0};
-            const item = currentPage.data && currentPage.data.find(i => String(i.id) === String(itemId));
-            if (!item) {
-                toastr.error('未找到该 MCP 服务器信息');
-                return;
-            }
-
-            // 直接通过 Smithery CLI 安装/接入
-            const res = await fetch('/api/systems/mcp/market/smithery/install', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    server_id: itemId,
-                    id: item.id,
-                    name: item.name,
-                    connection_url: item.connection_url || '',
-                    registry_url: item.registry_url || item.url || ''
-                })
-            });
-            const data = await res.json();
-            if (!res.ok || data.code !== 0) throw new Error(data.message || '接入失败');
-            toastr.success(data.message || `MCP 接入完成: ${item.name || item.id}`);
-            await loadMcpManager();
-        } catch (e) {
-            toastr.error('MCP 接入失败: ' + e.message);
-        }
+        // 兼容历史入口：统一切到 JSON 模板化新增流程
+        openMcpJsonCreateModalFromMarket(itemId);
     }
     
     function showMcpConfigModal(item, configData) {
@@ -7713,44 +8819,43 @@
     }
 
     async function createQuickMcp() {
-        const name = document.getElementById('mcp-name')?.value.trim();
-        const type = document.getElementById('mcp-type')?.value.trim() || 'stdio';
-        const command = document.getElementById('mcp-command')?.value.trim();
-        if (!name || !command) {
-            toastr.warning('请填写服务器名称和命令/URL');
-            return;
-        }
-        try {
-            const payload = type === 'http' || type === 'sse'
-                ? { name, type, url: command, description: command }
-                : { name, type, command, description: command, args: [] };
-            const res = await fetch('/api/systems/mcp/servers', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            if (data.code !== 0) throw new Error(data.message || '创建失败');
-            toastr.success('MCP 服务器已创建');
-            await loadMcpManager();
-        } catch (e) {
-            toastr.error('创建 MCP 失败: ' + e.message);
-        }
+        // 兼容历史入口：统一切到 JSON 模板化新增流程
+        openMcpJsonCreateModal();
     }
 
     async function loadKnowledgeManager() {
         try {
-            const res = await fetch('/api/systems/knowledge/entries?limit=50');
-            const data = await res.json();
+            const res = await fetch('/api/systems/knowledge/entries?limit=50').catch(() => ({ ok: false }));
+            let data = {};
+            if (res.ok) {
+                try {
+                    data = await res.json();
+                } catch (e) {
+                    data = { code: -1, data: [] };
+                }
+            } else {
+                data = { code: -1, data: [] };
+            }
+            
             const entries = (data.code === 0 && Array.isArray(data.data)) ? data.data : [];
             const body = document.getElementById('kb-body');
             const badge = document.getElementById('kb-count-badge');
+            
             if (badge) badge.textContent = entries.length;
             if (!body) return;
+            
             if (!entries.length) {
-                body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">暂无知识条目</td></tr>';
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center py-5">
+                            <i class="fas fa-book fa-2x text-muted opacity-50 mb-2 d-block"></i>
+                            <small class="text-muted">知识库为空 - 导入文档或手动添加条目</small>
+                        </td>
+                    </tr>
+                `;
                 return;
             }
+            
             body.innerHTML = entries.map(entry => `
                 <tr>
                     <td>${escapeHtml(entry.title || '')}</td>
@@ -7765,9 +8870,20 @@
                     </td>
                 </tr>
             `).join('');
+            
             await loadKnowledgeDifyMarket(false);
         } catch (e) {
-            toastr.error('加载知识库失败: ' + e.message);
+            console.error('知识库加载失败:', e);
+            const body = document.getElementById('kb-body');
+            if (body) {
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center py-3 small text-muted">
+                            加载失败: ${escapeHtml(e.message || '未知错误')}
+                        </td>
+                    </tr>
+                `;
+            }
         }
     }
 
@@ -7916,7 +9032,6 @@
         }
 
         const lines = text.split(/\r?\n/);
-        const blocks = [];
         let currentTitle = '';
         let currentLines = [];
 
@@ -8086,12 +9201,26 @@
 
     async function loadInstructionManager() {
         try {
-            const [instrRes, personaRes] = await Promise.all([
-                fetch('/api/systems/instructions'),
-                fetch('/api/systems/personalities')
+            // 使用 allSettled 来容错处理 API 调用
+            const settled = await Promise.allSettled([
+                fetch('/api/systems/instructions').catch(() => ({ ok: false })),
+                fetch('/api/systems/personalities').catch(() => ({ ok: false }))
             ]);
-            const instrData = await instrRes.json();
-            const personaData = await personaRes.json();
+
+            async function safeJson(promiRes, fallback = { code: -1, data: [] }) {
+                try {
+                    if (!promiRes || promiRes.status !== 'fulfilled') return fallback;
+                    const res = promiRes.value;
+                    if (!res.ok) return fallback;
+                    const data = await res.json();
+                    return data || fallback;
+                } catch {
+                    return fallback;
+                }
+            }
+
+            const instrData = await safeJson(settled[0]);
+            const personaData = await safeJson(settled[1]);
             const instructions = (instrData.code === 0 && Array.isArray(instrData.data)) ? instrData.data : [];
             const personalities = (personaData.code === 0 && Array.isArray(personaData.data)) ? personaData.data : [];
 
@@ -8099,32 +9228,65 @@
             const personaBody = document.getElementById('persona-body');
             const instrBadge = document.getElementById('instr-count-badge');
             const personaBadge = document.getElementById('persona-count-badge');
+            
             if (instrBadge) instrBadge.textContent = instructions.length;
             if (personaBadge) personaBadge.textContent = personalities.length;
 
             if (instrBody) {
-                instrBody.innerHTML = instructions.length ? instructions.map(item => `
-                    <tr>
-                        <td>${escapeHtml(item.name || '')}</td>
-                        <td><span class="badge bg-light text-dark border">${escapeHtml(item.instruction_type || '')}</span></td>
-                        <td>${escapeHtml(item.priority ?? 0)}</td>
-                        <td class="small text-muted">${escapeHtml(String(item.content || '').slice(0, 60))}${String(item.content || '').length > 60 ? '...' : ''}</td>
-                    </tr>
-                `).join('') : '<tr><td colspan="4" class="text-center text-muted py-4">暂无指令</td></tr>';
+                if (instructions.length) {
+                    instrBody.innerHTML = instructions.map(item => `
+                        <tr>
+                            <td>${escapeHtml(item.name || '')}</td>
+                            <td><span class="badge bg-light text-dark border">${escapeHtml(item.instruction_type || '')}</span></td>
+                            <td>${escapeHtml(item.priority ?? 0)}</td>
+                            <td class="small text-muted">${escapeHtml(String(item.content || '').slice(0, 60))}${String(item.content || '').length > 60 ? '...' : ''}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    instrBody.innerHTML = `
+                        <tr>
+                            <td colspan="4" class="text-center py-5">
+                                <i class="fas fa-scroll fa-2x text-muted opacity-50 mb-2 d-block"></i>
+                                <small class="text-muted">暂无自定义指令 - 点击上方添加新指令</small>
+                            </td>
+                        </tr>
+                    `;
+                }
             }
 
             if (personaBody) {
-                personaBody.innerHTML = personalities.length ? personalities.map(item => `
-                    <tr>
-                        <td>${escapeHtml(item.name || '')}</td>
-                        <td>${escapeHtml(item.tone || '-')}</td>
-                        <td>${escapeHtml(item.speaking_style || '-')}</td>
-                        <td class="small text-muted">${escapeHtml(String(item.description || '').slice(0, 60))}${String(item.description || '').length > 60 ? '...' : ''}</td>
-                    </tr>
-                `).join('') : '<tr><td colspan="4" class="text-center text-muted py-4">暂无人格配置</td></tr>';
+                if (personalities.length) {
+                    personaBody.innerHTML = personalities.map(item => `
+                        <tr>
+                            <td>${escapeHtml(item.name || '')}</td>
+                            <td>${escapeHtml(item.tone || '-')}</td>
+                            <td>${escapeHtml(item.speaking_style || '-')}</td>
+                            <td class="small text-muted">${escapeHtml(String(item.description || '').slice(0, 60))}${String(item.description || '').length > 60 ? '...' : ''}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    personaBody.innerHTML = `
+                        <tr>
+                            <td colspan="4" class="text-center py-5">
+                                <i class="fas fa-puzzle-piece fa-2x text-muted opacity-50 mb-2 d-block"></i>
+                                <small class="text-muted">暂无人格配置 - 点击上方添加新人格</small>
+                            </td>
+                        </tr>
+                    `;
+                }
             }
         } catch (e) {
-            toastr.error('加载指令中心失败: ' + e.message);
+            console.error('指令管理加载失败:', e);
+            const instrBody = document.getElementById('instr-body');
+            if (instrBody) {
+                instrBody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-center py-3 small text-muted">
+                            加载失败: ${escapeHtml(e.message || '未知错误')}
+                        </td>
+                    </tr>
+                `;
+            }
         }
     }
 

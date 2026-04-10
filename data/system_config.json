@@ -34,12 +34,16 @@
   "work_mode": {
     "enabled": false,
     "password_hash": "73011b56941c1e4bd9675f2c4082fba8d7f8ee20b0dbaab8a55ca730eb5acd0c",
-    "sandbox_enabled": true,
+    "sandbox_enabled": false,
     "features": {
       "allow_file_write": true,
       "allow_code_exec": true,
       "allow_plan_update": true,
-      "allow_coder_tool": true
+      "allow_coder_tool": true,
+      "plugin_command_requires_work_mode": false,
+      "plugin_dev_tools_require_work_mode": true,
+      "allow_external_access": false,
+      "require_external_approval": true
     },
     "allowed_databases": [
       "catgirl_db"
@@ -53,7 +57,11 @@
       "bot_qq": ""
     },
     "chat_settings": {
-      "bothub_enabled": true
+      "bothub_enabled": true,
+      "sandbox_show_agent_trace": true,
+      "sandbox_trace_collapsed": true,
+      "sandbox_show_back_to_top": true,
+      "sandbox_use_docker_runtime": true
     }
   },
   "comm_protocol": "onebot"
