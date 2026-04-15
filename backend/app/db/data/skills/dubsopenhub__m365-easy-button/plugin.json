@@ -1,0 +1,20 @@
+{
+  "name": "m365-easy-button",
+  "description": "Translate Google Workspace habits into Microsoft 365 steps, app mappings, troubleshooting, and power-user guidance.",
+  "version": "1.1.0",
+  "author": {
+    "name": "DUBSOpenHub",
+    "url": "https://github.com/DUBSOpenHub"
+  },
+  "homepage": "https://github.com/DUBSOpenHub/m365-easy-button",
+  "repository": "https://github.com/DUBSOpenHub/m365-easy-button",
+  "license": "MIT",
+  "keywords": [
+    "microsoft-365",
+    "google-workspace",
+    "migration",
+    "productivity",
+    "copilot-cli"
+  ],
+  "skills": "skills/"
+}

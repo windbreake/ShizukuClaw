@@ -1,0 +1,24 @@
+{
+  "name": "shizuku-sandbox-runtime",
+  "version": "1.0.0",
+  "description": "Secure sandbox runtime for JavaScript code execution (vm2-based)",
+  "main": "runner.js",
+  "scripts": {
+    "install-deps": "npm install vm2@latest",
+    "test": "node runner.js --test"
+  },
+  "keywords": [
+    "sandbox",
+    "security",
+    "isolation",
+    "vm2"
+  ],
+  "author": "Shizuku",
+  "license": "MIT",
+  "dependencies": {
+    "vm2": "^3.9.19"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

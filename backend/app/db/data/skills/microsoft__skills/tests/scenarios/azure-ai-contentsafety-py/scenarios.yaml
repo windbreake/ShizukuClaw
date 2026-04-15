@@ -1,0 +1,315 @@
+# yaml-language-server: $schema=https://json.schemastore.org/problem-object-rfc9457.json
+---
+# Test scenarios for azure-ai-contentsafety-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: text_analysis_api_key
+    prompt: |
+      Analyze a piece of text with Azure AI Content Safety using API key
+      authentication. Include category severity checks for hate, self-harm,
+      sexual, and violence.
+    expected_patterns:
+      - "from azure\\.ai\\.contentsafety import ContentSafetyClient"
+      - "AzureKeyCredential"
+      - "AnalyzeTextOptions"
+      - "analyze_text"
+      - "TextCategory"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+    tags:
+      - basic
+      - text
+      - authentication
+    mock_response: |
+      import os
+      from azure.ai.contentsafety import ContentSafetyClient
+      from azure.ai.contentsafety.models import AnalyzeTextOptions, TextCategory
+      from azure.core.credentials import AzureKeyCredential
+      
+      endpoint = os.environ["CONTENT_SAFETY_ENDPOINT"]
+      key = os.environ["CONTENT_SAFETY_KEY"]
+      
+      client = ContentSafetyClient(endpoint, AzureKeyCredential(key))
+      
+      request = AnalyzeTextOptions(text="You are an idiot")
+      response = client.analyze_text(request)
+      
+      for category in [
+          TextCategory.HATE,
+          TextCategory.SELF_HARM,
+          TextCategory.SEXUAL,
+          TextCategory.VIOLENCE,
+      ]:
+          result = next(
+              (item for item in response.categories_analysis if item.category == category),
+              None,
+          )
+          if result:
+              print(f"{category}: severity {result.severity}")
+
+  - name: text_analysis_entra_id
+    prompt: |
+      Analyze text using Microsoft Entra ID authentication with
+      DefaultAzureCredential. Include analyze_text usage.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "ContentSafetyClient"
+      - "AnalyzeTextOptions"
+      - "analyze_text"
+    forbidden_patterns:
+      - "AzureKeyCredential"
+    tags:
+      - authentication
+      - text
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.ai.contentsafety import ContentSafetyClient
+      from azure.ai.contentsafety.models import AnalyzeTextOptions
+      
+      endpoint = os.environ["CONTENT_SAFETY_ENDPOINT"]
+      credential = DefaultAzureCredential()
+      
+      client = ContentSafetyClient(endpoint, credential)
+      
+      request = AnalyzeTextOptions(text="Sample text to analyze")
+      response = client.analyze_text(request)
+      
+      for result in response.categories_analysis:
+          print(f"{result.category}: severity {result.severity}")
+
+  - name: image_analysis_file_bytes
+    prompt: |
+      Analyze an image from local file bytes using AnalyzeImageOptions and ImageData.
+      Use the ContentSafetyClient analyze_image method.
+    expected_patterns:
+      - "AnalyzeImageOptions"
+      - "ImageData\\(content="
+      - "analyze_image"
+      - "open\\("
+    forbidden_patterns:
+      - "AnalyzeTextOptions"
+    tags:
+      - image
+      - basic
+    mock_response: |
+      import os
+      from azure.ai.contentsafety import ContentSafetyClient
+      from azure.ai.contentsafety.models import AnalyzeImageOptions, ImageData
+      from azure.core.credentials import AzureKeyCredential
+      
+      endpoint = os.environ["CONTENT_SAFETY_ENDPOINT"]
+      key = os.environ["CONTENT_SAFETY_KEY"]
+      
+      client = ContentSafetyClient(endpoint, AzureKeyCredential(key))
+      
+      with open("image.jpg", "rb") as file:
+          request = AnalyzeImageOptions(image=ImageData(content=file.read()))
+      
+      response = client.analyze_image(request)
+      for result in response.categories_analysis:
+          print(f"{result.category}: severity {result.severity}")
+
+  - name: image_analysis_blob_url
+    prompt: |
+      Analyze an image from a blob URL using ImageData(blob_url=...).
+      Use analyze_image with AnalyzeImageOptions.
+    expected_patterns:
+      - "ImageData\\(blob_url="
+      - "AnalyzeImageOptions"
+      - "analyze_image"
+    forbidden_patterns:
+      - "ImageData\\(url="
+    tags:
+      - image
+      - url
+    mock_response: |
+      import os
+      from azure.ai.contentsafety import ContentSafetyClient
+      from azure.ai.contentsafety.models import AnalyzeImageOptions, ImageData
+      from azure.core.credentials import AzureKeyCredential
+      
+      endpoint = os.environ["CONTENT_SAFETY_ENDPOINT"]
+      key = os.environ["CONTENT_SAFETY_KEY"]
+      
+      client = ContentSafetyClient(endpoint, AzureKeyCredential(key))
+      
+      request = AnalyzeImageOptions(
+          image=ImageData(blob_url="https://example.com/image.jpg")
+      )
+      response = client.analyze_image(request)
+      for result in response.categories_analysis:
+          print(f"{result.category}: severity {result.severity}")
+
+  - name: blocklist_create_add_analyze
+    prompt: |
+      Create or update a text blocklist, add items, and analyze text using
+      the blocklist (halt_on_blocklist_hit enabled).
+    expected_patterns:
+      - "BlocklistClient"
+      - "TextBlocklist"
+      - "create_or_update_text_blocklist"
+      - "add_or_update_blocklist_items"
+      - "blocklist_names"
+      - "halt_on_blocklist_hit"
+    forbidden_patterns:
+      - "blocklist_client\\.analyze_text"
+    tags:
+      - blocklist
+      - text
+    mock_response: |
+      import os
+      from azure.ai.contentsafety import ContentSafetyClient, BlocklistClient
+      from azure.ai.contentsafety.models import (
+          AnalyzeTextOptions,
+          TextBlocklist,
+          TextBlocklistItem,
+          AddOrUpdateTextBlocklistItemsOptions,
+      )
+      from azure.core.credentials import AzureKeyCredential
+      
+      endpoint = os.environ["CONTENT_SAFETY_ENDPOINT"]
+      key = os.environ["CONTENT_SAFETY_KEY"]
+      
+      content_client = ContentSafetyClient(endpoint, AzureKeyCredential(key))
+      blocklist_client = BlocklistClient(endpoint, AzureKeyCredential(key))
+      
+      blocklist = TextBlocklist(
+          blocklist_name="my-blocklist",
+          description="Custom terms",
+      )
+      blocklist_client.create_or_update_text_blocklist(
+          blocklist_name="my-blocklist",
+          options=blocklist,
+      )
+      
+      items = AddOrUpdateTextBlocklistItemsOptions(
+          blocklist_items=[
+              TextBlocklistItem(text="blocked-term-1"),
+              TextBlocklistItem(text="blocked-term-2"),
+          ]
+      )
+      blocklist_client.add_or_update_blocklist_items(
+          blocklist_name="my-blocklist",
+          options=items,
+      )
+      
+      request = AnalyzeTextOptions(
+          text="Text containing blocked-term-1",
+          blocklist_names=["my-blocklist"],
+          halt_on_blocklist_hit=True,
+      )
+      response = content_client.analyze_text(request)
+      if response.blocklists_match:
+          for match in response.blocklists_match:
+              print(f"Blocked: {match.blocklist_item_text}")
+
+  - name: blocklist_remove_items
+    prompt: |
+      Remove a blocklist item using RemoveTextBlocklistItemsOptions and
+      remove_blocklist_items.
+    expected_patterns:
+      - "RemoveTextBlocklistItemsOptions"
+      - "remove_blocklist_items"
+      - "blocklist_item_ids"
+    forbidden_patterns:
+      - "delete_text_blocklist"
+    tags:
+      - blocklist
+      - management
+    mock_response: |
+      import os
+      from azure.ai.contentsafety import BlocklistClient
+      from azure.ai.contentsafety.models import (
+          TextBlocklistItem,
+          AddOrUpdateTextBlocklistItemsOptions,
+          RemoveTextBlocklistItemsOptions,
+      )
+      from azure.core.credentials import AzureKeyCredential
+      
+      endpoint = os.environ["CONTENT_SAFETY_ENDPOINT"]
+      key = os.environ["CONTENT_SAFETY_KEY"]
+      
+      blocklist_client = BlocklistClient(endpoint, AzureKeyCredential(key))
+      
+      add_result = blocklist_client.add_or_update_blocklist_items(
+          blocklist_name="my-blocklist",
+          options=AddOrUpdateTextBlocklistItemsOptions(
+              blocklist_items=[TextBlocklistItem(text="blocked-term")]
+          ),
+      )
+      block_item_id = add_result.blocklist_items[0].blocklist_item_id
+      
+      blocklist_client.remove_blocklist_items(
+          blocklist_name="my-blocklist",
+          options=RemoveTextBlocklistItemsOptions(blocklist_item_ids=[block_item_id]),
+      )
+
+  - name: multi_severity_text_output
+    prompt: |
+      Analyze text with the eight severity levels output type.
+    expected_patterns:
+      - "AnalyzeTextOutputType"
+      - "EIGHT_SEVERITY_LEVELS"
+      - "output_type"
+    forbidden_patterns:
+      - "EightSeverityLevels"
+    tags:
+      - text
+      - severity
+    mock_response: |
+      import os
+      from azure.ai.contentsafety import ContentSafetyClient
+      from azure.ai.contentsafety.models import AnalyzeTextOptions, AnalyzeTextOutputType
+      from azure.core.credentials import AzureKeyCredential
+      
+      endpoint = os.environ["CONTENT_SAFETY_ENDPOINT"]
+      key = os.environ["CONTENT_SAFETY_KEY"]
+      
+      client = ContentSafetyClient(endpoint, AzureKeyCredential(key))
+      
+      request = AnalyzeTextOptions(
+          text="Your text",
+          output_type=AnalyzeTextOutputType.EIGHT_SEVERITY_LEVELS,
+      )
+      response = client.analyze_text(request)
+      for result in response.categories_analysis:
+          print(f"{result.category}: severity {result.severity}")
+
+  - name: blocklist_match_results
+    prompt: |
+      Analyze text with blocklists enabled and print the blocklist match
+      results from response.blocklists_match.
+    expected_patterns:
+      - "blocklists_match"
+      - "blocklist_item_text"
+      - "AnalyzeTextOptions"
+    tags:
+      - blocklist
+      - text
+    mock_response: |
+      import os
+      from azure.ai.contentsafety import ContentSafetyClient
+      from azure.ai.contentsafety.models import AnalyzeTextOptions
+      from azure.core.credentials import AzureKeyCredential
+      
+      endpoint = os.environ["CONTENT_SAFETY_ENDPOINT"]
+      key = os.environ["CONTENT_SAFETY_KEY"]
+      
+      client = ContentSafetyClient(endpoint, AzureKeyCredential(key))
+      
+      request = AnalyzeTextOptions(
+          text="Text containing blocked-term-1",
+          blocklist_names=["my-blocklist"],
+          halt_on_blocklist_hit=False,
+      )
+      response = client.analyze_text(request)
+      if response.blocklists_match:
+          for match in response.blocklists_match:
+              print(f"Blocked: {match.blocklist_item_text}")

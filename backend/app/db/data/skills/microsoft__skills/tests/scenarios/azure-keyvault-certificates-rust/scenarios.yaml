@@ -1,0 +1,160 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-keyvault-certificates-rust skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: create_certificate_client
+    prompt: |
+      Create a Key Vault CertificateClient in Rust using DeveloperToolsCredential.
+    expected_patterns:
+      - "DeveloperToolsCredential"
+      - "CertificateClient"
+      - "vault.azure.net"
+    forbidden_patterns:
+      - "SecretClient"
+      - "KeyClient"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      use azure_identity::DeveloperToolsCredential;
+      use azure_security_keyvault_certificates::CertificateClient;
+
+      let credential = DeveloperToolsCredential::new(None)?;
+      let client = CertificateClient::new(
+          "https://<vault-name>.vault.azure.net/",
+          credential.clone(),
+          None,
+      )?;
+
+  - name: get_certificate
+    prompt: |
+      Retrieve a certificate from Azure Key Vault and display its thumbprint.
+    expected_patterns:
+      - "get_certificate"
+      - "into_model"
+      - "x509_thumbprint"
+    forbidden_patterns:
+      - "create_certificate"
+    tags:
+      - read
+      - certificates
+    mock_response: |
+      use azure_core::base64;
+
+      let certificate = client
+          .get_certificate("certificate-name", None)
+          .await?
+          .into_model()?;
+
+      println!(
+          "Thumbprint: {:?}",
+          certificate.x509_thumbprint.map(base64::encode_url_safe)
+      );
+
+  - name: create_self_signed_certificate
+    prompt: |
+      Create a self-signed certificate in Azure Key Vault using Rust.
+    expected_patterns:
+      - "create_certificate"
+      - "CreateCertificateParameters"
+      - "CertificatePolicy"
+      - "Self"
+      - "subject"
+    forbidden_patterns:
+      - "import_certificate"
+    tags:
+      - create
+      - self-signed
+    mock_response: |
+      use azure_security_keyvault_certificates::models::{
+          CreateCertificateParameters, CertificatePolicy,
+          IssuerParameters, X509CertificateProperties,
+      };
+
+      let policy = CertificatePolicy {
+          issuer_parameters: Some(IssuerParameters {
+              name: Some("Self".into()),
+              ..Default::default()
+          }),
+          x509_certificate_properties: Some(X509CertificateProperties {
+              subject: Some("CN=example.com".into()),
+              ..Default::default()
+          }),
+          ..Default::default()
+      };
+
+      let params = CreateCertificateParameters {
+          certificate_policy: Some(policy),
+          ..Default::default()
+      };
+
+      let operation = client
+          .create_certificate("cert-name", params.try_into()?, None)
+          .await?;
+
+  - name: import_certificate
+    prompt: |
+      Import an existing PFX certificate into Azure Key Vault using Rust.
+    expected_patterns:
+      - "import_certificate"
+      - "ImportCertificateParameters"
+      - "base64_encoded_certificate"
+    forbidden_patterns:
+      - "create_certificate"
+    tags:
+      - import
+      - certificates
+    mock_response: |
+      use azure_security_keyvault_certificates::models::ImportCertificateParameters;
+
+      let params = ImportCertificateParameters {
+          base64_encoded_certificate: Some(base64_cert_data),
+          password: Some("optional-password".into()),
+          ..Default::default()
+      };
+
+      let certificate = client
+          .import_certificate("cert-name", params.try_into()?, None)
+          .await?
+          .into_model()?;
+
+  - name: list_certificates
+    prompt: |
+      List all certificates in an Azure Key Vault using the Rust SDK.
+    expected_patterns:
+      - "list_certificate_properties"
+      - "into_stream"
+      - "try_next"
+    forbidden_patterns:
+      - "get_certificate"
+    tags:
+      - list
+      - certificates
+    mock_response: |
+      use azure_security_keyvault_certificates::ResourceExt;
+      use futures::TryStreamExt;
+
+      let mut pager = client.list_certificate_properties(None)?.into_stream();
+      while let Some(cert) = pager.try_next().await? {
+          let name = cert.resource_id()?.name;
+          println!("Certificate: {}", name);
+      }
+
+  - name: delete_certificate
+    prompt: |
+      Delete a certificate from Azure Key Vault using Rust.
+    expected_patterns:
+      - "delete_certificate"
+    forbidden_patterns:
+      - "purge"
+    tags:
+      - delete
+      - certificates
+    mock_response: |
+      client.delete_certificate("certificate-name", None).await?;

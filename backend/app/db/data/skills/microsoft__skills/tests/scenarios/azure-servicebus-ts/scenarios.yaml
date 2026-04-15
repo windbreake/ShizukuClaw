@@ -1,0 +1,563 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+# Test scenarios for azure-servicebus-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: servicebus_client_aad_auth
+    prompt: |
+      Create a ServiceBusClient in TypeScript using DefaultAzureCredential
+      for AAD authentication. Use environment variable for namespace.
+    expected_patterns:
+      - "import { ServiceBusClient } from \"@azure/service-bus\""
+      - "import { DefaultAzureCredential } from \"@azure/identity\""
+      - "new ServiceBusClient"
+      - "new DefaultAzureCredential()"
+      - "process.env"
+    forbidden_patterns:
+      - "require("
+      - "SharedAccessKey"
+    tags:
+      - authentication
+      - client
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const fullyQualifiedNamespace = process.env.SERVICEBUS_NAMESPACE!;
+      const client = new ServiceBusClient(
+        fullyQualifiedNamespace, 
+        new DefaultAzureCredential()
+      );
+
+  - name: send_message_to_queue
+    prompt: |
+      Send a JSON message to an Azure Service Bus queue in TypeScript.
+      Include contentType and close the sender when done.
+    expected_patterns:
+      - "createSender"
+      - "sendMessages"
+      - "contentType"
+      - "close"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - sender
+      - queue
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      const sender = client.createSender("my-queue");
+
+      await sender.sendMessages({
+        body: { orderId: "12345", amount: 99.99 },
+        contentType: "application/json",
+      });
+
+      await sender.close();
+      await client.close();
+
+  - name: send_batch_messages
+    prompt: |
+      Send multiple messages as a batch to Service Bus in TypeScript.
+      Handle the case when the batch becomes full.
+    expected_patterns:
+      - "createMessageBatch"
+      - "tryAddMessage"
+      - "sendMessages"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - sender
+      - batch
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      const sender = client.createSender("my-queue");
+      const messages = ["Message 1", "Message 2", "Message 3", "Message 4", "Message 5"];
+
+      let batch = await sender.createMessageBatch();
+
+      for (const msg of messages) {
+        if (!batch.tryAddMessage({ body: msg })) {
+          // Batch is full, send and create new
+          await sender.sendMessages(batch);
+          batch = await sender.createMessageBatch();
+          
+          if (!batch.tryAddMessage({ body: msg })) {
+            throw new Error("Message too large for batch");
+          }
+        }
+      }
+
+      // Send remaining messages
+      await sender.sendMessages(batch);
+      await sender.close();
+
+  - name: receive_messages_pull
+    prompt: |
+      Receive messages from a Service Bus queue in TypeScript using the pull model.
+      Complete each message after processing.
+    expected_patterns:
+      - "createReceiver"
+      - "receiveMessages"
+      - "completeMessage"
+      - "close"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - receiver
+      - pull
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      const receiver = client.createReceiver("my-queue");
+
+      const messages = await receiver.receiveMessages(10, { maxWaitTimeInMs: 5000 });
+
+      for (const message of messages) {
+        console.log(`Received: ${message.body}`);
+        await receiver.completeMessage(message);
+      }
+
+      await receiver.close();
+      await client.close();
+
+  - name: subscribe_messages_push
+    prompt: |
+      Subscribe to messages from a Service Bus queue in TypeScript using the push model.
+      Implement both processMessage and processError handlers.
+    expected_patterns:
+      - "subscribe"
+      - "processMessage"
+      - "processError"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - receiver
+      - push
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      const receiver = client.createReceiver("my-queue");
+
+      const subscription = receiver.subscribe({
+        processMessage: async (message) => {
+          console.log(`Processing: ${message.body}`);
+          // Message auto-completed on success
+        },
+        processError: async (args) => {
+          console.error(`Error source: ${args.errorSource}`);
+          console.error(`Error: ${args.error.message}`);
+        },
+      });
+
+      // Stop after 60 seconds
+      setTimeout(async () => {
+        await subscription.close();
+        await receiver.close();
+        await client.close();
+      }, 60000);
+
+  - name: send_to_topic
+    prompt: |
+      Send a message to a Service Bus topic in TypeScript with application properties.
+    expected_patterns:
+      - "createSender"
+      - "applicationProperties"
+      - "sendMessages"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - sender
+      - topic
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      const topicSender = client.createSender("my-topic");
+
+      await topicSender.sendMessages({
+        body: { event: "order.created", data: { orderId: "123", total: 99.99 } },
+        applicationProperties: { 
+          eventType: "order.created",
+          priority: "high",
+        },
+        contentType: "application/json",
+      });
+
+      await topicSender.close();
+
+  - name: receive_from_subscription
+    prompt: |
+      Receive messages from a Service Bus topic subscription in TypeScript.
+    expected_patterns:
+      - "createReceiver"
+      - "receiveMessages"
+      - "completeMessage"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - receiver
+      - subscription
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      // Create receiver for topic subscription
+      const subscriptionReceiver = client.createReceiver("my-topic", "my-subscription");
+
+      const messages = await subscriptionReceiver.receiveMessages(10, { 
+        maxWaitTimeInMs: 5000 
+      });
+
+      for (const message of messages) {
+        console.log(`Received from subscription: ${message.body}`);
+        console.log(`Application properties: ${JSON.stringify(message.applicationProperties)}`);
+        await subscriptionReceiver.completeMessage(message);
+      }
+
+      await subscriptionReceiver.close();
+
+  - name: dead_letter_handling
+    prompt: |
+      Dead letter a message and receive from the dead letter queue in TypeScript.
+    expected_patterns:
+      - "deadLetterMessage"
+      - "deadLetterReason"
+      - "subQueueType"
+      - "deadLetter"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - dead-letter
+      - settlement
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      // Dead letter a message
+      const receiver = client.createReceiver("my-queue");
+      const messages = await receiver.receiveMessages(1);
+
+      if (messages.length > 0) {
+        await receiver.deadLetterMessage(messages[0], {
+          deadLetterReason: "Validation failed",
+          deadLetterErrorDescription: "Missing required field: orderId",
+        });
+      }
+      await receiver.close();
+
+      // Process dead letter queue
+      const dlqReceiver = client.createReceiver("my-queue", { 
+        subQueueType: "deadLetter" 
+      });
+
+      const dlqMessages = await dlqReceiver.receiveMessages(10);
+      for (const msg of dlqMessages) {
+        console.log(`DLQ Reason: ${msg.deadLetterReason}`);
+        console.log(`DLQ Description: ${msg.deadLetterErrorDescription}`);
+        console.log(`Body: ${msg.body}`);
+        
+        // Reprocess or log and complete
+        await dlqReceiver.completeMessage(msg);
+      }
+
+      await dlqReceiver.close();
+
+  - name: session_send_receive
+    prompt: |
+      Send and receive session messages in Service Bus using TypeScript.
+      Use acceptSession to receive messages for a specific session.
+    expected_patterns:
+      - "sessionId"
+      - "acceptSession"
+      - "completeMessage"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - session
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      // Send session message
+      const sender = client.createSender("session-queue");
+      await sender.sendMessages({
+        body: { step: 1, data: "First step of workflow" },
+        sessionId: "workflow-123",
+      });
+      await sender.close();
+
+      // Receive session messages
+      const sessionReceiver = await client.acceptSession("session-queue", "workflow-123");
+      console.log(`Accepted session: ${sessionReceiver.sessionId}`);
+
+      const messages = await sessionReceiver.receiveMessages(10);
+      for (const message of messages) {
+        console.log(`Session ${sessionReceiver.sessionId}: ${JSON.stringify(message.body)}`);
+        await sessionReceiver.completeMessage(message);
+      }
+
+      await sessionReceiver.close();
+
+  - name: session_state
+    prompt: |
+      Manage session state in Service Bus using TypeScript.
+      Get and set session state to track workflow progress.
+    expected_patterns:
+      - "getSessionState"
+      - "setSessionState"
+      - "Buffer"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - session
+      - state
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      const sessionReceiver = await client.acceptSession("session-queue", "workflow-123");
+
+      // Get current session state
+      const currentState = await sessionReceiver.getSessionState();
+      if (currentState) {
+        const stateObj = JSON.parse(currentState.toString());
+        console.log(`Current progress: ${stateObj.progress}%`);
+      }
+
+      // Update session state
+      const newState = {
+        progress: 50,
+        lastStep: "validation",
+        lastUpdated: new Date().toISOString(),
+      };
+      await sessionReceiver.setSessionState(Buffer.from(JSON.stringify(newState)));
+
+      await sessionReceiver.close();
+
+  - name: scheduled_messages
+    prompt: |
+      Schedule a message for future delivery in Service Bus using TypeScript.
+      Also show how to cancel a scheduled message.
+    expected_patterns:
+      - "scheduleMessages"
+      - "cancelScheduledMessages"
+      - "Date"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - scheduled
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      const sender = client.createSender("my-queue");
+
+      // Schedule message for 1 minute from now
+      const scheduledTime = new Date(Date.now() + 60000);
+      const sequenceNumber = await sender.scheduleMessages(
+        { body: "This message will be delivered later" },
+        scheduledTime
+      );
+
+      console.log(`Scheduled message with sequence: ${sequenceNumber}`);
+
+      // Cancel the scheduled message if needed
+      await sender.cancelScheduledMessages(sequenceNumber);
+      console.log("Scheduled message cancelled");
+
+      await sender.close();
+
+  - name: message_settlement_options
+    prompt: |
+      Demonstrate all message settlement options in Service Bus using TypeScript:
+      complete, abandon, defer, and deadLetter.
+    expected_patterns:
+      - "completeMessage"
+      - "abandonMessage"
+      - "deferMessage"
+      - "deadLetterMessage"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - settlement
+    mock_response: |
+      import { ServiceBusClient, ServiceBusReceivedMessage } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      const receiver = client.createReceiver("my-queue", { receiveMode: "peekLock" });
+
+      async function processMessage(message: ServiceBusReceivedMessage): Promise<void> {
+        const messageType = message.applicationProperties?.type;
+
+        switch (messageType) {
+          case "valid":
+            // Successfully processed - remove from queue
+            await receiver.completeMessage(message);
+            break;
+            
+          case "retry":
+            // Return to queue for retry
+            await receiver.abandonMessage(message, {
+              propertiesToModify: {
+                retryCount: ((message.applicationProperties?.retryCount as number) ?? 0) + 1,
+              },
+            });
+            break;
+            
+          case "defer":
+            // Defer for later processing
+            await receiver.deferMessage(message);
+            // Store message.sequenceNumber to retrieve later
+            break;
+            
+          case "invalid":
+            // Move to dead letter queue
+            await receiver.deadLetterMessage(message, {
+              deadLetterReason: "Invalid message type",
+              deadLetterErrorDescription: "Message failed validation",
+            });
+            break;
+        }
+      }
+
+      const messages = await receiver.receiveMessages(10);
+      for (const message of messages) {
+        await processMessage(message);
+      }
+
+      await receiver.close();
+
+  - name: peek_messages
+    prompt: |
+      Peek messages from a Service Bus queue without removing them using TypeScript.
+    expected_patterns:
+      - "peekMessages"
+    forbidden_patterns:
+      - "require("
+      - "completeMessage"
+    tags:
+      - peek
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      const receiver = client.createReceiver("my-queue");
+
+      // Peek messages without removing them
+      const peekedMessages = await receiver.peekMessages(10);
+
+      console.log(`Peeked ${peekedMessages.length} messages:`);
+      for (const msg of peekedMessages) {
+        console.log(`  Sequence: ${msg.sequenceNumber}`);
+        console.log(`  Body: ${msg.body}`);
+        console.log(`  Enqueued: ${msg.enqueuedTimeUtc}`);
+      }
+
+      // Messages are still in the queue
+      await receiver.close();
+
+  - name: receive_and_delete_mode
+    prompt: |
+      Receive messages in receiveAndDelete mode in Service Bus using TypeScript.
+    expected_patterns:
+      - "receiveMode"
+      - "receiveAndDelete"
+      - "receiveMessages"
+    forbidden_patterns:
+      - "require("
+      - "\\.completeMessage\\("
+    tags:
+      - receive-mode
+    mock_response: |
+      import { ServiceBusClient } from "@azure/service-bus";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new ServiceBusClient(
+        process.env.SERVICEBUS_NAMESPACE!,
+        new DefaultAzureCredential()
+      );
+
+      // Receive-and-delete mode - messages removed immediately
+      const receiver = client.createReceiver("my-queue", { 
+        receiveMode: "receiveAndDelete" 
+      });
+
+      const messages = await receiver.receiveMessages(10);
+
+      for (const message of messages) {
+        console.log(`Received and auto-deleted: ${message.body}`);
+        // No need to call completeMessage - message already removed
+      }
+
+      await receiver.close();

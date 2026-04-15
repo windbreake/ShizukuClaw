@@ -1,0 +1,244 @@
+# Test scenarios for azure-monitor-opentelemetry-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: one_line_setup
+    prompt: |
+      Provide the minimal one-line setup for Azure Monitor OpenTelemetry in Python.
+      Use configure_azure_monitor and assume the connection string is in environment variables.
+    expected_patterns:
+      - "from azure.monitor.opentelemetry import configure_azure_monitor"
+      - "configure_azure_monitor()"
+    forbidden_patterns:
+      - "AzureMonitorTraceExporter"
+      - "opencensus"
+    tags:
+      - basic
+    mock_response: |
+      from azure.monitor.opentelemetry import configure_azure_monitor
+
+      # One-line setup - reads connection string from APPLICATIONINSIGHTS_CONNECTION_STRING
+      configure_azure_monitor()
+
+      def main() -> None:
+          print("App started")
+
+      if __name__ == "__main__":
+          main()
+
+  - name: explicit_connection_string
+    prompt: |
+      Show configure_azure_monitor with an explicit connection string literal.
+      Include InstrumentationKey and IngestionEndpoint.
+    expected_patterns:
+      - "connection_string=\"InstrumentationKey="
+      - "IngestionEndpoint=https://"
+      - "configure_azure_monitor"
+    forbidden_patterns:
+      - "connectionString"
+    tags:
+      - connection-string
+    mock_response: |
+      from azure.monitor.opentelemetry import configure_azure_monitor
+
+      configure_azure_monitor(
+          connection_string="InstrumentationKey=xxx;IngestionEndpoint=https://xxx.in.applicationinsights.azure.com/",
+      )
+
+      def main() -> None:
+          print("Configured with explicit connection string")
+
+      if __name__ == "__main__":
+          main()
+
+  - name: flask_auto_instrumentation
+    prompt: |
+      Provide a Flask example that enables auto-instrumentation using configure_azure_monitor.
+    expected_patterns:
+      - "from flask import Flask"
+      - "configure_azure_monitor()"
+      - "app = Flask(__name__)"
+      - "@app.route(\"/\")"
+    forbidden_patterns:
+      - "opencensus"
+    tags:
+      - flask
+      - auto-instrumentation
+    mock_response: |
+      from flask import Flask
+      from azure.monitor.opentelemetry import configure_azure_monitor
+
+      configure_azure_monitor()
+
+      app = Flask(__name__)
+
+      @app.route("/")
+      def hello():
+          return "Hello, World!"
+
+      if __name__ == "__main__":
+          app.run()
+
+  - name: fastapi_auto_instrumentation
+    prompt: |
+      Provide a FastAPI example that enables auto-instrumentation using configure_azure_monitor.
+    expected_patterns:
+      - "from fastapi import FastAPI"
+      - "configure_azure_monitor()"
+      - "app = FastAPI()"
+      - "@app.get(\"/\")"
+    forbidden_patterns:
+      - "opencensus"
+    tags:
+      - fastapi
+      - auto-instrumentation
+    mock_response: |
+      from fastapi import FastAPI
+      from azure.monitor.opentelemetry import configure_azure_monitor
+
+      configure_azure_monitor()
+
+      app = FastAPI()
+
+      @app.get("/")
+      async def root():
+          return {"message": "Hello World"}
+
+  - name: custom_span
+    prompt: |
+      Show how to create a custom span after calling configure_azure_monitor.
+      Use tracer.start_as_current_span and set an attribute.
+    expected_patterns:
+      - "from opentelemetry import trace"
+      - "trace.get_tracer"
+      - "start_as_current_span"
+      - "set_attribute"
+    forbidden_patterns:
+      - "opencensus"
+    tags:
+      - tracing
+    mock_response: |
+      from azure.monitor.opentelemetry import configure_azure_monitor
+      from opentelemetry import trace
+
+      configure_azure_monitor()
+
+      tracer = trace.get_tracer(__name__)
+
+      with tracer.start_as_current_span("my-operation") as span:
+          span.set_attribute("custom.attribute", "value")
+
+  - name: custom_metric
+    prompt: |
+      Show how to record a custom metric using OpenTelemetry after configuring Azure Monitor.
+      Use a counter and add a dimension.
+    expected_patterns:
+      - "from opentelemetry import metrics"
+      - "metrics.get_meter"
+      - "create_counter"
+      - "counter.add"
+    forbidden_patterns:
+      - "opencensus"
+    tags:
+      - metrics
+    mock_response: |
+      from azure.monitor.opentelemetry import configure_azure_monitor
+      from opentelemetry import metrics
+
+      configure_azure_monitor()
+
+      meter = metrics.get_meter(__name__)
+      counter = meter.create_counter("my_counter")
+
+      counter.add(1, {"dimension": "value"})
+
+  - name: custom_logs
+    prompt: |
+      Provide an example that logs INFO and ERROR messages after configure_azure_monitor.
+      Use the standard logging module.
+    expected_patterns:
+      - "import logging"
+      - "logging.getLogger"
+      - "logger.info"
+      - "logger.error"
+    forbidden_patterns:
+      - "opencensus"
+    tags:
+      - logging
+    mock_response: |
+      import logging
+      from azure.monitor.opentelemetry import configure_azure_monitor
+
+      configure_azure_monitor()
+
+      logger = logging.getLogger(__name__)
+      logger.setLevel(logging.INFO)
+
+      logger.info("This will appear in Application Insights")
+      logger.error("Errors are captured too", exc_info=True)
+
+  - name: cloud_role_name
+    prompt: |
+      Show how to set the cloud role name using OpenTelemetry Resource and SERVICE_NAME.
+    expected_patterns:
+      - "Resource.create"
+      - "SERVICE_NAME"
+      - "configure_azure_monitor"
+    forbidden_patterns:
+      - "role_name"
+    tags:
+      - resource
+    mock_response: |
+      from azure.monitor.opentelemetry import configure_azure_monitor
+      from opentelemetry.sdk.resources import Resource, SERVICE_NAME
+
+      configure_azure_monitor(
+          resource=Resource.create({SERVICE_NAME: "my-service-name"}),
+      )
+
+  - name: limit_instrumentations
+    prompt: |
+      Show how to enable only Flask and requests instrumentations.
+    expected_patterns:
+      - "instrumentations=[\"flask\", \"requests\"]"
+      - "configure_azure_monitor"
+    forbidden_patterns:
+      - "instrumentations=\"flask\""
+    tags:
+      - auto-instrumentation
+    mock_response: |
+      from azure.monitor.opentelemetry import configure_azure_monitor
+
+      configure_azure_monitor(
+          instrumentations=["flask", "requests"],
+      )
+
+      def main() -> None:
+          print("Instrumentation limited")
+
+      if __name__ == "__main__":
+          main()
+
+  - name: aad_authentication
+    prompt: |
+      Provide an example that uses DefaultAzureCredential for Azure AD auth with configure_azure_monitor.
+    expected_patterns:
+      - "from azure.identity import DefaultAzureCredential"
+      - "credential=DefaultAzureCredential()"
+      - "configure_azure_monitor"
+    forbidden_patterns:
+      - "ClientSecretCredential"
+    tags:
+      - authentication
+    mock_response: |
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.opentelemetry import configure_azure_monitor
+
+      configure_azure_monitor(
+          credential=DefaultAzureCredential(),
+      )

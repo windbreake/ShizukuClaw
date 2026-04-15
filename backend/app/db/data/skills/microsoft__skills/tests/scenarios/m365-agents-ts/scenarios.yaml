@@ -1,0 +1,129 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for m365-agents-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: express_agent_hosting
+    prompt: |
+      Create a minimal Express-hosted Microsoft 365 agent in TypeScript using
+      AgentApplication and startServer.
+    expected_patterns:
+      - "AgentApplication"
+      - "startServer"
+      - "@microsoft/agents-hosting"
+      - "@microsoft/agents-hosting-express"
+    forbidden_patterns:
+      - "botbuilder"
+      - "BotFrameworkAdapter"
+    tags:
+      - hosting
+    mock_response: |
+      import { AgentApplication, TurnContext, TurnState } from "@microsoft/agents-hosting";
+      import { startServer } from "@microsoft/agents-hosting-express";
+
+      const agent = new AgentApplication<TurnState>();
+
+      agent.onMessage("hello", async (context: TurnContext) => {
+        await context.sendActivity("Hello from the agent!");
+      });
+
+      startServer(agent);
+
+  - name: streaming_response
+    prompt: |
+      Show how to stream a response using streamingResponse with Azure OpenAI
+      and end the stream in a finally block.
+    expected_patterns:
+      - "streamingResponse"
+      - "queueTextChunk"
+      - "endStream"
+      - "streamText"
+    forbidden_patterns:
+      - "endstream"
+    tags:
+      - streaming
+    mock_response: |
+      import { azure } from "@ai-sdk/azure";
+      import { AgentApplication, TurnContext, TurnState } from "@microsoft/agents-hosting";
+      import { streamText } from "ai";
+
+      const agent = new AgentApplication<TurnState>();
+
+      agent.onMessage("poem", async (context: TurnContext) => {
+        const { fullStream } = streamText({
+          model: azure(process.env.AZURE_OPENAI_DEPLOYMENT_NAME || "gpt-4o-mini"),
+          prompt: "Write a poem.",
+        });
+
+        try {
+          for await (const part of fullStream) {
+            if (part.type === "text-delta" && part.text.length > 0) {
+              await context.streamingResponse.queueTextChunk(part.text);
+            }
+          }
+        } finally {
+          await context.streamingResponse.endStream();
+        }
+      });
+
+  - name: invoke_activity_response
+    prompt: |
+      Create an invoke handler that returns an InvokeResponse activity for
+      feedback submissions.
+    expected_patterns:
+      - "ActivityTypes.InvokeResponse"
+      - "Activity.fromObject"
+      - "onActivity"
+    tags:
+      - invoke
+    mock_response: |
+      import { Activity, ActivityTypes } from "@microsoft/agents-activity";
+      import { AgentApplication, TurnContext, TurnState } from "@microsoft/agents-hosting";
+
+      const agent = new AgentApplication<TurnState>();
+
+      agent.onActivity("invoke", async (context: TurnContext) => {
+        const invokeResponse = Activity.fromObject({
+          type: ActivityTypes.InvokeResponse,
+          value: { status: 200 },
+        });
+
+        await context.sendActivity(invokeResponse);
+      });
+
+  - name: copilot_studio_client
+    prompt: |
+      Show how to configure CopilotStudioClient with a token provider, start
+      a conversation, and ask a question.
+    expected_patterns:
+      - "CopilotStudioClient"
+      - "startConversationAsync"
+      - "askQuestionAsync"
+      - "tokenProvider"
+    forbidden_patterns:
+      - "DirectLineClient"
+    tags:
+      - copilot-studio
+    mock_response: |
+      import { CopilotStudioClient } from "@microsoft/agents-copilotstudio-client";
+
+      const settings = {
+        environmentId: process.env.COPILOT_ENVIRONMENT_ID!,
+        schemaName: process.env.COPILOT_SCHEMA_NAME!,
+        clientId: process.env.COPILOT_CLIENT_ID!,
+      };
+
+      const tokenProvider = async (): Promise<string> => {
+        return process.env.COPILOT_BEARER_TOKEN!;
+      };
+
+      const client = new CopilotStudioClient(settings, tokenProvider);
+
+      const conversation = await client.startConversationAsync();
+      const reply = await client.askQuestionAsync("Hello!", conversation.id);
+      console.log(reply);

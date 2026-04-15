@@ -1,0 +1,805 @@
+using System;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+// 使用 System.IO.Path 时需要完全限定名称，避免与 System.Windows.Shapes.Path 冲突
+// 使用 System.Windows.Shapes.Line 用于网格线绘制
+using Microsoft.Win32;
+using PixelArtGenerator.Controls;
+using PixelArtGenerator.Models;
+using PixelArtGenerator.Services;
+
+namespace PixelArtGenerator
+{
+    public partial class MainWindow : Window, INotifyPropertyChanged
+    {
+        private readonly IPythonPixelArtService _pixelArtService;
+        private readonly IFileService _fileService;
+        private BitmapSource _originalImage;
+        private BitmapSource _processedImage;
+        private PixelArtOptions _currentOptions;
+        private bool _isProcessing;
+        private bool _previewUpdateInProgress; // 添加此字段以解决编译错误
+        private bool _usePipeMode = true; // 默认使用管道模式
+
+        // Commands
+        public ICommand OpenCommand { get; private set; }
+        public ICommand SaveCommand { get; private set; }
+        public ICommand DownloadCommand { get; private set; }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public MainWindow()
+        {
+            try
+            {
+                LogStartup("MainWindow constructor starting");
+                InitializeComponent();
+                LogStartup("InitializeComponent completed");
+
+                // Initialize commands
+                OpenCommand = new RelayCommand((object o) => { OpenImage_Click(o, null); });
+                SaveCommand = new RelayCommand((object o) => { SaveResult_Click(o, null); });
+                DownloadCommand = new RelayCommand((object o) => { DownloadImage_Click(o, null); });
+
+                // 初始化服务
+                var pythonPath = Properties.Settings.Default.PythonPath;
+                if (string.IsNullOrEmpty(pythonPath))
+                {
+                    // 检查python是否在系统PATH中
+                    pythonPath = "python";
+                }
+                var scriptsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PythonScripts");
+                _pixelArtService = new PythonPixelArtService(pythonPath, scriptsPath);
+                _fileService = new FileService();
+                
+                // 初始化参数
+                _currentOptions = new PixelArtOptions();
+                DataContext = this;
+                
+                // 初始化控件
+                InitializeControls();
+                LoadAvailableOptions();
+                
+                // 检查并安装Python依赖
+                _ = CheckAndInstallDependenciesAsync();
+                
+                LogStartup("MainWindow constructor completed successfully");
+            }
+            catch (Exception ex)
+            {
+                LogError("Exception in MainWindow constructor", ex);
+                throw; // 重新抛出异常让应用程序处理
+            }
+        }
+
+        private async Task CheckAndInstallDependenciesAsync()
+        {
+            try
+            {
+                StatusText.Text = "正在检查Python环境...";
+                var isPythonAvailable = await _pixelArtService.CheckPythonEnvironmentAsync();
+                
+                if (!isPythonAvailable)
+                {
+                    StatusText.Text = "Python环境不可用，请检查Python安装";
+                    MessageBox.Show("Python环境不可用，请检查Python安装", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+                
+                StatusText.Text = "正在安装/更新Python依赖...";
+                var progress = new Progress<string>(message => {
+                    StatusText.Text = message;
+                });
+                
+                var isDependenciesInstalled = await _pixelArtService.InstallDependenciesAsync(progress);
+                
+                if (!isDependenciesInstalled)
+                {
+                    StatusText.Text = "安装Python依赖失败";
+                    MessageBox.Show("安装Python依赖失败，请手动安装依赖", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                else
+                {
+                    StatusText.Text = "Python依赖安装完成";
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"检查依赖时出错: {ex.Message}";
+                MessageBox.Show($"检查依赖时出错: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void InitializeControls()
+        {
+            // 绑定滑块事件
+            PixelSizeSlider.ValueChanged += PixelSizeSlider_ValueChanged;
+            ColorCountSlider.ValueChanged += ColorCountSlider_ValueChanged;
+            EdgeSmoothingSlider.ValueChanged += EdgeSmoothingSlider_ValueChanged;
+            ContrastSlider.ValueChanged += ContrastSlider_ValueChanged;
+            BrightnessSlider.ValueChanged += BrightnessSlider_ValueChanged;
+            SaturationSlider.ValueChanged += SaturationSlider_ValueChanged;
+            EdgeOutlineThicknessSlider.ValueChanged += EdgeOutlineThicknessSlider_ValueChanged;
+            EdgeOutlineColorRSlider.ValueChanged += EdgeOutlineColorRSlider_ValueChanged;
+            EdgeOutlineColorGSlider.ValueChanged += EdgeOutlineColorGSlider_ValueChanged;
+            EdgeOutlineColorBSlider.ValueChanged += EdgeOutlineColorBSlider_ValueChanged;
+            
+            // 绑定复选框事件
+            DitheringCheckBox.Checked += DitheringCheckBox_Checked;
+            DitheringCheckBox.Unchecked += DitheringCheckBox_Unchecked;
+            
+            // 绑定下拉框事件
+            PaletteComboBox.SelectionChanged += PaletteComboBox_SelectionChanged;
+            AlgorithmComboBox.SelectionChanged += AlgorithmComboBox_SelectionChanged;
+            
+            // 绑定边缘描边复选框事件
+            EdgeOutlineCheckBox.Checked += EdgeOutline_Checked;
+            EdgeOutlineCheckBox.Unchecked += EdgeOutline_Unchecked;
+
+        }
+
+        private async void LoadAvailableOptions()
+        {
+            try
+            {
+                StatusText.Text = "正在加载可用选项...";
+                
+                // 加载可用调色板
+                var palettes = await _pixelArtService.GetAvailablePalettesAsync();
+                PaletteComboBox.ItemsSource = palettes;
+                if (palettes.Length > 0)
+                    PaletteComboBox.SelectedIndex = 0;
+                
+                // 加载可用算法
+                var algorithms = await _pixelArtService.GetAvailableAlgorithmsAsync();
+                AlgorithmComboBox.ItemsSource = algorithms;
+                if (algorithms.Length > 0)
+                    AlgorithmComboBox.SelectedIndex = 0;
+                
+                StatusText.Text = "就绪";
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"加载选项失败: {ex.Message}";
+                MessageBox.Show($"加载选项时出错: {ex.Message}", "错误",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        #region 菜单事件处理
+        private async void OpenImage_Click(object sender, RoutedEventArgs e)
+        {
+            var openFileDialog = new OpenFileDialog
+            {
+                Title = "选择图片文件",
+                Filter = "图片文件|*.jpg;*.jpeg;*.png;*.bmp;*.gif|所有文件|*.*",
+                Multiselect = false
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                await LoadImageAsync(openFileDialog.FileName);
+            }
+        }
+
+        private void DownloadImage_Click(object sender, RoutedEventArgs e)
+        {
+            if (_processedImage == null)
+            {
+                MessageBox.Show("没有可下载的处理结果", "提示", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var saveFileDialog = new SaveFileDialog
+            {
+                Title = "保存像素画",
+                Filter = "PNG文件|*.png|JPEG文件|*.jpg|BMP文件|*.bmp",
+                DefaultExt = ".png"
+            };
+
+            if (saveFileDialog.ShowDialog() == true)
+            {
+                try
+                {
+                    _fileService.SaveImage(_processedImage, saveFileDialog.FileName);
+                    StatusText.Text = $"图片已保存: {saveFileDialog.FileName}";
+                }
+                catch (Exception ex)
+                {
+                    StatusText.Text = $"保存失败: {ex.Message}";
+                    MessageBox.Show($"保存图片时出错: {ex.Message}", "错误", 
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+
+
+        private async Task LoadImageAsync(string filePath)
+        {
+            try
+            {
+                StatusText.Text = "正在加载图片...";
+                
+                var bitmap = await _fileService.LoadImageAsync(filePath);
+                if (bitmap != null)
+                {
+                    _originalImage = bitmap;
+                    OriginalImage.Source = _originalImage;
+                    OriginalImagePlaceholder.Visibility = Visibility.Collapsed;
+                    
+                    // 更新图片信息显示
+                    UpdateImageInfo(filePath, _originalImage.PixelWidth, _originalImage.PixelHeight);
+                    
+                    StatusText.Text = "图片加载成功";
+                    
+                    // 自动处理图片
+                    await ProcessImageAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"加载图片失败: {ex.Message}";
+                MessageBox.Show($"加载图片时出错: {ex.Message}", "错误", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SaveResult_Click(object sender, RoutedEventArgs e)
+        {
+            if (_processedImage == null)
+            {
+                MessageBox.Show("没有可保存的处理结果", "提示", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var saveFileDialog = new SaveFileDialog
+            {
+                Title = "保存像素画",
+                Filter = "PNG文件|*.png|JPEG文件|*.jpg|BMP文件|*.bmp",
+                DefaultExt = ".png"
+            };
+
+            if (saveFileDialog.ShowDialog() == true)
+            {
+                try
+                {
+                    _fileService.SaveImage(_processedImage, saveFileDialog.FileName);
+                    StatusText.Text = $"图片已保存: {saveFileDialog.FileName}";
+                }
+                catch (Exception ex)
+                {
+                    StatusText.Text = $"保存失败: {ex.Message}";
+                    MessageBox.Show($"保存图片时出错: {ex.Message}", "错误", 
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+        #endregion
+
+        #region 滑块值变更事件处理
+        private void PixelSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (PixelSizeValue != null && _currentOptions != null)
+            {
+                PixelSizeValue.Text = e.NewValue.ToString("0");
+                _currentOptions.PixelSize = (int)e.NewValue;
+                UpdatePreview();
+            }
+        }
+
+        private void ColorCountSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (ColorCountValue != null && _currentOptions != null)
+            {
+                ColorCountValue.Text = e.NewValue.ToString("0");
+                _currentOptions.ColorCount = (int)e.NewValue;
+                UpdatePreview();
+            }
+        }
+
+        private void EdgeSmoothingSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (EdgeSmoothingValue != null && _currentOptions != null)
+            {
+                EdgeSmoothingValue.Text = e.NewValue.ToString("0.0");
+                _currentOptions.EdgeSmoothing = e.NewValue;
+                UpdatePreview();
+            }
+        }
+
+        private void ContrastSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (ContrastValue != null && _currentOptions != null)
+            {
+                ContrastValue.Text = e.NewValue.ToString("0.0");
+                _currentOptions.Contrast = e.NewValue;
+                UpdatePreview();
+            }
+        }
+
+        private void BrightnessSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (BrightnessValue != null && _currentOptions != null)
+            {
+                BrightnessValue.Text = e.NewValue.ToString("0.0");
+                _currentOptions.Brightness = e.NewValue;
+                UpdatePreview();
+            }
+        }
+
+        private void SaturationSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (SaturationValue != null && _currentOptions != null)
+            {
+                SaturationValue.Text = e.NewValue.ToString("0.0");
+                _currentOptions.Saturation = e.NewValue;
+                UpdatePreview();
+            }
+        }
+
+        private void EdgeOutlineThicknessSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (EdgeOutlineThicknessValue != null && _currentOptions != null)
+            {
+                EdgeOutlineThicknessValue.Text = e.NewValue.ToString("0");
+                _currentOptions.EdgeOutlineThickness = (int)e.NewValue;
+                UpdatePreview();
+            }
+        }
+
+        private void EdgeOutlineColorRSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_currentOptions != null)
+            {
+                _currentOptions.EdgeOutlineColorR = (int)e.NewValue;
+                UpdatePreview();
+            }
+        }
+
+        private void EdgeOutlineColorGSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_currentOptions != null)
+            {
+                _currentOptions.EdgeOutlineColorG = (int)e.NewValue;
+                UpdatePreview();
+            }
+        }
+
+        private void EdgeOutlineColorBSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_currentOptions != null)
+            {
+                _currentOptions.EdgeOutlineColorB = (int)e.NewValue;
+                UpdatePreview();
+            }
+        }
+
+        private void DitheringCheckBox_Checked(object sender, RoutedEventArgs e)
+        {
+            if (_currentOptions != null)
+            {
+                _currentOptions.EnableDithering = true;
+                UpdatePreview();
+            }
+        }
+
+        private void DitheringCheckBox_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (_currentOptions != null)
+            {
+                _currentOptions.EnableDithering = false;
+                UpdatePreview();
+            }
+        }
+
+        private void PaletteComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (PaletteComboBox.SelectedItem != null && _currentOptions != null)
+            {
+                _currentOptions.Palette = PaletteComboBox.SelectedItem.ToString();
+                UpdatePreview();
+            }
+        }
+
+        private void AlgorithmComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (AlgorithmComboBox.SelectedItem != null && _currentOptions != null)
+            {
+                _currentOptions.Algorithm = AlgorithmComboBox.SelectedItem.ToString();
+                UpdatePreview();
+            }
+        }
+        #endregion
+
+        #region 处理图片相关
+        private async void ProcessImage_Click(object sender, RoutedEventArgs e)
+        {
+            await ProcessImageAsync();
+        }
+
+        private async Task ProcessImageAsync()
+        {
+            LogMessage("ProcessImageAsync started");
+            if (_originalImage == null || _isProcessing)
+            {
+                LogMessage($"ProcessImageAsync early return - _originalImage: {_originalImage != null}, _isProcessing: {_isProcessing}");
+                return;
+            }
+
+            try
+            {
+                _isProcessing = true;
+                StatusText.Text = "正在处理...";
+                ProgressBar.Visibility = Visibility.Visible;
+                ProgressBar.Value = 0;
+                LogMessage("ProcessImageAsync initialized UI");
+
+                var progress = new Progress<int>(value =>
+                {
+                    ProgressBar.Value = value;
+                    StatusText.Text = $"正在处理... {value}%";
+                    LogMessage($"ProcessImageAsync progress: {value}%");
+                });
+
+                // 将BitmapSource转换为System.Drawing.Bitmap
+                using (var bitmap = BitmapFromSource(_originalImage))
+                {
+                    LogMessage("ProcessImageAsync converted bitmap");
+                    // 根据设置选择处理方式
+                    ProcessingResult result;
+                    if (_usePipeMode)
+                    {
+                        LogMessage("ProcessImageAsync using pipe mode");
+                        result = await _pixelArtService.ProcessImageViaPipeAsync(bitmap, _currentOptions, progress);
+                    }
+                    else
+                    {
+                        LogMessage("ProcessImageAsync using file mode");
+                        result = await _pixelArtService.ProcessImageWithResultAsync(bitmap, _currentOptions, progress);
+                    }
+                    LogMessage($"ProcessImageAsync got result - Success: {result.IsSuccess}");
+                    
+                    if (result.IsSuccess && result.ProcessedImage != null)
+                    {
+                        _processedImage = BitmapSourceFromBitmap(result.ProcessedImage);
+                        PixelArtPreview.Source = _processedImage;
+                        PreviewPlaceholder.Visibility = Visibility.Collapsed;
+                        LogMessage("ProcessImageAsync updated UI with processed image");
+
+                        StatusText.Text = $"处理完成 (耗时: {result.ProcessingTime.TotalSeconds:F2}秒)";
+                    }
+                    else
+                    {
+                        StatusText.Text = $"处理失败: {result.ErrorMessage}";
+                        LogMessage($"ProcessImageAsync failed - Error: {result.ErrorMessage}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"处理失败: {ex.Message}";
+                LogMessage($"ProcessImageAsync exception: {ex}");
+                MessageBox.Show($"处理图片时出错: {ex.Message}", "错误", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                _isProcessing = false;
+                ProgressBar.Visibility = Visibility.Collapsed;
+                LogMessage("ProcessImageAsync finished");
+            }
+        }
+
+        private async void UpdatePreview()
+        {
+            LogMessage("UpdatePreview called");
+            if (_originalImage != null && !_isProcessing)
+            {
+                LogMessage("UpdatePreview passed initial checks");
+                // 防止重复调用
+                if (_previewUpdateInProgress)
+                {
+                    LogMessage("UpdatePreview skipped due to _previewUpdateInProgress");
+                    return;
+                }
+                
+                _previewUpdateInProgress = true;
+                LogMessage("UpdatePreview set _previewUpdateInProgress to true");
+                
+                try
+                {
+                    // 延迟处理以避免频繁调用
+                    // 自动处理图片
+                    LogMessage("UpdatePreview calling ProcessImageAsync");
+                    await ProcessImageAsync();
+                }
+                finally
+                {
+                    _previewUpdateInProgress = false;
+                    LogMessage("UpdatePreview reset _previewUpdateInProgress to false");
+                }
+            }
+            else
+            {
+                LogMessage($"UpdatePreview skipped - _originalImage: {_originalImage != null}, _isProcessing: {_isProcessing}");
+            }
+        }
+
+        #endregion
+
+        #region 拖放事件处理
+        private void ImageViewer_DragEnter(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effects = DragDropEffects.Copy;
+            }
+        }
+
+        private async void ImageViewer_Drop(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                if (files.Length > 0)
+                {
+                    await LoadImageAsync(files[0]);
+                }
+            }
+        }
+        #endregion
+
+        #region 工具菜单事件处理
+        private void ResetParameters_Click(object sender, RoutedEventArgs e)
+        {
+            // 重置所有参数为默认值
+            PixelSizeSlider.Value = 16;
+            ColorCountSlider.Value = 32;
+            EdgeSmoothingSlider.Value = 0.5;
+            ContrastSlider.Value = 1.0;
+            BrightnessSlider.Value = 1.0;
+            SaturationSlider.Value = 1.0;
+            DitheringCheckBox.IsChecked = false;
+            
+            if (PaletteComboBox.Items.Count > 0)
+                PaletteComboBox.SelectedIndex = 0;
+            if (AlgorithmComboBox.Items.Count > 0)
+                AlgorithmComboBox.SelectedIndex = 0;
+            
+            StatusText.Text = "参数已重置";
+        }
+
+        private void BatchProcess_Click(object sender, RoutedEventArgs e)
+        {
+            var batchWindow = new BatchProcessingWindow(_pixelArtService, _currentOptions);
+            batchWindow.Owner = this;
+            batchWindow.ShowDialog();
+        }
+
+        private void Options_Click(object sender, RoutedEventArgs e)
+        {
+            var optionsWindow = new OptionsWindow();
+            optionsWindow.Owner = this;
+            optionsWindow.ShowDialog();
+        }
+
+        private void About_Click(object sender, RoutedEventArgs e)
+        {
+            var aboutWindow = new AboutWindow();
+            aboutWindow.Owner = this;
+            aboutWindow.ShowDialog();
+        }
+
+        private void Exit_Click(object sender, RoutedEventArgs e)
+        {
+            Close();
+        }
+        #endregion
+
+        #region 视图菜单事件处理
+        private void FitToWindow_Click(object sender, RoutedEventArgs e)
+        {
+            // 实现适应窗口功能
+        }
+
+        private void ActualSize_Click(object sender, RoutedEventArgs e)
+        {
+            // 实现实际大小功能
+        }
+
+        private void ShowGrid_Checked(object sender, RoutedEventArgs e)
+        {
+            if (_currentOptions != null)
+            {
+                _currentOptions.ShowGrid = true;
+                ShowGridCheckBox.IsChecked = true;
+            }
+        }
+
+        private void HideGrid_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (_currentOptions != null)
+            {
+                _currentOptions.ShowGrid = false;
+                ShowGridCheckBox.IsChecked = false;
+            }
+        }
+
+        private void EdgeOutline_Checked(object sender, RoutedEventArgs e)
+        {
+            if (_currentOptions != null)
+            {
+                _currentOptions.EnableEdgeOutline = true;
+                EdgeOutlineCheckBox.IsChecked = true;
+            }
+        }
+
+        private void EdgeOutline_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (_currentOptions != null)
+            {
+                _currentOptions.EnableEdgeOutline = false;
+                EdgeOutlineCheckBox.IsChecked = false;
+            }
+        }
+        #endregion
+
+        #region 编辑菜单事件处理
+        private void Undo_Click(object sender, RoutedEventArgs e)
+        {
+            // 实现撤销功能
+        }
+
+        private void Redo_Click(object sender, RoutedEventArgs e)
+        {
+            // 实现重做功能
+        }
+        #endregion
+
+        #region 预设管理事件处理
+        private void SavePresetButton_Click(object sender, RoutedEventArgs e)
+        {
+            // 实现保存预设功能
+        }
+
+        private void LoadPresetButton_Click(object sender, RoutedEventArgs e)
+        {
+            // 实现加载预设功能
+        }
+        #endregion
+
+        #region 辅助方法
+        private void LogStartup(string message)
+        {
+            LogMessage("STARTUP", message);
+        }
+        
+        private void LogError(string message, Exception ex = null)
+        {
+            try
+            {
+                string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "startup_errors.log");
+                string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}: ERROR: {message}";
+                
+                if (ex != null)
+                {
+                    logEntry += $"{Environment.NewLine}Exception: {ex.Message}{Environment.NewLine}Stack Trace:{Environment.NewLine}{ex.StackTrace}";
+                }
+                
+                logEntry += Environment.NewLine + new string('-', 50) + Environment.NewLine;
+                
+                File.AppendAllText(logPath, logEntry);
+            }
+            catch
+            {
+                // 忽略日志记录错误
+            }
+        }
+        
+        private void LogMessage(string category, string message)
+        {
+            try
+            {
+                string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "startup.log");
+                string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}: [{category}] {message}{Environment.NewLine}";
+                File.AppendAllText(logPath, logEntry);
+            }
+            catch
+            {
+                // 忽略日志记录错误
+            }
+        }
+
+        // 保留原有的 LogMessage 方法以保持兼容性
+        private void LogMessage(string message)
+        {
+            LogMessage("GENERAL", message);
+        }
+
+        private void UpdateImageInfo(string filePath, int width, int height)
+        {
+            var fileInfo = new FileInfo(filePath);
+            ImageInfoText.Text = $"{fileInfo.Name} - {width}x{height}";
+        }
+
+        private System.Drawing.Bitmap BitmapFromSource(BitmapSource source)
+        {
+            using (var memoryStream = new MemoryStream())
+            {
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(source));
+                encoder.Save(memoryStream);
+                
+                return new System.Drawing.Bitmap(memoryStream);
+            }
+        }
+
+        private BitmapSource BitmapSourceFromBitmap(System.Drawing.Bitmap bitmap)
+        {
+            using (var memoryStream = new MemoryStream())
+            {
+                bitmap.Save(memoryStream, System.Drawing.Imaging.ImageFormat.Png);
+                memoryStream.Position = 0;
+                
+                var bitmapImage = new BitmapImage();
+                bitmapImage.BeginInit();
+                bitmapImage.StreamSource = memoryStream;
+                bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
+                bitmapImage.EndInit();
+                
+                return bitmapImage;
+            }
+        }
+
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        private void ViewLog_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // 构造日志文件路径
+                var logPath = Path.Combine(Path.GetTempPath(), "PixelArtGenerator", "processing.log");
+                
+                if (File.Exists(logPath))
+                {
+                    // 使用记事本打开日志文件
+                    Process.Start("notepad.exe", logPath);
+                }
+                else
+                {
+                    MessageBox.Show("日志文件不存在。", "提示",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"打开日志文件时出错: {ex.Message}", "错误", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        
+        // 切换处理模式
+        private void ToggleProcessingMode_Click(object sender, RoutedEventArgs e)
+        {
+            _usePipeMode = !_usePipeMode;
+            ProcessingModeText.Text = _usePipeMode ? "当前模式: 管道模式" : "当前模式: 文件模式";
+            StatusText.Text = _usePipeMode ? "已切换到管道模式" : "已切换到文件模式";
+        }
+        #endregion
+    }
+
+
+}

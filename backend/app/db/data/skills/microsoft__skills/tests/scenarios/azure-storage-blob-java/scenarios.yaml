@@ -1,0 +1,465 @@
+# Test scenarios for azure-storage-blob-java skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # BlobServiceClient with DefaultAzureCredential
+  - name: blob_service_client_default_credential
+    prompt: |
+      Create a BlobServiceClient using DefaultAzureCredential with
+      endpoint from environment variable.
+    expected_patterns:
+      - "BlobServiceClient"
+      - "BlobServiceClientBuilder"
+      - "DefaultAzureCredentialBuilder"
+      - ".endpoint("
+      - ".credential("
+      - "System.getenv"
+    forbidden_patterns:
+      - "connectionString"
+      - "sasToken"
+    tags:
+      - authentication
+      - client
+    mock_response: |
+      import com.azure.storage.blob.BlobServiceClient;
+      import com.azure.storage.blob.BlobServiceClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      BlobServiceClient serviceClient = new BlobServiceClientBuilder()
+          .endpoint(System.getenv("AZURE_STORAGE_ACCOUNT_URL"))
+          .credential(new DefaultAzureCredentialBuilder().build())
+          .buildClient();
+
+  # BlobContainerClient and BlobClient
+  - name: container_and_blob_clients
+    prompt: |
+      Create BlobContainerClient and BlobClient for specific container
+      and blob operations using DefaultAzureCredential.
+    expected_patterns:
+      - "BlobContainerClient"
+      - "BlobClient"
+      - "getBlobContainerClient"
+      - "getBlobClient"
+    forbidden_patterns:
+      - "connectionString"
+    tags:
+      - client
+      - hierarchy
+    mock_response: |
+      import com.azure.storage.blob.BlobServiceClient;
+      import com.azure.storage.blob.BlobServiceClientBuilder;
+      import com.azure.storage.blob.BlobContainerClient;
+      import com.azure.storage.blob.BlobClient;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      BlobServiceClient serviceClient = new BlobServiceClientBuilder()
+          .endpoint(System.getenv("AZURE_STORAGE_ACCOUNT_URL"))
+          .credential(new DefaultAzureCredentialBuilder().build())
+          .buildClient();
+
+      // Get container client
+      BlobContainerClient containerClient = serviceClient.getBlobContainerClient("mycontainer");
+
+      // Get blob client
+      BlobClient blobClient = containerClient.getBlobClient("folder/myfile.txt");
+
+      // Or direct construction
+      BlobContainerClient directContainerClient = new BlobContainerClientBuilder()
+          .endpoint(System.getenv("AZURE_STORAGE_ACCOUNT_URL"))
+          .credential(new DefaultAzureCredentialBuilder().build())
+          .containerName("mycontainer")
+          .buildClient();
+
+  # Upload Operations
+  - name: upload_operations
+    prompt: |
+      Show different upload methods: BinaryData, file path, and InputStream
+      with overwrite flag.
+    expected_patterns:
+      - "upload"
+      - "uploadFromFile"
+      - "BinaryData"
+      - "true"
+    forbidden_patterns:
+      - "upload(data)"
+    tags:
+      - upload
+      - crud
+    mock_response: |
+      import com.azure.storage.blob.BlobClient;
+      import com.azure.storage.blob.specialized.BlockBlobClient;
+      import com.azure.core.util.BinaryData;
+      import java.io.FileInputStream;
+      import java.io.InputStream;
+      import java.io.File;
+
+      // Upload string content
+      String content = "Hello, Azure Blob Storage!";
+      blobClient.upload(BinaryData.fromString(content), true);  // true = overwrite
+
+      // Upload from file
+      blobClient.uploadFromFile("path/to/local/file.txt", true);
+
+      // Upload from InputStream
+      BlockBlobClient blockBlobClient = blobClient.getBlockBlobClient();
+      File file = new File("largefile.bin");
+      try (InputStream inputStream = new FileInputStream(file)) {
+          blockBlobClient.upload(inputStream, file.length(), true);
+      }
+
+  # Upload with Headers and Metadata
+  - name: upload_with_options
+    prompt: |
+      Upload a blob with custom HTTP headers (Content-Type, Cache-Control)
+      and metadata using BlobParallelUploadOptions.
+    expected_patterns:
+      - "BlobParallelUploadOptions"
+      - "BlobHttpHeaders"
+      - "setContentType"
+      - "setMetadata"
+      - "uploadWithResponse"
+    forbidden_patterns: []
+    tags:
+      - upload
+      - metadata
+    mock_response: |
+      import com.azure.storage.blob.models.BlobHttpHeaders;
+      import com.azure.storage.blob.options.BlobParallelUploadOptions;
+      import com.azure.core.util.Context;
+      import java.io.FileInputStream;
+      import java.io.InputStream;
+      import java.util.Map;
+
+      BlobHttpHeaders headers = new BlobHttpHeaders()
+          .setContentType("application/json")
+          .setCacheControl("max-age=3600");
+
+      Map<String, String> metadata = Map.of(
+          "author", "john",
+          "version", "1.0",
+          "processed", "false"
+      );
+
+      try (InputStream stream = new FileInputStream("data.json")) {
+          BlobParallelUploadOptions options = new BlobParallelUploadOptions(stream)
+              .setHeaders(headers)
+              .setMetadata(metadata);
+
+          blobClient.uploadWithResponse(options, null, Context.NONE);
+      }
+
+  # Download Operations
+  - name: download_operations
+    prompt: |
+      Show different download methods: to BinaryData, to file, and to OutputStream.
+    expected_patterns:
+      - "downloadContent"
+      - "downloadToFile"
+      - "downloadStream"
+      - "BinaryData"
+    forbidden_patterns: []
+    tags:
+      - download
+      - crud
+    mock_response: |
+      import com.azure.storage.blob.BlobClient;
+      import com.azure.core.util.BinaryData;
+      import java.io.ByteArrayOutputStream;
+
+      // Download to BinaryData (for small files)
+      BinaryData content = blobClient.downloadContent();
+      String text = content.toString();
+      System.out.println("Content: " + text);
+
+      // Download to file
+      blobClient.downloadToFile("path/to/downloaded/file.txt");
+
+      // Download to OutputStream
+      try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+          blobClient.downloadStream(outputStream);
+          byte[] data = outputStream.toByteArray();
+          System.out.println("Downloaded " + data.length + " bytes");
+      }
+
+  # Download with BlobInputStream (Streaming)
+  - name: download_streaming
+    prompt: |
+      Download a large blob using BlobInputStream for memory-efficient
+      streaming.
+    expected_patterns:
+      - "BlobInputStream"
+      - "openInputStream"
+      - "read"
+    forbidden_patterns:
+      - "downloadContent"
+    tags:
+      - download
+      - streaming
+    mock_response: |
+      import com.azure.storage.blob.specialized.BlobInputStream;
+
+      try (BlobInputStream blobIS = blobClient.openInputStream()) {
+          byte[] buffer = new byte[4096];
+          int bytesRead;
+          long totalBytes = 0;
+
+          while ((bytesRead = blobIS.read(buffer)) != -1) {
+              // Process each chunk
+              processChunk(buffer, bytesRead);
+              totalBytes += bytesRead;
+          }
+
+          System.out.printf("Processed %d bytes total%n", totalBytes);
+      }
+
+  # List Blobs
+  - name: list_blobs
+    prompt: |
+      List blobs in a container with prefix filtering and hierarchical
+      listing (virtual directories).
+    expected_patterns:
+      - "listBlobs"
+      - "ListBlobsOptions"
+      - "setPrefix"
+      - "listBlobsByHierarchy"
+    forbidden_patterns: []
+    tags:
+      - list
+      - query
+    mock_response: |
+      import com.azure.storage.blob.models.BlobItem;
+      import com.azure.storage.blob.models.ListBlobsOptions;
+      import com.azure.storage.blob.models.BlobListDetails;
+
+      // List all blobs
+      for (BlobItem blobItem : containerClient.listBlobs()) {
+          System.out.printf("Blob: %s, Size: %d%n",
+              blobItem.getName(),
+              blobItem.getProperties().getContentLength());
+      }
+
+      // List with prefix filter
+      ListBlobsOptions options = new ListBlobsOptions()
+          .setPrefix("folder/subfolder/");
+
+      for (BlobItem blobItem : containerClient.listBlobs(options, null)) {
+          System.out.println("Blob: " + blobItem.getName());
+      }
+
+      // List by hierarchy (directories)
+      String delimiter = "/";
+      ListBlobsOptions hierarchyOptions = new ListBlobsOptions()
+          .setPrefix("data/")
+          .setDetails(new BlobListDetails().setRetrieveMetadata(true));
+
+      for (BlobItem item : containerClient.listBlobsByHierarchy(delimiter, hierarchyOptions, null)) {
+          if (item.isPrefix() != null && item.isPrefix()) {
+              System.out.println("Directory: " + item.getName());
+          } else {
+              System.out.println("Blob: " + item.getName());
+          }
+      }
+
+  # Generate SAS Token
+  - name: generate_sas_token
+    prompt: |
+      Generate a SAS token for a blob with read permission and 24-hour expiry.
+    expected_patterns:
+      - "BlobSasPermission"
+      - "BlobServiceSasSignatureValues"
+      - "generateSas"
+      - "setReadPermission"
+      - "OffsetDateTime"
+      - "plusDays"
+    forbidden_patterns:
+      - "setDeletePermission(true)"
+    tags:
+      - sas
+      - security
+    mock_response: |
+      import com.azure.storage.blob.sas.BlobSasPermission;
+      import com.azure.storage.blob.sas.BlobServiceSasSignatureValues;
+      import java.time.OffsetDateTime;
+
+      // Create permissions (read-only)
+      BlobSasPermission permissions = new BlobSasPermission()
+          .setReadPermission(true)
+          .setWritePermission(false);
+
+      // Set expiry (24 hours)
+      OffsetDateTime expiry = OffsetDateTime.now().plusDays(1);
+
+      // Generate SAS
+      BlobServiceSasSignatureValues sasValues = new BlobServiceSasSignatureValues(expiry, permissions);
+      String sasToken = blobClient.generateSas(sasValues);
+
+      // Build full URL
+      String blobUrlWithSas = blobClient.getBlobUrl() + "?" + sasToken;
+      System.out.println("SAS URL: " + blobUrlWithSas);
+
+  # Container SAS Token
+  - name: container_sas_token
+    prompt: |
+      Generate a SAS token at the container level with read and list permissions.
+    expected_patterns:
+      - "BlobContainerSasPermission"
+      - "setReadPermission"
+      - "setListPermission"
+      - "generateSas"
+    forbidden_patterns: []
+    tags:
+      - sas
+      - container
+    mock_response: |
+      import com.azure.storage.blob.sas.BlobContainerSasPermission;
+      import com.azure.storage.blob.sas.BlobServiceSasSignatureValues;
+      import java.time.OffsetDateTime;
+
+      BlobContainerSasPermission containerPermissions = new BlobContainerSasPermission()
+          .setReadPermission(true)
+          .setListPermission(true)
+          .setWritePermission(false)
+          .setDeletePermission(false);
+
+      BlobServiceSasSignatureValues sasValues = new BlobServiceSasSignatureValues(
+          OffsetDateTime.now().plusHours(4),
+          containerPermissions
+      );
+
+      String containerSasToken = containerClient.generateSas(sasValues);
+      System.out.println("Container SAS: " + containerSasToken);
+
+  # Error Handling
+  - name: blob_error_handling
+    prompt: |
+      Show proper error handling for BlobStorageException with status codes
+      for not found, conflict, and access denied.
+    expected_patterns:
+      - "BlobStorageException"
+      - "getStatusCode"
+      - "getErrorCode"
+      - "404"
+      - "409"
+      - "403"
+    forbidden_patterns:
+      - "catch (Exception"
+      - "printStackTrace"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.storage.blob.models.BlobStorageException;
+
+      public byte[] downloadBlobSafely(String blobName) {
+          BlobClient blobClient = containerClient.getBlobClient(blobName);
+
+          try {
+              return blobClient.downloadContent().toBytes();
+          } catch (BlobStorageException e) {
+              int statusCode = e.getStatusCode();
+              String errorCode = e.getErrorCode() != null ? e.getErrorCode().toString() : "Unknown";
+
+              switch (statusCode) {
+                  case 404:
+                      System.err.printf("Blob not found: %s%n", blobName);
+                      return null;
+                  case 409:
+                      System.err.printf("Conflict: %s - %s%n", blobName, errorCode);
+                      throw e;
+                  case 403:
+                      System.err.printf("Access denied: %s - %s%n", blobName, errorCode);
+                      throw e;
+                  default:
+                      System.err.printf("Error %d (%s): %s%n", statusCode, errorCode, e.getMessage());
+                      throw e;
+              }
+          }
+      }
+
+  # Blob Properties and Metadata
+  - name: blob_properties_metadata
+    prompt: |
+      Get blob properties and set custom metadata on a blob.
+    expected_patterns:
+      - "getProperties"
+      - "setMetadata"
+      - "BlobProperties"
+      - "getBlobSize"
+      - "getContentType"
+    forbidden_patterns: []
+    tags:
+      - metadata
+      - properties
+    mock_response: |
+      import com.azure.storage.blob.models.BlobProperties;
+      import com.azure.storage.blob.models.BlobHttpHeaders;
+      import java.util.Map;
+
+      // Get properties
+      BlobProperties properties = blobClient.getProperties();
+      System.out.printf("Size: %d bytes%n", properties.getBlobSize());
+      System.out.printf("Content-Type: %s%n", properties.getContentType());
+      System.out.printf("Last Modified: %s%n", properties.getLastModified());
+      System.out.printf("ETag: %s%n", properties.getETag());
+
+      // Get existing metadata
+      Map<String, String> currentMetadata = properties.getMetadata();
+      System.out.println("Current metadata: " + currentMetadata);
+
+      // Set new metadata
+      Map<String, String> newMetadata = Map.of(
+          "processed", "true",
+          "version", "2.0",
+          "lastUpdatedBy", "system"
+      );
+      blobClient.setMetadata(newMetadata);
+
+      // Set HTTP headers
+      BlobHttpHeaders headers = new BlobHttpHeaders()
+          .setContentType("application/octet-stream")
+          .setCacheControl("max-age=86400");
+      blobClient.setHttpHeaders(headers);
+
+  # Blob Leasing
+  - name: blob_leasing
+    prompt: |
+      Acquire a lease on a blob to prevent concurrent modifications,
+      perform operations, then release the lease.
+    expected_patterns:
+      - "BlobLeaseClient"
+      - "BlobLeaseClientBuilder"
+      - "acquireLease"
+      - "releaseLease"
+    forbidden_patterns: []
+    tags:
+      - leasing
+      - concurrency
+    mock_response: |
+      import com.azure.storage.blob.specialized.BlobLeaseClient;
+      import com.azure.storage.blob.specialized.BlobLeaseClientBuilder;
+      import com.azure.core.util.BinaryData;
+
+      BlobLeaseClient leaseClient = new BlobLeaseClientBuilder()
+          .blobClient(blobClient)
+          .buildClient();
+
+      // Acquire lease (60 seconds, or -1 for infinite)
+      String leaseId = leaseClient.acquireLease(60);
+      System.out.println("Lease acquired: " + leaseId);
+
+      try {
+          // Perform operations with lease protection
+          blobClient.upload(BinaryData.fromString("Updated content"), true);
+          System.out.println("Blob updated while holding lease");
+
+          // Renew lease if needed
+          leaseClient.renewLease();
+      } finally {
+          // Always release lease
+          leaseClient.releaseLease();
+          System.out.println("Lease released");
+      }

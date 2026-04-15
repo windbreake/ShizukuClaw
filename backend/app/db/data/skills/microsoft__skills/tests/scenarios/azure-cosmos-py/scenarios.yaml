@@ -1,0 +1,292 @@
+# yaml-language-server: $schema=file:///Users/govindm4max/code/oss/agent-skills/tests/scenarios/skill-scenarios.schema.json
+# Test scenarios for azure-cosmos-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic client usage with DefaultAzureCredential
+  - name: basic_aad_client
+    prompt: |
+      Create a basic Cosmos DB NoSQL example using DefaultAzureCredential.
+      Get a database and container, upsert an item, and read it back.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "CosmosClient"
+      - "get_database_client"
+      - "get_container_client"
+      - "upsert_item"
+      - "read_item"
+      - "partition_key"
+    forbidden_patterns:
+      - "from_connection_string"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import os
+      from azure.cosmos import CosmosClient
+      from azure.identity import DefaultAzureCredential
+
+      credential = DefaultAzureCredential()
+      client = CosmosClient(
+          url=os.environ["ACCOUNT_URI"],
+          credential=credential,
+      )
+
+      database = client.get_database_client("cosmicworks")
+      container = database.get_container_client("products")
+
+      item = {"id": "item-1", "category": "gear", "name": "Board"}
+      container.upsert_item(body=item)
+
+      read_item = container.read_item(item="item-1", partition_key="gear")
+      print(read_item["id"])
+
+  # Connection string authentication
+  - name: connection_string_client
+    prompt: |
+      Create a CosmosClient using a connection string and retrieve
+      an existing database.
+    expected_patterns:
+      - "from_connection_string"
+      - "AZURE_COSMOS_CONNECTIONSTRING"
+      - "get_database_client"
+    forbidden_patterns:
+      - 'CosmosClient\\(url=os\\.environ\\["AZURE_COSMOS_CONNECTIONSTRING"\\]'
+    tags:
+      - authentication
+      - connection-string
+    mock_response: |
+      import os
+      from azure.cosmos import CosmosClient
+
+      client = CosmosClient.from_connection_string(
+          conn_str=os.environ["AZURE_COSMOS_CONNECTIONSTRING"],
+      )
+
+      database = client.get_database_client("cosmicworks")
+      print(database.id)
+
+  # Create database and container
+  - name: create_database_container
+    prompt: |
+      Create a database and container if they do not exist,
+      using a PartitionKey.
+    expected_patterns:
+      - "create_database_if_not_exists"
+      - "create_container_if_not_exists"
+      - "PartitionKey"
+      - "partition_key"
+    forbidden_patterns:
+      - "partition_key=\"/category\""
+    tags:
+      - database
+      - container
+    mock_response: |
+      import os
+      from azure.cosmos import CosmosClient, PartitionKey
+      from azure.identity import DefaultAzureCredential
+
+      client = CosmosClient(
+          url=os.environ["ACCOUNT_URI"],
+          credential=DefaultAzureCredential(),
+      )
+
+      database = client.create_database_if_not_exists(id="mydb")
+      container = database.create_container_if_not_exists(
+          id="items",
+          partition_key=PartitionKey(path="/category"),
+      )
+
+      print(container.id)
+
+  # Item CRUD operations
+  - name: item_crud_operations
+    prompt: |
+      Demonstrate create, read, replace, and delete operations for items.
+      Use partition keys for point reads and deletes.
+    expected_patterns:
+      - "create_item"
+      - "read_item"
+      - "replace_item"
+      - "delete_item"
+      - "partition_key"
+    forbidden_patterns:
+      - "read_item(item_id"
+    tags:
+      - crud
+      - items
+    mock_response: |
+      import os
+      from azure.cosmos import CosmosClient
+      from azure.identity import DefaultAzureCredential
+
+      client = CosmosClient(
+          url=os.environ["ACCOUNT_URI"],
+          credential=DefaultAzureCredential(),
+      )
+      database = client.get_database_client("cosmicworks")
+      container = database.get_container_client("products")
+
+      item = {"id": "item-2", "category": "electronics", "name": "Tablet"}
+      container.create_item(body=item)
+
+      fetched = container.read_item(item="item-2", partition_key="electronics")
+      fetched["name"] = "Tablet Pro"
+      container.replace_item(item=fetched["id"], body=fetched)
+
+      container.delete_item(item="item-2", partition_key="electronics")
+
+  # Parameterized query with partition key
+  - name: parameterized_query_partition
+    prompt: |
+      Query items within a single partition using a parameterized SQL query.
+    expected_patterns:
+      - "query_items"
+      - "parameters"
+      - "@category"
+      - "partition_key"
+    forbidden_patterns:
+      - "enable_cross_partition_query=True"
+    tags:
+      - queries
+      - partition
+    mock_response: |
+      import os
+      from azure.cosmos import CosmosClient
+      from azure.identity import DefaultAzureCredential
+
+      client = CosmosClient(
+          url=os.environ["ACCOUNT_URI"],
+          credential=DefaultAzureCredential(),
+      )
+      database = client.get_database_client("cosmicworks")
+      container = database.get_container_client("products")
+
+      query = "SELECT * FROM c WHERE c.category = @category"
+      items = container.query_items(
+          query=query,
+          parameters=[{"name": "@category", "value": "gear"}],
+          partition_key="gear",
+      )
+
+      for item in items:
+          print(item["id"])
+
+  # Cross-partition query
+  - name: cross_partition_query
+    prompt: |
+      Query items across partitions using enable_cross_partition_query.
+    expected_patterns:
+      - "query_items"
+      - "enable_cross_partition_query=True"
+      - "@max_price"
+    forbidden_patterns:
+      - "partition_key="
+    tags:
+      - queries
+      - cross-partition
+    mock_response: |
+      import os
+      from azure.cosmos import CosmosClient
+      from azure.identity import DefaultAzureCredential
+
+      client = CosmosClient(
+          url=os.environ["ACCOUNT_URI"],
+          credential=DefaultAzureCredential(),
+      )
+      database = client.get_database_client("cosmicworks")
+      container = database.get_container_client("products")
+
+      query = "SELECT * FROM c WHERE c.price < @max_price"
+      items = container.query_items(
+          query=query,
+          parameters=[{"name": "@max_price", "value": 500}],
+          enable_cross_partition_query=True,
+      )
+
+      for item in items:
+          print(item["id"])
+
+  # Async client usage
+  - name: async_client_usage
+    prompt: |
+      Create an async Cosmos client and run an async query with proper
+      async context management and iteration.
+    expected_patterns:
+      - 'from azure\\.cosmos\\.aio import CosmosClient'
+      - 'from azure\\.identity\\.aio import DefaultAzureCredential'
+      - "async with"
+      - "await container.upsert_item"
+      - "async for"
+    forbidden_patterns:
+      - 'from azure\\.identity import DefaultAzureCredential'
+    tags:
+      - async
+    mock_response: |
+      import os
+      import asyncio
+      from azure.cosmos.aio import CosmosClient
+      from azure.identity.aio import DefaultAzureCredential
+
+      async def main():
+          credential = DefaultAzureCredential()
+          async with CosmosClient(
+              url=os.environ["ACCOUNT_URI"],
+              credential=credential,
+          ) as client:
+              database = client.get_database_client("cosmicworks")
+              container = database.get_container_client("products")
+
+              await container.upsert_item(
+                  body={"id": "item-async", "category": "gear"}
+              )
+
+              results = container.query_items(
+                  query="SELECT * FROM c",
+                  partition_key="gear",
+              )
+
+              async for item in results:
+                  print(item["id"])
+
+      asyncio.run(main())
+
+  # Hierarchical partition key
+  - name: hierarchical_partition_key
+    prompt: |
+      Create a container with a hierarchical partition key using MultiHash.
+    expected_patterns:
+      - "PartitionKey"
+      - "MultiHash"
+      - "/tenant_id"
+      - "/user_id"
+    forbidden_patterns:
+      - "PartitionKey(path=\"tenant_id\")"
+    tags:
+      - partition-key
+      - container
+    mock_response: |
+      import os
+      from azure.cosmos import CosmosClient, PartitionKey
+      from azure.identity import DefaultAzureCredential
+
+      client = CosmosClient(
+          url=os.environ["ACCOUNT_URI"],
+          credential=DefaultAzureCredential(),
+      )
+
+      database = client.create_database_if_not_exists(id="multi")
+      container = database.create_container_if_not_exists(
+          id="events",
+          partition_key=PartitionKey(
+              path=["/tenant_id", "/user_id"],
+              kind="MultiHash",
+          ),
+      )
+
+      print(container.id)

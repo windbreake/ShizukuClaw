@@ -1,0 +1,276 @@
+config:
+  max_tokens: 2000
+  model: gpt-4
+  temperature: 0.3
+scenarios:
+- expected_patterns:
+  - AzureKeyCredential
+  - TranscriptionClient
+  - begin_transcription
+  - result.status
+  - status == "succeeded"
+  forbidden_patterns:
+  - DefaultAzureCredential
+  - ManagedIdentityCredential
+  mock_response: "import os\nfrom azure.ai.transcription import TranscriptionClient\n\
+    from azure.core.credentials import AzureKeyCredential\n\nendpoint = os.environ[\"\
+    TRANSCRIPTION_ENDPOINT\"]\nkey = os.environ[\"TRANSCRIPTION_KEY\"]\n\nclient =\
+    \ TranscriptionClient(\n    endpoint=endpoint,\n    credential=AzureKeyCredential(key)\n\
+    )\n\njob = client.begin_transcription(\n    name=\"my-transcription\",\n    locale=\"\
+    en-US\",\n    content_urls=[\"https://storage.example.com/audio.wav\"]\n)\n\n\
+    result = job.result()\n\nif result.status == \"succeeded\":\n    print(\"Transcription\
+    \ completed successfully\")\n    for phrase in result.results:\n        print(f\"\
+    Text: {phrase.text}\")\nelif result.status == \"failed\":\n    print(f\"Transcription\
+    \ failed: {result.error}\")"
+  name: basic_batch_transcription
+  prompt: 'Create a basic batch transcription example using the Azure AI Transcription
+    SDK.
+
+    Include proper authentication with subscription key, transcription job creation,
+
+    status checking, and result processing.'
+  tags:
+  - basic
+  - batch
+  - authentication
+- expected_patterns:
+  - diarization_enabled
+  - diarize_max_speakers
+  - begin_transcription
+  - getattr.*speaker
+  - for phrase in result.results
+  forbidden_patterns:
+  - phrase\.speaker
+  mock_response: "import os\nfrom azure.ai.transcription import TranscriptionClient\n\
+    from azure.core.credentials import AzureKeyCredential\n\nclient = TranscriptionClient(\n\
+    \    endpoint=os.environ[\"TRANSCRIPTION_ENDPOINT\"],\n    credential=AzureKeyCredential(os.environ[\"\
+    TRANSCRIPTION_KEY\"])\n)\n\njob = client.begin_transcription(\n    name=\"diarization-transcription\"\
+    ,\n    locale=\"en-US\",\n    diarization_enabled=True,\n    diarize_max_speakers=2,\n\
+    \    content_urls=[\"https://storage.example.com/audio.wav\"]\n)\n\nresult = job.result()\n\
+    \nif result.status == \"succeeded\":\n    for phrase in result.results:\n    \
+    \    speaker_id = getattr(phrase, \"speaker\", None)\n        if speaker_id is\
+    \ not None:\n            print(f\"Speaker {speaker_id}: {phrase.text}\")\n   \
+    \     else:\n            print(f\"Unknown: {phrase.text}\")"
+  name: batch_with_diarization
+  prompt: 'Create a batch transcription example with diarization (speaker identification)
+    enabled.
+
+    Include proper handling of speaker information in the results.
+
+    Set max_speakers to identify multiple speakers in the audio.'
+  tags:
+  - batch
+  - diarization
+- expected_patterns:
+  - offset
+  - duration
+  - '10_000_000'
+  - hasattr.*offset
+  forbidden_patterns:
+  - result\.offset
+  mock_response: "import os\nfrom azure.ai.transcription import TranscriptionClient\n\
+    from azure.core.credentials import AzureKeyCredential\n\nclient = TranscriptionClient(\n\
+    \    endpoint=os.environ[\"TRANSCRIPTION_ENDPOINT\"],\n    credential=AzureKeyCredential(os.environ[\"\
+    TRANSCRIPTION_KEY\"])\n)\n\njob = client.begin_transcription(\n    name=\"timestamped-transcription\"\
+    ,\n    locale=\"en-US\",\n    content_urls=[\"https://storage.example.com/audio.wav\"\
+    ]\n)\n\nresult = job.result()\n\nif result.status == \"succeeded\":\n    for phrase\
+    \ in result.results:\n        if hasattr(phrase, \"offset\") and hasattr(phrase,\
+    \ \"duration\"):\n            start_sec = phrase.offset / 10_000_000\n       \
+    \     duration_sec = phrase.duration / 10_000_000\n            end_sec = start_sec\
+    \ + duration_sec\n            print(f\"[{start_sec:.2f}s - {end_sec:.2f}s] {phrase.text}\"\
+    )\n        else:\n            print(phrase.text)"
+  name: batch_with_timestamps
+  prompt: 'Create a batch transcription example that extracts and converts timestamps.
+
+    Convert the offset and duration from 100-nanosecond units to seconds.
+
+    Display time-coded transcription suitable for subtitle generation.'
+  tags:
+  - batch
+  - timestamps
+  - subtitles
+- expected_patterns:
+  - begin_stream_transcription
+  - send_audio
+  - stream\.stop\(\)
+  - for result in
+  forbidden_patterns:
+  - stream\.close\(\)
+  mock_response: "import os\nfrom azure.ai.transcription import TranscriptionClient\n\
+    from azure.core.credentials import AzureKeyCredential\n\nclient = TranscriptionClient(\n\
+    \    endpoint=os.environ[\"TRANSCRIPTION_ENDPOINT\"],\n    credential=AzureKeyCredential(os.environ[\"\
+    TRANSCRIPTION_KEY\"])\n)\n\nstream = client.begin_stream_transcription(\n    locale=\"\
+    en-US\"\n)\n\n# Send audio chunks\nwith open(\"audio.wav\", \"rb\") as audio_file:\n\
+    \    while chunk := audio_file.read(1024):\n        stream.send_audio(chunk)\n\
+    \nstream.stop()\n\nfor result in stream:\n    print(f\"Text: {result.text}\")"
+  name: realtime_streaming_transcription
+  prompt: 'Create a real-time streaming transcription example using the SDK.
+
+    Stream audio data and handle partial and final results as they arrive.
+
+    Use stream.stop() to properly end the stream.'
+  tags:
+  - streaming
+  - realtime
+- expected_patterns:
+  - 'try:'
+  - except
+  - 'finally:'
+  - stream\.stop\(\)
+  - send_audio
+  forbidden_patterns:
+  - stream\.close\(\)
+  mock_response: "import os\nfrom azure.ai.transcription import TranscriptionClient\n\
+    from azure.core.credentials import AzureKeyCredential\n\nclient = TranscriptionClient(\n\
+    \    endpoint=os.environ[\"TRANSCRIPTION_ENDPOINT\"],\n    credential=AzureKeyCredential(os.environ[\"\
+    TRANSCRIPTION_KEY\"])\n)\n\ntry:\n    stream = client.begin_stream_transcription(locale=\"\
+    en-US\")\n    \n    with open(\"audio.wav\", \"rb\") as audio_file:\n        while\
+    \ chunk := audio_file.read(1024):\n            stream.send_audio(chunk)\n    \n\
+    \    for result in stream:\n        if result.error:\n            print(f\"Error:\
+    \ {result.error}\")\n        else:\n            print(f\"Text: {result.text}\"\
+    )\n\nexcept Exception as e:\n    print(f\"Exception: {e}\")\nfinally:\n    stream.stop()"
+  name: streaming_with_error_handling
+  prompt: 'Create a streaming transcription example with proper error handling.
+
+    Include try-except-finally blocks to handle stream errors and ensure cleanup.
+
+    Check for error status in results and handle stream closure gracefully.'
+  tags:
+  - streaming
+  - error-handling
+- expected_patterns:
+  - with
+  - TranscriptionClient
+  - begin_transcription
+  forbidden_patterns:
+  - client\.close\(\)
+  mock_response: "import os\nfrom azure.ai.transcription import TranscriptionClient\n\
+    from azure.core.credentials import AzureKeyCredential\n\nwith TranscriptionClient(\n\
+    \    endpoint=os.environ[\"TRANSCRIPTION_ENDPOINT\"],\n    credential=AzureKeyCredential(os.environ[\"\
+    TRANSCRIPTION_KEY\"])\n) as client:\n    job = client.begin_transcription(\n \
+    \       name=\"context-transcription\",\n        locale=\"en-US\",\n        content_urls=[\"\
+    https://storage.example.com/audio.wav\"]\n    )\n    \n    result = job.result()\n\
+    \    \n    for phrase in result.results:\n        print(f\"Text: {phrase.text}\"\
+    )"
+  name: context_manager_usage
+  prompt: 'Create a transcription example using context managers for proper resource
+    cleanup.
+
+    Use "with" statements for client initialization to ensure automatic cleanup.
+
+    Avoid explicit close() calls in favor of context manager cleanup.'
+  tags:
+  - resource-management
+  - best-practices
+- expected_patterns:
+  - diarization_enabled
+  - getattr.*speaker
+  - speaker_confidence
+  - result.results
+  forbidden_patterns:
+  - phrase\.speaker_confidence
+  mock_response: "import os\nfrom azure.ai.transcription import TranscriptionClient\n\
+    from azure.core.credentials import AzureKeyCredential\n\nclient = TranscriptionClient(\n\
+    \    endpoint=os.environ[\"TRANSCRIPTION_ENDPOINT\"],\n    credential=AzureKeyCredential(os.environ[\"\
+    TRANSCRIPTION_KEY\"])\n)\n\njob = client.begin_transcription(\n    name=\"confidence-transcription\"\
+    ,\n    locale=\"en-US\",\n    diarization_enabled=True,\n    diarize_max_speakers=2,\n\
+    \    content_urls=[\"https://storage.example.com/audio.wav\"]\n)\n\nresult = job.result()\n\
+    \nfor phrase in result.results:\n    speaker = getattr(phrase, \"speaker\", None)\n\
+    \    confidence = getattr(phrase, \"speaker_confidence\", None)\n    if speaker\
+    \ and confidence:\n        print(f\"Speaker {speaker} (confidence: {confidence:.0%}):\
+    \ {phrase.text}\")\n    else:\n        print(f\"{phrase.text}\")"
+  name: diarization_with_confidence
+  prompt: 'Create a diarization example that extracts speaker confidence scores.
+
+    Use safe attribute access (getattr) to retrieve optional speaker confidence fields.
+
+    Display confidence scores along with speaker IDs and transcribed text.'
+  tags:
+  - diarization
+  - confidence
+- expected_patterns:
+  - '10_000_000'
+  - def.*subtitle
+  - format_timestamp
+  - offset
+  - duration
+  forbidden_patterns:
+  - result\.offset
+  mock_response: "import os\nfrom azure.ai.transcription import TranscriptionClient\n\
+    from azure.core.credentials import AzureKeyCredential\n\ndef format_timestamp(milliseconds):\n\
+    \    seconds = int(milliseconds // 1000)\n    ms = int(milliseconds % 1000)\n\
+    \    hours = seconds // 3600\n    minutes = (seconds % 3600) // 60\n    secs =\
+    \ seconds % 60\n    return f\"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}\"\n\
+    \ndef generate_subtitles(job_result):\n    subtitles = []\n    \n    for phrase\
+    \ in job_result.results:\n        if hasattr(phrase, \"offset\") and hasattr(phrase,\
+    \ \"duration\"):\n            start_ms = (phrase.offset / 10_000_000) * 1000\n\
+    \            duration_ms = (phrase.duration / 10_000_000) * 1000\n           \
+    \ end_ms = start_ms + duration_ms\n            \n            subtitle = {\n  \
+    \              \"start\": format_timestamp(start_ms),\n                \"end\"\
+    : format_timestamp(end_ms),\n                \"text\": phrase.text\n         \
+    \   }\n            subtitles.append(subtitle)\n    \n    return subtitles\n\n\
+    client = TranscriptionClient(\n    endpoint=os.environ[\"TRANSCRIPTION_ENDPOINT\"\
+    ],\n    credential=AzureKeyCredential(os.environ[\"TRANSCRIPTION_KEY\"])\n)\n\n\
+    job = client.begin_transcription(\n    name=\"subtitle-transcription\",\n    locale=\"\
+    en-US\",\n    content_urls=[\"https://storage.example.com/video.wav\"]\n)\n\n\
+    result = job.result()\nsubs = generate_subtitles(result)\nfor sub in subs:\n \
+    \   print(f\"{sub['start']} --> {sub['end']}\")\n    print(f\"{sub['text']}\")"
+  name: subtitle_generation
+  prompt: 'Create a function that converts batch transcription results to SRT subtitle
+    format.
+
+    Convert 100-nanosecond timing units to milliseconds and format as HH:MM:SS,mmm.
+
+    Include speaker information if diarization is available.'
+  tags:
+  - timestamps
+  - subtitles
+  - conversion
+- expected_patterns:
+  - content_urls=
+  - begin_transcription
+  - for phrase in result.results
+  forbidden_patterns:
+  - content_urls=\[\".*\"\]
+  mock_response: "import os\nfrom azure.ai.transcription import TranscriptionClient\n\
+    from azure.core.credentials import AzureKeyCredential\n\nclient = TranscriptionClient(\n\
+    \    endpoint=os.environ[\"TRANSCRIPTION_ENDPOINT\"],\n    credential=AzureKeyCredential(os.environ[\"\
+    TRANSCRIPTION_KEY\"])\n)\n\njob = client.begin_transcription(\n    name=\"multi-file-transcription\"\
+    ,\n    locale=\"en-US\",\n    content_urls=[\n        \"https://storage.example.com/audio1.wav\"\
+    ,\n        \"https://storage.example.com/audio2.wav\",\n        \"https://storage.example.com/audio3.wav\"\
+    \n    ]\n)\n\nresult = job.result()\n\nif result.status == \"succeeded\":\n  \
+    \  for phrase in result.results:\n        print(f\"[File: {phrase.file_id}] {phrase.text}\"\
+    )"
+  name: multiple_audio_files_batch
+  prompt: 'Create a batch transcription job that processes multiple audio files at
+    once.
+
+    Include multiple URLs in content_urls and process all results.'
+  tags:
+  - batch
+  - multiple-files
+- expected_patterns:
+  - begin_stream_transcription
+  - is_final
+  - send_audio
+  - stream\.stop\(\)
+  forbidden_patterns:
+  - stream\.close\(\)
+  mock_response: "import os\nfrom azure.ai.transcription import TranscriptionClient\n\
+    from azure.core.credentials import AzureKeyCredential\n\nclient = TranscriptionClient(\n\
+    \    endpoint=os.environ[\"TRANSCRIPTION_ENDPOINT\"],\n    credential=AzureKeyCredential(os.environ[\"\
+    TRANSCRIPTION_KEY\"])\n)\n\nstream = client.begin_stream_transcription(locale=\"\
+    en-US\")\n\nwith open(\"audio.wav\", \"rb\") as audio_file:\n    while chunk :=\
+    \ audio_file.read(1024):\n        stream.send_audio(chunk)\n\nfor result in stream:\n\
+    \    if result.is_final:\n        print(f\"Final: {result.text}\")\n    else:\n\
+    \        print(f\"Partial: {result.text}\")\n\nstream.stop()"
+  name: streaming_partial_results
+  prompt: 'Create a streaming transcription example that distinguishes between partial
+    and final results.
+
+    Handle partial results for real-time display and final results for permanent storage.
+
+    Check result.is_final to differentiate between the two types.'
+  tags:
+  - streaming
+  - partial-results

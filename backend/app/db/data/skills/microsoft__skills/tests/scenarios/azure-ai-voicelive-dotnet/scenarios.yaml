@@ -1,0 +1,618 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-ai-voicelive-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Voice Assistant
+  - name: basic_voice_assistant
+    prompt: |
+      Create a basic Azure VoiceLive voice assistant that starts a session,
+      configures it with a system prompt and standard voice, and processes
+      audio and text updates.
+    expected_patterns:
+      - "VoiceLiveClient"
+      - "DefaultAzureCredential"
+      - "StartSessionAsync"
+      - "ConfigureSessionAsync"
+      - "GetUpdatesAsync"
+    forbidden_patterns:
+      - 'Microsoft\.CognitiveServices\.Speech'
+    tags:
+      - basic
+      - voice-assistant
+    mock_response: |
+      using Azure.AI.VoiceLive;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_VOICELIVE_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_VOICELIVE_ENDPOINT not set");
+      
+      VoiceLiveClient client = new VoiceLiveClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      var model = "gpt-4o-mini-realtime-preview";
+      VoiceLiveSession session = await client.StartSessionAsync(model);
+      
+      VoiceLiveSessionOptions sessionOptions = new()
+      {
+          Model = model,
+          Instructions = "You are a helpful AI assistant. Respond naturally and conversationally.",
+          Voice = new AzureStandardVoice("en-US-AvaNeural"),
+          TurnDetection = new AzureSemanticVadTurnDetection()
+          {
+              Threshold = 0.5f,
+              PrefixPadding = TimeSpan.FromMilliseconds(300),
+              SilenceDuration = TimeSpan.FromMilliseconds(500)
+          },
+          InputAudioFormat = InputAudioFormat.Pcm16,
+          OutputAudioFormat = OutputAudioFormat.Pcm16
+      };
+      
+      sessionOptions.Modalities.Clear();
+      sessionOptions.Modalities.Add(InteractionModality.Text);
+      sessionOptions.Modalities.Add(InteractionModality.Audio);
+      
+      await session.ConfigureSessionAsync(sessionOptions);
+      
+      await foreach (SessionUpdate serverEvent in session.GetUpdatesAsync())
+      {
+          if (serverEvent is SessionUpdateResponseAudioDelta audioDelta)
+          {
+              byte[] audioData = audioDelta.Delta.ToArray();
+              // Play audio
+          }
+          else if (serverEvent is SessionUpdateResponseTextDelta textDelta)
+          {
+              Console.Write(textDelta.Delta);
+          }
+      }
+
+  # API Key Authentication
+  - name: api_key_authentication
+    prompt: |
+      Create a VoiceLive client using API key authentication from
+      environment variables instead of DefaultAzureCredential.
+    expected_patterns:
+      - "AzureKeyCredential"
+      - "AZURE_VOICELIVE_API_KEY"
+      - "VoiceLiveClient"
+    forbidden_patterns:
+      - 'new AzureKeyCredential\("[^"]+"\)'
+    tags:
+      - authentication
+      - api-key
+    mock_response: |
+      using Azure;
+      using Azure.AI.VoiceLive;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_VOICELIVE_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_VOICELIVE_ENDPOINT not set");
+      string apiKey = Environment.GetEnvironmentVariable("AZURE_VOICELIVE_API_KEY")
+          ?? throw new InvalidOperationException("AZURE_VOICELIVE_API_KEY not set");
+      
+      VoiceLiveClient client = new VoiceLiveClient(
+          new Uri(endpoint),
+          new AzureKeyCredential(apiKey));
+      
+      var model = "gpt-4o-mini-realtime-preview";
+      VoiceLiveSession session = await client.StartSessionAsync(model);
+
+  # Custom Voice Configuration
+  - name: custom_voice_configuration
+    prompt: |
+      Create a VoiceLive session with a custom voice including
+      temperature setting and custom voice endpoint.
+    expected_patterns:
+      - "AzureCustomVoice"
+      - "Temperature"
+      - "ConfigureSessionAsync"
+    forbidden_patterns:
+      - 'AzureStandardVoice'
+    tags:
+      - voice
+      - custom
+    mock_response: |
+      using Azure.AI.VoiceLive;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_VOICELIVE_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_VOICELIVE_ENDPOINT not set");
+      
+      VoiceLiveClient client = new VoiceLiveClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      var model = "gpt-4o-mini-realtime-preview";
+      VoiceLiveSession session = await client.StartSessionAsync(model);
+      
+      VoiceLiveSessionOptions sessionOptions = new()
+      {
+          Model = model,
+          Instructions = "You are a customer service representative. Be helpful and professional.",
+          Voice = new AzureCustomVoice("my-custom-voice", "my-voice-endpoint-id")
+          {
+              Temperature = 0.8f
+          },
+          TurnDetection = new AzureSemanticVadTurnDetection()
+          {
+              RemoveFillerWords = true
+          },
+          InputAudioFormat = InputAudioFormat.Pcm16,
+          OutputAudioFormat = OutputAudioFormat.Pcm16
+      };
+      
+      sessionOptions.Modalities.Clear();
+      sessionOptions.Modalities.Add(InteractionModality.Text);
+      sessionOptions.Modalities.Add(InteractionModality.Audio);
+      
+      await session.ConfigureSessionAsync(sessionOptions);
+
+  # Function Calling
+  - name: function_calling
+    prompt: |
+      Create a VoiceLive session with function calling capability.
+      Define a weather function and handle the function call response.
+    expected_patterns:
+      - "VoiceLiveFunctionDefinition"
+      - "Tools.Add"
+      - "SessionUpdateResponseFunctionCallArgumentsDone"
+      - "FunctionCallOutputItem"
+      - "StartResponseAsync"
+    forbidden_patterns:
+      - 'ChatTool'
+    tags:
+      - function-calling
+      - tools
+    mock_response: |
+      using System.Text.Json;
+      using Azure.AI.VoiceLive;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_VOICELIVE_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_VOICELIVE_ENDPOINT not set");
+      
+      VoiceLiveClient client = new VoiceLiveClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      var model = "gpt-4o-mini-realtime-preview";
+      VoiceLiveSession session = await client.StartSessionAsync(model);
+      
+      // Define function tool
+      var getCurrentWeatherFunction = new VoiceLiveFunctionDefinition("get_current_weather")
+      {
+          Description = "Get the current weather for a given location",
+          Parameters = BinaryData.FromString("""
+              {
+                  "type": "object",
+                  "properties": {
+                      "location": {
+                          "type": "string",
+                          "description": "The city and state or country"
+                      }
+                  },
+                  "required": ["location"]
+              }
+              """)
+      };
+      
+      VoiceLiveSessionOptions sessionOptions = new()
+      {
+          Model = model,
+          Instructions = "You are a weather assistant. Use the get_current_weather function to help users.",
+          Voice = new AzureStandardVoice("en-US-AvaNeural"),
+          InputAudioFormat = InputAudioFormat.Pcm16,
+          OutputAudioFormat = OutputAudioFormat.Pcm16
+      };
+      
+      sessionOptions.Tools.Add(getCurrentWeatherFunction);
+      sessionOptions.Modalities.Clear();
+      sessionOptions.Modalities.Add(InteractionModality.Text);
+      sessionOptions.Modalities.Add(InteractionModality.Audio);
+      
+      await session.ConfigureSessionAsync(sessionOptions);
+      
+      await foreach (SessionUpdate serverEvent in session.GetUpdatesAsync())
+      {
+          if (serverEvent is SessionUpdateResponseFunctionCallArgumentsDone functionCall)
+          {
+              if (functionCall.Name == "get_current_weather")
+              {
+                  var args = JsonSerializer.Deserialize<Dictionary<string, string>>(functionCall.Arguments);
+                  string location = args?["location"] ?? "unknown";
+                  
+                  // Call weather service
+                  string weatherResult = $"The weather in {location} is sunny, 72°F.";
+                  
+                  // Send function response
+                  await session.AddItemAsync(new FunctionCallOutputItem(functionCall.CallId, weatherResult));
+                  await session.StartResponseAsync();
+              }
+          }
+      }
+
+  # Add User Message
+  - name: add_user_message
+    prompt: |
+      Create an example that adds a text message from the user to
+      a VoiceLive session and triggers a response.
+    expected_patterns:
+      - "AddItemAsync"
+      - "UserMessageItem"
+      - "StartResponseAsync"
+    forbidden_patterns:
+      - 'SendAudioAsync'
+    tags:
+      - text-input
+      - message
+    mock_response: |
+      using Azure.AI.VoiceLive;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_VOICELIVE_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_VOICELIVE_ENDPOINT not set");
+      
+      VoiceLiveClient client = new VoiceLiveClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      var model = "gpt-4o-mini-realtime-preview";
+      VoiceLiveSession session = await client.StartSessionAsync(model);
+      
+      VoiceLiveSessionOptions sessionOptions = new()
+      {
+          Model = model,
+          Instructions = "You are a helpful assistant.",
+          Voice = new AzureStandardVoice("en-US-AvaNeural"),
+          InputAudioFormat = InputAudioFormat.Pcm16,
+          OutputAudioFormat = OutputAudioFormat.Pcm16
+      };
+      
+      sessionOptions.Modalities.Clear();
+      sessionOptions.Modalities.Add(InteractionModality.Text);
+      sessionOptions.Modalities.Add(InteractionModality.Audio);
+      
+      await session.ConfigureSessionAsync(sessionOptions);
+      
+      // Add user text message
+      await session.AddItemAsync(new UserMessageItem("Hello, can you help me with my account?"));
+      
+      // Trigger response
+      await session.StartResponseAsync();
+      
+      await foreach (SessionUpdate serverEvent in session.GetUpdatesAsync())
+      {
+          if (serverEvent is SessionUpdateResponseTextDelta textDelta)
+          {
+              Console.Write(textDelta.Delta);
+          }
+      }
+
+  # Process Audio Updates
+  - name: process_audio_updates
+    prompt: |
+      Create an example that processes audio response updates from
+      VoiceLive, handling audio delta events.
+    expected_patterns:
+      - "SessionUpdateResponseAudioDelta"
+      - "audioDelta.Delta"
+      - "ToArray"
+      - "GetUpdatesAsync"
+    forbidden_patterns:
+      - 'SessionUpdateResponseTextDelta'
+    tags:
+      - audio
+      - processing
+    mock_response: |
+      using Azure.AI.VoiceLive;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_VOICELIVE_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_VOICELIVE_ENDPOINT not set");
+      
+      VoiceLiveClient client = new VoiceLiveClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      var model = "gpt-4o-mini-realtime-preview";
+      VoiceLiveSession session = await client.StartSessionAsync(model);
+      
+      VoiceLiveSessionOptions sessionOptions = new()
+      {
+          Model = model,
+          Instructions = "You are a helpful assistant.",
+          Voice = new AzureStandardVoice("en-US-AvaNeural"),
+          InputAudioFormat = InputAudioFormat.Pcm16,
+          OutputAudioFormat = OutputAudioFormat.Pcm16
+      };
+      
+      sessionOptions.Modalities.Clear();
+      sessionOptions.Modalities.Add(InteractionModality.Audio);
+      
+      await session.ConfigureSessionAsync(sessionOptions);
+      
+      List<byte> audioBuffer = new();
+      
+      await foreach (SessionUpdate serverEvent in session.GetUpdatesAsync())
+      {
+          if (serverEvent is SessionUpdateResponseAudioDelta audioDelta)
+          {
+              byte[] audioData = audioDelta.Delta.ToArray();
+              audioBuffer.AddRange(audioData);
+              
+              // Process audio chunk (e.g., stream to speaker)
+              await PlayAudioChunkAsync(audioData);
+          }
+      }
+      
+      static Task PlayAudioChunkAsync(byte[] audio)
+      {
+          Console.WriteLine($"Playing {audio.Length} bytes of audio");
+          return Task.CompletedTask;
+      }
+
+  # Azure Semantic VAD Configuration
+  - name: azure_semantic_vad
+    prompt: |
+      Create a VoiceLive session with Azure Semantic VAD turn detection
+      configured with threshold, silence duration, and filler word removal.
+    expected_patterns:
+      - "AzureSemanticVadTurnDetection"
+      - "Threshold"
+      - "SilenceDuration"
+      - "RemoveFillerWords"
+    forbidden_patterns:
+      - 'ServerVadTurnDetection'
+    tags:
+      - vad
+      - turn-detection
+    mock_response: |
+      using Azure.AI.VoiceLive;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_VOICELIVE_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_VOICELIVE_ENDPOINT not set");
+      
+      VoiceLiveClient client = new VoiceLiveClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      var model = "gpt-4o-mini-realtime-preview";
+      VoiceLiveSession session = await client.StartSessionAsync(model);
+      
+      VoiceLiveSessionOptions sessionOptions = new()
+      {
+          Model = model,
+          Instructions = "You are a helpful assistant.",
+          Voice = new AzureStandardVoice("en-US-AvaNeural"),
+          TurnDetection = new AzureSemanticVadTurnDetection()
+          {
+              Threshold = 0.6f,
+              PrefixPadding = TimeSpan.FromMilliseconds(200),
+              SilenceDuration = TimeSpan.FromMilliseconds(800),
+              RemoveFillerWords = true
+          },
+          InputAudioFormat = InputAudioFormat.Pcm16,
+          OutputAudioFormat = OutputAudioFormat.Pcm16
+      };
+      
+      sessionOptions.Modalities.Clear();
+      sessionOptions.Modalities.Add(InteractionModality.Text);
+      sessionOptions.Modalities.Add(InteractionModality.Audio);
+      
+      await session.ConfigureSessionAsync(sessionOptions);
+
+  # Send Audio Input
+  - name: send_audio_input
+    prompt: |
+      Create an example that sends audio data to a VoiceLive session
+      from a microphone or audio file.
+    expected_patterns:
+      - "SendAudioAsync"
+      - "BinaryData.FromBytes"
+      - "CommitAudioAsync|StartResponseAsync"
+    forbidden_patterns:
+      - 'AddItemAsync.*UserMessageItem'
+    tags:
+      - audio-input
+      - microphone
+    mock_response: |
+      using Azure.AI.VoiceLive;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_VOICELIVE_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_VOICELIVE_ENDPOINT not set");
+      
+      VoiceLiveClient client = new VoiceLiveClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      var model = "gpt-4o-mini-realtime-preview";
+      VoiceLiveSession session = await client.StartSessionAsync(model);
+      
+      VoiceLiveSessionOptions sessionOptions = new()
+      {
+          Model = model,
+          Instructions = "You are a helpful assistant.",
+          Voice = new AzureStandardVoice("en-US-AvaNeural"),
+          TurnDetection = new AzureSemanticVadTurnDetection(),
+          InputAudioFormat = InputAudioFormat.Pcm16,
+          OutputAudioFormat = OutputAudioFormat.Pcm16
+      };
+      
+      sessionOptions.Modalities.Clear();
+      sessionOptions.Modalities.Add(InteractionModality.Audio);
+      
+      await session.ConfigureSessionAsync(sessionOptions);
+      
+      // Simulate sending audio chunks from microphone
+      byte[] audioChunk = GetAudioFromMicrophone();
+      await session.SendAudioAsync(BinaryData.FromBytes(audioChunk));
+      
+      // When done speaking, commit and trigger response
+      await session.CommitAudioAsync();
+      await session.StartResponseAsync();
+      
+      static byte[] GetAudioFromMicrophone()
+      {
+          // Simulated audio data (16kHz PCM)
+          return new byte[3200]; // 100ms of audio at 16kHz, 16-bit
+      }
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Show how to handle errors in VoiceLive sessions, including
+      session update errors and request failures.
+    expected_patterns:
+      - "RequestFailedException"
+      - "SessionUpdateError"
+      - "catch"
+      - "ex.Status"
+    forbidden_patterns:
+      - 'catch \{\s*\}'
+      - 'catch \(Exception\)'
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure;
+      using Azure.AI.VoiceLive;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_VOICELIVE_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_VOICELIVE_ENDPOINT not set");
+      
+      VoiceLiveClient client = new VoiceLiveClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      try
+      {
+          var model = "gpt-4o-mini-realtime-preview";
+          VoiceLiveSession session = await client.StartSessionAsync(model);
+          
+          VoiceLiveSessionOptions sessionOptions = new()
+          {
+              Model = model,
+              Instructions = "You are a helpful assistant.",
+              Voice = new AzureStandardVoice("en-US-AvaNeural"),
+              InputAudioFormat = InputAudioFormat.Pcm16,
+              OutputAudioFormat = OutputAudioFormat.Pcm16
+          };
+          
+          sessionOptions.Modalities.Clear();
+          sessionOptions.Modalities.Add(InteractionModality.Audio);
+          
+          await session.ConfigureSessionAsync(sessionOptions);
+          
+          await foreach (SessionUpdate update in session.GetUpdatesAsync())
+          {
+              if (update is SessionUpdateError error)
+              {
+                  Console.WriteLine($"Session error: {error.Error}");
+                  break;
+              }
+              
+              // Process other updates...
+          }
+      }
+      catch (RequestFailedException ex) when (ex.Status == 401)
+      {
+          Console.WriteLine("Authentication failed. Check your credentials.");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 429)
+      {
+          Console.WriteLine("Rate limited. Please retry after a delay.");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"Service error ({ex.Status}): {ex.Message}");
+      }
+
+  # Multiple Event Types
+  - name: multiple_event_types
+    prompt: |
+      Create an example that handles multiple types of session updates
+      using a switch expression or pattern matching.
+    expected_patterns:
+      - "switch"
+      - "SessionUpdateResponseAudioDelta"
+      - "SessionUpdateResponseTextDelta"
+      - "SessionUpdateResponseFunctionCallArgumentsDone"
+    forbidden_patterns:
+      - 'if.*is.*if.*is.*if'
+    tags:
+      - event-handling
+      - pattern-matching
+    mock_response: |
+      using Azure.AI.VoiceLive;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_VOICELIVE_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_VOICELIVE_ENDPOINT not set");
+      
+      VoiceLiveClient client = new VoiceLiveClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      var model = "gpt-4o-mini-realtime-preview";
+      VoiceLiveSession session = await client.StartSessionAsync(model);
+      
+      VoiceLiveSessionOptions sessionOptions = new()
+      {
+          Model = model,
+          Instructions = "You are a helpful assistant.",
+          Voice = new AzureStandardVoice("en-US-AvaNeural"),
+          InputAudioFormat = InputAudioFormat.Pcm16,
+          OutputAudioFormat = OutputAudioFormat.Pcm16
+      };
+      
+      sessionOptions.Modalities.Clear();
+      sessionOptions.Modalities.Add(InteractionModality.Text);
+      sessionOptions.Modalities.Add(InteractionModality.Audio);
+      
+      await session.ConfigureSessionAsync(sessionOptions);
+      
+      await foreach (SessionUpdate update in session.GetUpdatesAsync())
+      {
+          switch (update)
+          {
+              case SessionUpdateResponseAudioDelta audioDelta:
+                  byte[] audio = audioDelta.Delta.ToArray();
+                  Console.WriteLine($"Audio: {audio.Length} bytes");
+                  break;
+                  
+              case SessionUpdateResponseTextDelta textDelta:
+                  Console.Write(textDelta.Delta);
+                  break;
+                  
+              case SessionUpdateResponseAudioTranscriptDelta transcriptDelta:
+                  Console.WriteLine($"[Transcript] {transcriptDelta.Delta}");
+                  break;
+                  
+              case SessionUpdateResponseFunctionCallArgumentsDone functionCall:
+                  Console.WriteLine($"Function call: {functionCall.Name}");
+                  break;
+                  
+              case SessionUpdateError error:
+                  Console.WriteLine($"Error: {error.Error}");
+                  return;
+          }
+      }
+
+  # Specific API Version
+  - name: specific_api_version
+    prompt: |
+      Create a VoiceLive client with a specific API version configured.
+    expected_patterns:
+      - "VoiceLiveClientOptions"
+      - "ServiceVersion"
+      - "V2025_10_01|ServiceVersion"
+    forbidden_patterns:
+      - 'new VoiceLiveClient\(endpoint, credential\)'
+    tags:
+      - api-version
+      - configuration
+    mock_response: |
+      using Azure.AI.VoiceLive;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_VOICELIVE_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_VOICELIVE_ENDPOINT not set");
+      
+      Uri endpointUri = new Uri(endpoint);
+      DefaultAzureCredential credential = new DefaultAzureCredential();
+      
+      VoiceLiveClientOptions options = new(VoiceLiveClientOptions.ServiceVersion.V2025_10_01);
+      VoiceLiveClient client = new VoiceLiveClient(endpointUri, credential, options);
+      
+      var model = "gpt-4o-mini-realtime-preview";
+      VoiceLiveSession session = await client.StartSessionAsync(model);

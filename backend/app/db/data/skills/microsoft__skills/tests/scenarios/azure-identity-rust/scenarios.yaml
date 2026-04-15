@@ -1,0 +1,94 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-identity-rust skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: developer_tools_credential_basic
+    prompt: |
+      Show a minimal example using DeveloperToolsCredential to create a 
+      Key Vault SecretClient in Rust.
+    expected_patterns:
+      - "DeveloperToolsCredential"
+      - "azure_identity"
+      - "SecretClient"
+      - "clone()"
+    forbidden_patterns:
+      - "ClientSecretCredential"
+      - "primary_key"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      use azure_identity::DeveloperToolsCredential;
+      use azure_security_keyvault_secrets::SecretClient;
+
+      let credential = DeveloperToolsCredential::new(None)?;
+      let client = SecretClient::new(
+          "https://my-vault.vault.azure.net/",
+          credential.clone(),
+          None,
+      )?;
+
+  - name: managed_identity_credential
+    prompt: |
+      Create a ManagedIdentityCredential for a user-assigned managed identity
+      in Rust, using a client ID.
+    expected_patterns:
+      - "ManagedIdentityCredential"
+      - "client_id"
+    forbidden_patterns:
+      - "tenant_id"
+    tags:
+      - managed-identity
+    mock_response: |
+      use azure_identity::{ManagedIdentityCredential, ManagedIdentityCredentialOptions};
+
+      let options = ManagedIdentityCredentialOptions {
+          client_id: Some("<user-assigned-mi-client-id>".into()),
+          ..Default::default()
+      };
+      let credential = ManagedIdentityCredential::new(Some(options))?;
+
+  - name: client_secret_credential
+    prompt: |
+      Authenticate using ClientSecretCredential with tenant ID, client ID, 
+      and client secret in Rust.
+    expected_patterns:
+      - "ClientSecretCredential"
+      - "tenant"
+      - "client_id"
+      - "client_secret"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+    tags:
+      - service-principal
+    mock_response: |
+      use azure_identity::ClientSecretCredential;
+
+      let credential = ClientSecretCredential::new(
+          "<tenant-id>".into(),
+          "<client-id>".into(),
+          "<client-secret>".into(),
+          None,
+      )?;
+
+  - name: azure_cli_credential
+    prompt: |
+      Use AzureCliCredential for local development authentication in Rust.
+    expected_patterns:
+      - "AzureCliCredential"
+      - "azure_identity"
+    forbidden_patterns:
+      - "client_secret"
+    tags:
+      - cli
+      - local-dev
+    mock_response: |
+      use azure_identity::AzureCliCredential;
+
+      let credential = AzureCliCredential::new(None)?;

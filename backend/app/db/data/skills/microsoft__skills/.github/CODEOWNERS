@@ -1,0 +1,21 @@
+# CODEOWNERS for microsoft/skills
+#
+# Each line is a file pattern followed by one or more owners.
+# Order matters: later rules override earlier ones.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: primary maintainer owns everything
+*                                         @thegovind
+
+# Copilot for Azure skills plugin (synced from upstream)
+.github/plugins/azure-skills/            @microsoft/ghcp4a
+
+# Azure Identity SDK skills
+.github/plugins/*/skills/azure-identity-*/SKILL.md      @scottaddie
+
+# Community-contributed skill: Microsoft Entra Agent ID
+.github/skills/entra-agent-id/           @ArLucaID @rbinrais @thegovind
+
+# CI/CD and automation (security-sensitive)
+.github/workflows/                        @thegovind
+.github/scripts/                          @thegovind

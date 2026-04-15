@@ -1,0 +1,315 @@
+# Test scenarios for azure-cosmos-db-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Dual Auth Client Setup
+  - name: dual_auth_client_setup
+    prompt: |
+      Create a Cosmos DB client setup with dual authentication.
+      Use DefaultAzureCredential in Azure and key-based auth for emulator.
+      Include emulator detection and SSL verification disabled for emulator.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "_is_emulator_endpoint"
+      - "connection_verify=False"
+      - "CosmosClient"
+    forbidden_patterns:
+      - 'key="'
+      - "ClientSecretCredential"
+    tags:
+      - authentication
+      - client
+    mock_response: |
+      import os
+      from azure.cosmos import CosmosClient
+      from azure.identity import DefaultAzureCredential
+      
+      def _is_emulator_endpoint(endpoint: str) -> bool:
+          return "localhost" in endpoint.lower() or "127.0.0.1" in endpoint
+      
+      def create_client(endpoint: str, cosmos_key: str) -> CosmosClient:
+          if _is_emulator_endpoint(endpoint):
+              return CosmosClient(
+                  url=endpoint,
+                  credential=cosmos_key,
+                  connection_verify=False,
+              )
+          return CosmosClient(
+              url=endpoint,
+              credential=DefaultAzureCredential(),
+          )
+      
+      client = create_client(
+          endpoint=os.environ["COSMOS_ENDPOINT"],
+          cosmos_key=os.environ.get("COSMOS_KEY", ""),
+      )
+
+  # Singleton Container Initialization
+  - name: singleton_container_initialization
+    prompt: |
+      Show a singleton Cosmos container initialization with a cached container
+      and a safe one-time initialization flag.
+    expected_patterns:
+      - "_cosmos_container"
+      - "_init_attempted"
+      - "get_container"
+      - "container.read()"
+    forbidden_patterns:
+      - "CosmosClient("  # client should be created in helper, not per call
+    tags:
+      - client
+      - singleton
+    mock_response: |
+      from typing import Optional
+      from azure.cosmos import ContainerProxy
+      from app.db.cosmos import create_client
+      from app.core.config import settings
+      
+      _cosmos_container: Optional[ContainerProxy] = None
+      _init_attempted: bool = False
+      
+      def get_container() -> Optional[ContainerProxy]:
+          global _cosmos_container, _init_attempted
+          if _init_attempted:
+              return _cosmos_container
+          _init_attempted = True
+          client = create_client(settings.cosmos_endpoint, settings.cosmos_key)
+          database = client.get_database_client(settings.cosmos_database_name)
+          _cosmos_container = database.get_container_client(settings.cosmos_container_id)
+          _cosmos_container.read()
+          return _cosmos_container
+
+  # Service Layer CRUD
+  - name: service_layer_crud
+    prompt: |
+      Implement a service layer class with CRUD methods using the Cosmos
+      wrapper functions and graceful defaults when Cosmos is unavailable.
+    expected_patterns:
+      - "class ProjectService"
+      - "_use_cosmos"
+      - "get_by_id"
+      - "list_by_workspace"
+    forbidden_patterns:
+      - "container.read_item"
+      - "container.query_items"
+    tags:
+      - service-layer
+      - crud
+    mock_response: |
+      from typing import Optional
+      from app.db.cosmos import get_container, get_document, upsert_document, delete_document, query_documents
+      from app.models.project import Project, ProjectCreate, ProjectUpdate, ProjectInDB
+      
+      class ProjectService:
+          def _use_cosmos(self) -> bool:
+              return get_container() is not None
+      
+          def _doc_to_model_in_db(self, doc: dict) -> ProjectInDB:
+              return ProjectInDB(
+                  id=doc["id"],
+                  name=doc["name"],
+                  workspace_id=doc["workspaceId"],
+                  doc_type=doc.get("docType", "project"),
+              )
+      
+          def _model_in_db_to_doc(self, model: ProjectInDB) -> dict:
+              return {
+                  "id": model.id,
+                  "name": model.name,
+                  "workspaceId": model.workspace_id,
+                  "docType": model.doc_type,
+              }
+      
+          def _model_in_db_to_model(self, model: ProjectInDB) -> Project:
+              return Project(id=model.id, name=model.name, workspace_id=model.workspace_id)
+      
+          async def create(self, data: ProjectCreate, author_id: str) -> Project:
+              if not self._use_cosmos():
+                  raise RuntimeError("Database unavailable")
+              model = ProjectInDB(
+                  id="proj-1",
+                  name=data.name,
+                  workspace_id=data.workspace_id,
+                  doc_type="project",
+              )
+              await upsert_document(self._model_in_db_to_doc(model), partition_key=data.workspace_id)
+              return self._model_in_db_to_model(model)
+      
+          async def get_by_id(self, project_id: str, workspace_id: str) -> Optional[Project]:
+              if not self._use_cosmos():
+                  return None
+              doc = await get_document(project_id, partition_key=workspace_id)
+              if doc is None:
+                  return None
+              return self._model_in_db_to_model(self._doc_to_model_in_db(doc))
+      
+          async def update(self, project_id: str, workspace_id: str, data: ProjectUpdate) -> Optional[Project]:
+              if not self._use_cosmos():
+                  return None
+              doc = await get_document(project_id, partition_key=workspace_id)
+              if doc is None:
+                  return None
+              model = self._doc_to_model_in_db(doc)
+              update_data = data.model_dump(exclude_unset=True)
+              for field, value in update_data.items():
+                  if hasattr(model, field):
+                      setattr(model, field, value)
+              await upsert_document(self._model_in_db_to_doc(model), partition_key=workspace_id)
+              return self._model_in_db_to_model(model)
+      
+          async def delete(self, project_id: str, workspace_id: str) -> bool:
+              if not self._use_cosmos():
+                  return False
+              return await delete_document(project_id, partition_key=workspace_id)
+      
+          async def list_by_workspace(self, workspace_id: str) -> list[Project]:
+              if not self._use_cosmos():
+                  return []
+              docs = await query_documents(doc_type="project", partition_key=workspace_id)
+              return [self._model_in_db_to_model(self._doc_to_model_in_db(doc)) for doc in docs]
+      
+      project_service = ProjectService()
+
+  # Parameterized Query
+  - name: parameterized_query
+    prompt: |
+      Show a Cosmos query that filters by slug using parameterized queries
+      and partition key scoping.
+    expected_patterns:
+      - "extra_filter"
+      - "@slug"
+      - 'parameters=[{"name": "@slug"'
+    forbidden_patterns:
+      - "f\"SELECT"
+      - "%s"  # string formatting in query
+    tags:
+      - queries
+      - security
+    mock_response: |
+      from app.db.cosmos import query_documents
+      
+      async def get_by_slug(slug: str, workspace_id: str):
+          docs = await query_documents(
+              doc_type="project",
+              partition_key=workspace_id,
+              extra_filter="AND c.slug = @slug",
+              parameters=[{"name": "@slug", "value": slug}],
+          )
+          return docs[0] if docs else None
+
+  # Partition Key Strategy
+  - name: partition_key_strategy
+    prompt: |
+      Demonstrate partition key choices for parent-scoped entities and
+      global entities with consistent access patterns.
+    expected_patterns:
+      - "workspace_id"
+      - "partition_key=workspace_id"
+      - "GLOBAL_PARTITION"
+    forbidden_patterns:
+      - "partition_key=None"  # should use a known partition when possible
+    tags:
+      - partitioning
+    mock_response: |
+      GLOBAL_PARTITION = "global"
+      
+      async def get_project(project_id: str, workspace_id: str):
+          return await get_document(project_id, partition_key=workspace_id)
+      
+      async def get_user_by_email(email: str):
+          return await query_documents(
+              doc_type="user",
+              partition_key=GLOBAL_PARTITION,
+              extra_filter="AND c.email = @email",
+              parameters=[{"name": "@email", "value": email}],
+          )
+
+  # Cross-Partition Query
+  - name: cross_partition_query
+    prompt: |
+      Provide a cross-partition query when the partition key is unknown,
+      enabling cross partition queries explicitly.
+    expected_patterns:
+      - "enable_cross_partition_query=True"
+      - "partition_key is None"
+    forbidden_patterns:
+      - "partition_key=workspace_id"
+    tags:
+      - partitioning
+      - queries
+    mock_response: |
+      from starlette.concurrency import run_in_threadpool
+      from app.db.cosmos import get_container
+      
+      async def list_all_users():
+          container = get_container()
+          query = "SELECT * FROM c WHERE c.docType = @docType"
+          params = [{"name": "@docType", "value": "user"}]
+          partition_key = None
+          items = container.query_items(
+              query=query,
+              parameters=params,
+              enable_cross_partition_query=True,
+          )
+          return await run_in_threadpool(list, items)
+
+  # TDD Unit Tests with Mocks
+  - name: tdd_unit_tests
+    prompt: |
+      Write a pytest unit test for a Cosmos service method using
+      mocked get_container and async test patterns.
+    expected_patterns:
+      - "pytest.mark.asyncio"
+      - "mocker.patch"
+      - "mock_cosmos_container"
+    forbidden_patterns:
+      - "CosmosClient("  # unit tests should not initialize real clients
+    tags:
+      - tests
+      - tdd
+    mock_response: |
+      import pytest
+      from unittest.mock import MagicMock
+      from app.services.project_service import project_service
+      
+      @pytest.fixture
+      def mock_cosmos_container(mocker):
+          container = MagicMock()
+          mocker.patch("app.db.cosmos.get_container", return_value=container)
+          return container
+      
+      @pytest.mark.asyncio
+      async def test_get_by_id_returns_project(mock_cosmos_container):
+          mock_cosmos_container.read_item.return_value = {"id": "123", "name": "Test", "workspaceId": "ws-1"}
+          result = await project_service.get_by_id("123", workspace_id="ws-1")
+          assert result is not None
+          assert result.id == "123"
+
+  # FastAPI Router Delegation
+  - name: fastapi_router_delegation
+    prompt: |
+      Create a FastAPI router handler that delegates to the service layer
+      instead of using Cosmos client directly.
+    expected_patterns:
+      - "APIRouter"
+      - "project_service.get_by_id"
+    forbidden_patterns:
+      - "CosmosClient("
+      - "get_container("
+    tags:
+      - fastapi
+      - service-layer
+    mock_response: |
+      from fastapi import APIRouter
+      from app.services.project_service import project_service
+      
+      router = APIRouter()
+      
+      @router.get("/workspaces/{workspace_id}/projects/{project_id}")
+      async def get_project(project_id: str, workspace_id: str):
+          return await project_service.get_by_id(project_id, workspace_id)

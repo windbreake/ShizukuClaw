@@ -1,0 +1,287 @@
+# Test scenarios for azure-data-tables-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Table service client management
+  - name: basic_table_service_client
+    prompt: |
+      Create a TableServiceClient using DefaultAzureCredential, create a table
+      if it doesn't exist, and get a TableClient for that table.
+    expected_patterns:
+      - "TableServiceClient"
+      - "DefaultAzureCredential"
+      - "create_table_if_not_exists"
+      - "get_table_client"
+    forbidden_patterns:
+      - "azure.cosmosdb.table"
+      - "url="
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import os
+      from azure.data.tables import TableServiceClient
+      from azure.identity import DefaultAzureCredential
+
+      credential = DefaultAzureCredential()
+      service_client = TableServiceClient(
+          endpoint=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          credential=credential,
+      )
+
+      table_name = "orders"
+      service_client.create_table_if_not_exists(table_name)
+
+      table_client = service_client.get_table_client(table_name)
+      print(table_client.table_name)
+
+  # Table client CRUD operations
+  - name: table_client_entity_crud
+    prompt: |
+      Create a TableClient and perform entity CRUD operations using
+      PartitionKey/RowKey, including update with UpdateMode.
+    expected_patterns:
+      - "TableClient"
+      - "create_entity"
+      - "get_entity"
+      - "update_entity"
+      - "delete_entity"
+      - "UpdateMode"
+    forbidden_patterns:
+      - "\"partition_key\":"
+      - "\"row_key\":"
+    tags:
+      - crud
+      - entities
+    mock_response: |
+      import os
+      from azure.data.tables import TableClient, UpdateMode
+      from azure.identity import DefaultAzureCredential
+
+      table_client = TableClient(
+          endpoint=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          table_name="orders",
+          credential=DefaultAzureCredential(),
+      )
+
+      entity = {
+          "PartitionKey": "sales",
+          "RowKey": "order-001",
+          "product": "Widget",
+          "quantity": 2,
+      }
+
+      table_client.create_entity(entity=entity)
+
+      fetched = table_client.get_entity(partition_key="sales", row_key="order-001")
+      print(fetched["product"])
+
+      table_client.update_entity(
+          entity={"PartitionKey": "sales", "RowKey": "order-001", "quantity": 3},
+          mode=UpdateMode.REPLACE,
+      )
+
+      table_client.delete_entity(partition_key="sales", row_key="order-001")
+
+  # PartitionKey/RowKey requirements
+  - name: partition_key_row_key_required
+    prompt: |
+      Provide an example that shows an entity with required PartitionKey and
+      RowKey fields, then create the entity.
+    expected_patterns:
+      - "PartitionKey"
+      - "RowKey"
+      - "create_entity"
+    forbidden_patterns:
+      - "partition_key"
+      - "row_key"
+    tags:
+      - basics
+      - keys
+    mock_response: |
+      import os
+      from azure.data.tables import TableClient
+      from azure.identity import DefaultAzureCredential
+
+      table_client = TableClient(
+          endpoint=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          table_name="inventory",
+          credential=DefaultAzureCredential(),
+      )
+
+      entity = {
+          "PartitionKey": "inventory",
+          "RowKey": "sku-1001",
+          "name": "Keyboard",
+      }
+
+      table_client.create_entity(entity=entity)
+
+  # Query entities with filters
+  - name: query_entities_with_parameters
+    prompt: |
+      Query entities in a table using query_filter and parameters for
+      PartitionKey and a numeric comparison.
+    expected_patterns:
+      - "query_entities"
+      - "query_filter"
+      - "parameters"
+    forbidden_patterns:
+      - "(?<!query_)filter="
+    tags:
+      - query
+      - filtering
+    mock_response: |
+      import os
+      from azure.data.tables import TableClient
+      from azure.identity import DefaultAzureCredential
+
+      table_client = TableClient(
+          endpoint=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          table_name="orders",
+          credential=DefaultAzureCredential(),
+      )
+
+      entities = table_client.query_entities(
+          query_filter="PartitionKey eq @pk and quantity gt @min_qty",
+          parameters={"pk": "sales", "min_qty": 1},
+      )
+
+      for entity in entities:
+          print(entity["RowKey"])
+
+  # Batch operations
+  - name: batch_submit_transaction
+    prompt: |
+      Submit a batch transaction with multiple operations in the same
+      PartitionKey and handle TableTransactionError.
+    expected_patterns:
+      - "submit_transaction"
+      - "TableTransactionError"
+    forbidden_patterns:
+      - "submit_batch"
+    tags:
+      - batch
+      - transactions
+    mock_response: |
+      import os
+      from azure.data.tables import TableClient, TableTransactionError
+      from azure.identity import DefaultAzureCredential
+
+      table_client = TableClient(
+          endpoint=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          table_name="batch-table",
+          credential=DefaultAzureCredential(),
+      )
+
+      operations = [
+          ("create", {"PartitionKey": "batch", "RowKey": "1", "value": 1}),
+          ("upsert", {"PartitionKey": "batch", "RowKey": "2", "value": 2}),
+      ]
+
+      try:
+          table_client.submit_transaction(operations)
+      except TableTransactionError as exc:
+          print(f"Transaction failed: {exc}")
+
+  # List tables from service client
+  - name: list_tables
+    prompt: |
+      List tables in the storage account using TableServiceClient.
+    expected_patterns:
+      - "TableServiceClient"
+      - "list_tables"
+      - "table.name"
+    forbidden_patterns:
+      - "create_table_if_missing"
+    tags:
+      - service-client
+      - listing
+    mock_response: |
+      import os
+      from azure.data.tables import TableServiceClient
+      from azure.identity import DefaultAzureCredential
+
+      service_client = TableServiceClient(
+          endpoint=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          credential=DefaultAzureCredential(),
+      )
+
+      for table in service_client.list_tables():
+          print(table.name)
+
+  # Connection string alternative
+  - name: connection_string_table_client
+    prompt: |
+      Create a TableClient using a connection string from environment variables
+      and insert an entity with PartitionKey and RowKey.
+    expected_patterns:
+      - "from_connection_string"
+      - "create_entity"
+      - "PartitionKey"
+      - "RowKey"
+    forbidden_patterns:
+      - "AccountKey="
+    tags:
+      - connection-string
+    mock_response: |
+      import os
+      from azure.data.tables import TableClient
+
+      table_client = TableClient.from_connection_string(
+          conn_str=os.environ["AZURE_STORAGE_CONNECTION_STRING"],
+          table_name="orders",
+      )
+
+      entity = {
+          "PartitionKey": "sales",
+          "RowKey": "order-002",
+          "product": "Mouse",
+      }
+
+      table_client.create_entity(entity=entity)
+
+  # Async TableClient usage
+  - name: async_table_client_usage
+    prompt: |
+      Provide an async example using azure.data.tables.aio TableClient with
+      DefaultAzureCredential and async context manager.
+    expected_patterns:
+      - "from azure.data.tables.aio import TableClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with"
+      - "await"
+    forbidden_patterns:
+      - "from azure.data.tables import TableClient"
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - async
+      - advanced
+    mock_response: |
+      import os
+      import asyncio
+      from azure.data.tables.aio import TableClient
+      from azure.identity.aio import DefaultAzureCredential
+
+      async def main():
+          credential = DefaultAzureCredential()
+
+          async with TableClient(
+              endpoint=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+              table_name="async-table",
+              credential=credential,
+          ) as table_client:
+              await table_client.create_entity(
+                  entity={
+                      "PartitionKey": "async",
+                      "RowKey": "1",
+                      "value": "test",
+                  }
+              )
+
+      asyncio.run(main())

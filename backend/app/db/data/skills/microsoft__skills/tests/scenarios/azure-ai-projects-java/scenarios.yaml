@@ -1,0 +1,584 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-ai-projects-java skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Client Creation
+  - name: client_creation
+    prompt: |
+      Create Java code to set up AIProjectClient sub-clients using
+      DefaultAzureCredential. Create ConnectionsClient, DatasetsClient,
+      DeploymentsClient, and IndexesClient.
+    expected_patterns:
+      - "AIProjectClientBuilder"
+      - "DefaultAzureCredentialBuilder"
+      - "buildConnectionsClient"
+      - "buildDatasetsClient"
+      - "buildDeploymentsClient"
+      - "buildIndexesClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'endpoint\("https://'  # Hardcoded endpoint
+      - "buildClient()"  # Wrong method
+    tags:
+      - basic
+      - authentication
+      - client
+    mock_response: |
+      import com.azure.ai.projects.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              
+              AIProjectClientBuilder builder = new AIProjectClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build());
+              
+              ConnectionsClient connectionsClient = builder.buildConnectionsClient();
+              DatasetsClient datasetsClient = builder.buildDatasetsClient();
+              DeploymentsClient deploymentsClient = builder.buildDeploymentsClient();
+              IndexesClient indexesClient = builder.buildIndexesClient();
+              
+              System.out.println("All clients initialized successfully");
+          }
+      }
+
+  # List Connections
+  - name: list_connections
+    prompt: |
+      Create a Java example that lists all project connections and
+      prints their name, type, and credential type.
+    expected_patterns:
+      - "ConnectionsClient"
+      - "listConnections"
+      - "PagedIterable"
+      - "getName()"
+      - "getType()"
+      - "getCredentials()"
+    forbidden_patterns:
+      - "listConnections(ConnectionType"  # Full filter when listing all
+    tags:
+      - connections
+      - list
+    mock_response: |
+      import com.azure.ai.projects.*;
+      import com.azure.ai.projects.models.Connection;
+      import com.azure.core.http.rest.PagedIterable;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ListConnectionsExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              
+              ConnectionsClient connectionsClient = new AIProjectClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildConnectionsClient();
+              
+              PagedIterable<Connection> connections = connectionsClient.listConnections();
+              
+              for (Connection connection : connections) {
+                  System.out.println("Name: " + connection.getName());
+                  System.out.println("Type: " + connection.getType());
+                  System.out.println("Credential Type: " + connection.getCredentials().getType());
+                  System.out.println("---");
+              }
+          }
+      }
+
+  # Filter Connections by Type
+  - name: filter_connections_by_type
+    prompt: |
+      Create a Java example that filters connections by ConnectionType.
+      Show how to list only Azure OpenAI connections.
+    expected_patterns:
+      - "ConnectionType"
+      - "AZURE_OPEN_AI"
+      - "listConnections"
+    forbidden_patterns:
+      - '"AzureOpenAI"'  # Should use enum
+      - '"azure_open_ai"'
+    tags:
+      - connections
+      - filter
+    mock_response: |
+      import com.azure.ai.projects.*;
+      import com.azure.ai.projects.models.Connection;
+      import com.azure.ai.projects.models.ConnectionType;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class FilterConnectionsExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              
+              ConnectionsClient connectionsClient = new AIProjectClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildConnectionsClient();
+              
+              // Filter by Azure OpenAI type
+              System.out.println("Azure OpenAI Connections:");
+              Iterable<Connection> azureOpenAIConnections = 
+                  connectionsClient.listConnections(ConnectionType.AZURE_OPEN_AI, null);
+              
+              for (Connection connection : azureOpenAIConnections) {
+                  System.out.println("  Name: " + connection.getName());
+              }
+              
+              // Filter by default connections
+              System.out.println("\nDefault Connections:");
+              Iterable<Connection> defaultConnections = 
+                  connectionsClient.listConnections(null, true);
+              
+              for (Connection connection : defaultConnections) {
+                  System.out.println("  Name: " + connection.getName());
+              }
+          }
+      }
+
+  # List Deployments
+  - name: list_deployments
+    prompt: |
+      Create a Java example that lists all model deployments and
+      retrieves a specific deployment by name.
+    expected_patterns:
+      - "DeploymentsClient"
+      - "list()"
+      - "get("
+      - "PagedIterable"
+      - "Deployment"
+      - "getName()"
+    forbidden_patterns:
+      - "listDeployments()"  # Wrong method name
+      - "getDeployment("     # Wrong method name
+    tags:
+      - deployments
+      - list
+    mock_response: |
+      import com.azure.ai.projects.*;
+      import com.azure.ai.projects.models.Deployment;
+      import com.azure.core.http.rest.PagedIterable;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class DeploymentsExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              
+              DeploymentsClient deploymentsClient = new AIProjectClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildDeploymentsClient();
+              
+              // List all deployments
+              System.out.println("=== All Deployments ===");
+              PagedIterable<Deployment> deployments = deploymentsClient.list();
+              for (Deployment deployment : deployments) {
+                  System.out.println("Name: " + deployment.getName());
+                  System.out.println("Type: " + deployment.getType().getValue());
+                  System.out.println("---");
+              }
+              
+              // Get specific deployment
+              String deploymentName = "gpt-4o";
+              Deployment specificDeployment = deploymentsClient.get(deploymentName);
+              System.out.println("\n=== Specific Deployment ===");
+              System.out.println("Name: " + specificDeployment.getName());
+              System.out.println("Type: " + specificDeployment.getType().getValue());
+          }
+      }
+
+  # Create Dataset with File
+  - name: create_dataset_with_file
+    prompt: |
+      Create a Java example that uploads a file to create a new dataset.
+      Use createDatasetWithFile with a Path object.
+    expected_patterns:
+      - "DatasetsClient"
+      - "createDatasetWithFile"
+      - "Path"
+      - "FileDatasetVersion"
+    forbidden_patterns:
+      - "new File("
+    tags:
+      - datasets
+      - create
+      - file
+    mock_response: |
+      import com.azure.ai.projects.*;
+      import com.azure.ai.projects.models.FileDatasetVersion;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      import java.nio.file.Path;
+
+      public class CreateDatasetExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              
+              DatasetsClient datasetsClient = new AIProjectClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildDatasetsClient();
+              
+              String datasetName = "my-dataset";
+              String datasetVersion = "1.0";
+              Path filePath = Path.of("data/product_info.md");
+              
+              FileDatasetVersion createdDataset = datasetsClient.createDatasetWithFile(
+                  datasetName,
+                  datasetVersion,
+                  filePath
+              );
+              
+              System.out.println("Created dataset: " + createdDataset.getId());
+              System.out.println("Name: " + createdDataset.getName());
+              System.out.println("Version: " + createdDataset.getVersion());
+          }
+      }
+
+  # List and Get Datasets
+  - name: list_and_get_datasets
+    prompt: |
+      Create a Java example that lists all datasets (latest versions),
+      lists versions of a specific dataset, and gets a specific version.
+    expected_patterns:
+      - "listLatest"
+      - "listVersions"
+      - "getDatasetVersion"
+      - "DatasetVersion"
+    forbidden_patterns:
+      - "listDatasets"  # Wrong method name
+      - "get("          # Wrong method for datasets
+    tags:
+      - datasets
+      - list
+    mock_response: |
+      import com.azure.ai.projects.*;
+      import com.azure.ai.projects.models.DatasetVersion;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ListDatasetsExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              
+              DatasetsClient datasetsClient = new AIProjectClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildDatasetsClient();
+              
+              // List latest versions of all datasets
+              System.out.println("=== All Datasets (Latest) ===");
+              datasetsClient.listLatest().forEach(dataset -> {
+                  System.out.println("Name: " + dataset.getName());
+                  System.out.println("Version: " + dataset.getVersion());
+                  System.out.println("Type: " + dataset.getType());
+                  System.out.println("---");
+              });
+              
+              // List all versions of a specific dataset
+              String datasetName = "my-dataset";
+              System.out.println("\n=== Versions of " + datasetName + " ===");
+              datasetsClient.listVersions(datasetName).forEach(version -> {
+                  System.out.println("Version: " + version.getVersion());
+              });
+              
+              // Get specific dataset version
+              DatasetVersion dataset = datasetsClient.getDatasetVersion(datasetName, "1.0");
+              System.out.println("\n=== Specific Version ===");
+              System.out.println("Name: " + dataset.getName());
+              System.out.println("Type: " + dataset.getType());
+          }
+      }
+
+  # Create or Update Index
+  - name: create_or_update_index
+    prompt: |
+      Create a Java example that creates or updates a search index
+      using AzureAISearchIndex with connection name and index name.
+    expected_patterns:
+      - "IndexesClient"
+      - "createOrUpdate"
+      - "AzureAISearchIndex"
+      - "setConnectionName"
+      - "setIndexName"
+    forbidden_patterns:
+      - "new Index()"  # Should use AzureAISearchIndex
+    tags:
+      - indexes
+      - create
+    mock_response: |
+      import com.azure.ai.projects.*;
+      import com.azure.ai.projects.models.AzureAISearchIndex;
+      import com.azure.ai.projects.models.Index;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class CreateIndexExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              String searchConnectionName = System.getenv("AI_SEARCH_CONNECTION_NAME");
+              String searchIndexName = System.getenv("AI_SEARCH_INDEX_NAME");
+              
+              IndexesClient indexesClient = new AIProjectClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildIndexesClient();
+              
+              String indexName = "my-index";
+              String indexVersion = "1.0";
+              
+              Index index = indexesClient.createOrUpdate(
+                  indexName,
+                  indexVersion,
+                  new AzureAISearchIndex()
+                      .setConnectionName(searchConnectionName)
+                      .setIndexName(searchIndexName)
+              );
+              
+              System.out.println("Created index: " + index.getName());
+              System.out.println("Version: " + index.getVersion());
+          }
+      }
+
+  # List and Get Indexes
+  - name: list_and_get_indexes
+    prompt: |
+      Create a Java example that lists all indexes (latest versions)
+      and retrieves a specific index by name and version.
+    expected_patterns:
+      - "IndexesClient"
+      - "listLatest"
+      - "get("
+      - "getName()"
+      - "getVersion()"
+    forbidden_patterns:
+      - "list()"  # Wrong method for indexes
+      - "listIndexes()"
+    tags:
+      - indexes
+      - list
+    mock_response: |
+      import com.azure.ai.projects.*;
+      import com.azure.ai.projects.models.Index;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ListIndexesExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              
+              IndexesClient indexesClient = new AIProjectClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildIndexesClient();
+              
+              // List latest versions
+              System.out.println("=== All Indexes ===");
+              indexesClient.listLatest().forEach(index -> {
+                  System.out.println("Name: " + index.getName());
+                  System.out.println("Version: " + index.getVersion());
+                  if (index.getDescription() != null) {
+                      System.out.println("Description: " + index.getDescription());
+                  }
+                  System.out.println("---");
+              });
+              
+              // Get specific index
+              String indexName = "my-index";
+              String indexVersion = "1.0";
+              Index index = indexesClient.get(indexName, indexVersion);
+              
+              System.out.println("\n=== Specific Index ===");
+              System.out.println("Name: " + index.getName());
+              System.out.println("Version: " + index.getVersion());
+          }
+      }
+
+  # Async Client Usage
+  - name: async_client_usage
+    prompt: |
+      Create a Java example using async clients (ConnectionsAsyncClient)
+      with Flux/Mono reactive patterns.
+    expected_patterns:
+      - "ConnectionsAsyncClient"
+      - "buildConnectionsAsyncClient"
+      - "Flux"
+      - "subscribe"
+      - "doOnNext"
+    tags:
+      - async
+      - connections
+    mock_response: |
+      import com.azure.ai.projects.*;
+      import com.azure.ai.projects.models.Connection;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import reactor.core.publisher.Flux;
+      import reactor.core.publisher.Mono;
+
+      public class AsyncClientExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              
+              ConnectionsAsyncClient asyncClient = new AIProjectClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildConnectionsAsyncClient();
+              
+              // List connections asynchronously
+              Flux<Connection> connections = asyncClient.listConnections();
+              connections
+                  .doOnNext(conn -> System.out.println("Connection: " + conn.getName()))
+                  .doOnComplete(() -> System.out.println("Listing complete"))
+                  .blockLast();  // Block for demo purposes
+              
+              // Get specific connection
+              String connectionName = "my-connection";
+              Mono<Connection> connection = asyncClient.getConnection(connectionName);
+              connection
+                  .subscribe(
+                      conn -> System.out.println("Got: " + conn.getName()),
+                      error -> System.err.println("Error: " + error.getMessage()),
+                      () -> System.out.println("Done")
+                  );
+              
+              // Block for demo
+              connection.block();
+          }
+      }
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Create a Java example with proper error handling when getting
+      an index. Handle ResourceNotFoundException and HttpResponseException.
+    expected_patterns:
+      - "ResourceNotFoundException"
+      - "HttpResponseException"
+      - "try"
+      - "catch"
+      - "getStatusCode"
+    forbidden_patterns:
+      - "catch (Exception e) {}"
+      - "catch (Exception e) { }"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.ai.projects.*;
+      import com.azure.ai.projects.models.Index;
+      import com.azure.core.exception.HttpResponseException;
+      import com.azure.core.exception.ResourceNotFoundException;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ErrorHandlingExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              
+              IndexesClient indexesClient = new AIProjectClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildIndexesClient();
+              
+              String indexName = "my-index";
+              String indexVersion = "1.0";
+              
+              try {
+                  Index index = indexesClient.get(indexName, indexVersion);
+                  System.out.println("Found index: " + index.getName());
+                  
+              } catch (ResourceNotFoundException e) {
+                  System.err.println("Index not found: " + indexName + " v" + indexVersion);
+                  System.err.println("Message: " + e.getMessage());
+                  
+              } catch (HttpResponseException e) {
+                  int statusCode = e.getResponse().getStatusCode();
+                  System.err.println("HTTP Error: " + statusCode);
+                  System.err.println("Message: " + e.getMessage());
+                  
+                  switch (statusCode) {
+                      case 401:
+                          System.err.println("Unauthorized - check credentials");
+                          break;
+                      case 403:
+                          System.err.println("Forbidden - check permissions");
+                          break;
+                      case 429:
+                          System.err.println("Rate limited - retry with backoff");
+                          break;
+                      default:
+                          System.err.println("Unexpected error");
+                  }
+              }
+          }
+      }
+
+  # Complete Project Workflow
+  - name: complete_project_workflow
+    prompt: |
+      Create a complete Java workflow that lists connections, creates
+      a dataset from file, and creates a search index.
+    expected_patterns:
+      - "AIProjectClientBuilder"
+      - "ConnectionsClient"
+      - "DatasetsClient"
+      - "IndexesClient"
+      - "listConnections"
+      - "createDatasetWithFile"
+      - "createOrUpdate"
+    tags:
+      - workflow
+      - complete
+    mock_response: |
+      import com.azure.ai.projects.*;
+      import com.azure.ai.projects.models.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      import java.nio.file.Path;
+
+      public class CompleteWorkflow {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              String searchConnectionName = System.getenv("AI_SEARCH_CONNECTION_NAME");
+              String searchIndexName = System.getenv("AI_SEARCH_INDEX_NAME");
+              
+              // Build all clients
+              AIProjectClientBuilder builder = new AIProjectClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build());
+              
+              ConnectionsClient connectionsClient = builder.buildConnectionsClient();
+              DatasetsClient datasetsClient = builder.buildDatasetsClient();
+              IndexesClient indexesClient = builder.buildIndexesClient();
+              
+              // 1. List connections
+              System.out.println("=== Connections ===");
+              connectionsClient.listConnections().forEach(conn -> {
+                  System.out.println("  " + conn.getName() + " (" + conn.getType() + ")");
+              });
+              
+              // 2. Create dataset
+              System.out.println("\n=== Creating Dataset ===");
+              FileDatasetVersion dataset = datasetsClient.createDatasetWithFile(
+                  "workflow-dataset",
+                  "1.0",
+                  Path.of("data/sample.txt")
+              );
+              System.out.println("Created: " + dataset.getName() + " v" + dataset.getVersion());
+              
+              // 3. Create index
+              System.out.println("\n=== Creating Index ===");
+              Index index = indexesClient.createOrUpdate(
+                  "workflow-index",
+                  "1.0",
+                  new AzureAISearchIndex()
+                      .setConnectionName(searchConnectionName)
+                      .setIndexName(searchIndexName)
+              );
+              System.out.println("Created: " + index.getName() + " v" + index.getVersion());
+              
+              System.out.println("\nWorkflow completed successfully!");
+          }
+      }

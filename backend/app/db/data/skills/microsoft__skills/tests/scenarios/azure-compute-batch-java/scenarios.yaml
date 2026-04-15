@@ -1,0 +1,320 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-compute-batch-java skill evaluation
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: client_creation
+    prompt: |
+      Create Java code to set up the Azure Batch client using
+      DefaultAzureCredential authentication.
+    expected_patterns:
+      - "BatchClientBuilder"
+      - "DefaultAzureCredentialBuilder"
+      - "buildClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'endpoint\("https://'
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import com.azure.compute.batch.BatchClient;
+      import com.azure.compute.batch.BatchClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_BATCH_ENDPOINT");
+              
+              BatchClient batchClient = new BatchClientBuilder()
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              System.out.println("Client initialized successfully");
+          }
+      }
+
+  - name: create_pool
+    prompt: |
+      Create a Java example that creates an Azure Batch pool with
+      Ubuntu VMs using VirtualMachineConfiguration.
+    expected_patterns:
+      - "createPool"
+      - "BatchPoolCreateParameters"
+      - "VirtualMachineConfiguration"
+      - "BatchVmImageReference"
+      - "setTargetDedicatedNodes"
+    tags:
+      - pools
+      - basic
+    mock_response: |
+      import com.azure.compute.batch.BatchClient;
+      import com.azure.compute.batch.BatchClientBuilder;
+      import com.azure.compute.batch.models.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class CreatePool {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_BATCH_ENDPOINT");
+              
+              BatchClient batchClient = new BatchClientBuilder()
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              batchClient.createPool(new BatchPoolCreateParameters("myPoolId", "STANDARD_DC2s_V2")
+                  .setVirtualMachineConfiguration(
+                      new VirtualMachineConfiguration(
+                          new BatchVmImageReference()
+                              .setPublisher("Canonical")
+                              .setOffer("UbuntuServer")
+                              .setSku("22_04-lts")
+                              .setVersion("latest"),
+                          "batch.node.ubuntu 22.04"))
+                  .setTargetDedicatedNodes(2)
+                  .setTargetLowPriorityNodes(0), null);
+              
+              System.out.println("Pool created successfully");
+          }
+      }
+
+  - name: create_job_and_tasks
+    prompt: |
+      Create a Java example that creates a Batch job and adds multiple
+      tasks to it using task collection.
+    expected_patterns:
+      - "createJob"
+      - "BatchJobCreateParameters"
+      - "BatchPoolInfo"
+      - "BatchTaskCreateParameters"
+      - "createTaskCollection"
+      - "BatchTaskGroup"
+    tags:
+      - jobs
+      - tasks
+    mock_response: |
+      import com.azure.compute.batch.BatchClient;
+      import com.azure.compute.batch.BatchClientBuilder;
+      import com.azure.compute.batch.models.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.Arrays;
+      import java.util.List;
+
+      public class CreateJobAndTasks {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_BATCH_ENDPOINT");
+              
+              BatchClient batchClient = new BatchClientBuilder()
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              // Create job
+              batchClient.createJob(
+                  new BatchJobCreateParameters("myJobId", new BatchPoolInfo().setPoolId("myPoolId"))
+                      .setPriority(100),
+                  null);
+              
+              // Create task collection
+              List<BatchTaskCreateParameters> taskList = Arrays.asList(
+                  new BatchTaskCreateParameters("task1", "echo Task 1"),
+                  new BatchTaskCreateParameters("task2", "echo Task 2"),
+                  new BatchTaskCreateParameters("task3", "echo Task 3")
+              );
+              BatchTaskGroup taskGroup = new BatchTaskGroup(taskList);
+              BatchCreateTaskCollectionResult result = batchClient.createTaskCollection("myJobId", taskGroup);
+              
+              System.out.println("Job and tasks created successfully");
+          }
+      }
+
+  - name: error_handling
+    prompt: |
+      Create a Java example showing proper error handling for Batch
+      operations with BatchErrorException handling.
+    expected_patterns:
+      - "BatchErrorException"
+      - "try"
+      - "catch"
+      - "getCode"
+      - "getMessage"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.compute.batch.BatchClient;
+      import com.azure.compute.batch.BatchClientBuilder;
+      import com.azure.compute.batch.models.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ErrorHandling {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_BATCH_ENDPOINT");
+              
+              BatchClient batchClient = new BatchClientBuilder()
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              try {
+                  batchClient.getPool("nonexistent-pool");
+              } catch (BatchErrorException e) {
+                  BatchError error = e.getValue();
+                  System.err.println("Error code: " + error.getCode());
+                  System.err.println("Message: " + error.getMessage().getValue());
+                  
+                  if ("PoolNotFound".equals(error.getCode())) {
+                      System.err.println("The specified pool does not exist.");
+                  }
+              }
+          }
+      }
+
+  - name: shared_key_auth
+    prompt: |
+      Create Java code to set up the Azure Batch client using
+      AzureNamedKeyCredential (shared key) authentication instead of
+      DefaultAzureCredential.
+    expected_patterns:
+      - "BatchClientBuilder"
+      - "AzureNamedKeyCredential"
+      - "buildClient"
+      - 'System\.getenv\('
+      - "AZURE_BATCH_ACCOUNT"
+      - "AZURE_BATCH_ACCESS_KEY"
+    forbidden_patterns:
+      - 'endpoint\("https://'
+      - 'credential\(".*", ".*"\)'
+    tags:
+      - authentication
+      - shared-key
+    mock_response: |
+      import com.azure.compute.batch.BatchClient;
+      import com.azure.compute.batch.BatchClientBuilder;
+      import com.azure.core.credential.AzureNamedKeyCredential;
+
+      public class SharedKeyAuth {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_BATCH_ENDPOINT");
+              String accountName = System.getenv("AZURE_BATCH_ACCOUNT");
+              String accountKey = System.getenv("AZURE_BATCH_ACCESS_KEY");
+              
+              AzureNamedKeyCredential sharedKeyCreds = new AzureNamedKeyCredential(accountName, accountKey);
+              
+              BatchClient batchClient = new BatchClientBuilder()
+                  .credential(sharedKeyCreds)
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              System.out.println("Client initialized with shared key credentials");
+          }
+      }
+
+  - name: list_pools
+    prompt: |
+      Create a Java example that lists all Azure Batch pools and displays
+      their ID and state using PagedIterable.
+    expected_patterns:
+      - "listPools"
+      - "PagedIterable"
+      - "BatchPool"
+      - "getId"
+      - "getState"
+      - "for.*:"
+    tags:
+      - pools
+      - listing
+    mock_response: |
+      import com.azure.compute.batch.BatchClient;
+      import com.azure.compute.batch.BatchClientBuilder;
+      import com.azure.compute.batch.models.BatchPool;
+      import com.azure.core.http.rest.PagedIterable;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ListPools {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_BATCH_ENDPOINT");
+              
+              BatchClient batchClient = new BatchClientBuilder()
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              PagedIterable<BatchPool> pools = batchClient.listPools();
+              for (BatchPool pool : pools) {
+                  System.out.println("Pool: " + pool.getId() + ", State: " + pool.getState());
+              }
+          }
+      }
+
+  - name: get_task_counts
+    prompt: |
+      Create a Java example that retrieves and displays the task counts
+      (active, running, completed) for a Batch job using BatchTaskCountsResult.
+    expected_patterns:
+      - "getJobTaskCounts"
+      - "BatchTaskCountsResult"
+      - "getTaskCounts"
+      - "getActive|getRunning|getCompleted"
+    tags:
+      - jobs
+      - monitoring
+    mock_response: |
+      import com.azure.compute.batch.BatchClient;
+      import com.azure.compute.batch.BatchClientBuilder;
+      import com.azure.compute.batch.models.BatchTaskCountsResult;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class GetTaskCounts {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_BATCH_ENDPOINT");
+              
+              BatchClient batchClient = new BatchClientBuilder()
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              BatchTaskCountsResult counts = batchClient.getJobTaskCounts("myJobId");
+              System.out.println("Active: " + counts.getTaskCounts().getActive());
+              System.out.println("Running: " + counts.getTaskCounts().getRunning());
+              System.out.println("Completed: " + counts.getTaskCounts().getCompleted());
+          }
+      }
+
+  - name: async_batch_client
+    prompt: |
+      Create Java code to set up the Azure Batch async client (BatchAsyncClient)
+      using DefaultAzureCredential authentication.
+    expected_patterns:
+      - "BatchClientBuilder"
+      - "BatchAsyncClient"
+      - "DefaultAzureCredentialBuilder"
+      - "buildAsyncClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'endpoint\("https://'
+      - "buildClient\\(\\)"
+    tags:
+      - async
+      - authentication
+    mock_response: |
+      import com.azure.compute.batch.BatchAsyncClient;
+      import com.azure.compute.batch.BatchClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class AsyncClientSetup {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_BATCH_ENDPOINT");
+              
+              BatchAsyncClient batchAsyncClient = new BatchClientBuilder()
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .endpoint(endpoint)
+                  .buildAsyncClient();
+              
+              System.out.println("Async client initialized successfully");
+          }
+      }

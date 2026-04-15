@@ -1,0 +1,24 @@
+{
+  "name": "microsoft-foundry",
+  "description": "All-in-one plugin for Microsoft AI Foundry development. Includes SDK skills for Python, .NET, TypeScript, and Java covering agents, voice, search, content safety, and model deployment. Bundles Azure MCP, Foundry MCP, and Microsoft Docs MCP servers for live resource management and up-to-date documentation.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Microsoft",
+    "url": "https://www.microsoft.com"
+  },
+  "homepage": "https://github.com/microsoft/skills/tree/main/.github/plugins/microsoft-foundry",
+  "repository": "https://github.com/microsoft/skills",
+  "license": "MIT",
+  "keywords": [
+    "foundry",
+    "azure-ai",
+    "agents",
+    "voice",
+    "search",
+    "rag",
+    "content-safety",
+    "model-deployment",
+    "ai-projects",
+    "mcp"
+  ]
+}

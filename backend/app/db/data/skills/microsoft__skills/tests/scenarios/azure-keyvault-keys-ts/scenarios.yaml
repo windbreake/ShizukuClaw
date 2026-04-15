@@ -1,0 +1,457 @@
+# yaml-language-server: $schema=file:///Users/govindm4max/code/oss/agent-skills/tests/scenarios/skill-scenarios.schema.json
+# Test scenarios for azure-keyvault-keys-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Client Setup
+  - name: basic_client_setup
+    prompt: |
+      Create a basic Azure Key Vault Key client using KeyClient with proper
+      authentication. Include connecting to a key vault and creating a simple RSA key.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "KeyClient"
+      - 'import { KeyClient } from "@azure/keyvault-keys"'
+      - 'import { DefaultAzureCredential } from "@azure/identity"'
+      - "process.env"
+    forbidden_patterns:
+      - "require("
+      - "KeyVaultClient"
+      - "azure-keyvault"
+    tags:
+      - basic
+      - authentication
+      - client-setup
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { KeyClient } from "@azure/keyvault-keys";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new KeyClient(url, credential);
+
+      const key = await client.createKey("MyKeyName", "RSA");
+      console.log("Created key:", key.name);
+
+  # Create RSA and EC Keys
+  - name: create_rsa_ec_keys
+    prompt: |
+      Create both an RSA key with 2048-bit size and an EC key with P-256 curve
+      using KeyClient. Show proper options for each key type.
+    expected_patterns:
+      - "createRsaKey"
+      - "createEcKey"
+      - "keySize"
+      - "curve"
+    forbidden_patterns:
+      - "createKey.*RSA.*size"
+    tags:
+      - keys
+      - create
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { KeyClient } from "@azure/keyvault-keys";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new KeyClient(url, credential);
+
+      // Create RSA key with specific size
+      const rsaKey = await client.createRsaKey("MyRsaKey", {
+        keySize: 2048,
+        keyOps: ["encrypt", "decrypt", "sign", "verify"],
+      });
+      console.log("RSA Key:", rsaKey.name, rsaKey.keyType);
+
+      // Create EC key with specific curve
+      const ecKey = await client.createEcKey("MyEcKey", {
+        curve: "P-256",
+      });
+      console.log("EC Key:", ecKey.name, ecKey.keyType);
+
+  # Get Key with Version
+  - name: get_key_with_version
+    prompt: |
+      Get a key from Azure Key Vault, both the latest version and a specific version.
+      Show how to access key properties like version.
+    expected_patterns:
+      - "getKey"
+      - "version"
+      - "properties.version"
+    forbidden_patterns:
+      - "getKeyVersion"
+    tags:
+      - keys
+      - read
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { KeyClient } from "@azure/keyvault-keys";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new KeyClient(url, credential);
+
+      // Get latest version
+      const latestKey = await client.getKey("MyKeyName");
+      console.log("Latest version:", latestKey.properties.version);
+
+      // Get specific version
+      const specificKey = await client.getKey("MyKeyName", {
+        version: latestKey.properties.version!,
+      });
+      console.log("Specific key version:", specificKey.properties.version);
+
+  # Delete Key with Poller
+  - name: delete_key_poller
+    prompt: |
+      Delete a key from Azure Key Vault using the proper poller pattern.
+      Show how to wait for deletion to complete and optionally purge.
+    expected_patterns:
+      - "beginDeleteKey"
+      - "pollUntilDone"
+      - "purgeDeletedKey"
+    forbidden_patterns:
+      - "deleteKey("
+      - "delete("
+    tags:
+      - keys
+      - delete
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { KeyClient } from "@azure/keyvault-keys";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new KeyClient(url, credential);
+
+      // Start deletion - returns a poller
+      const poller = await client.beginDeleteKey("MyKeyName");
+
+      // Get result immediately (key is marked for deletion)
+      const deletedKey = poller.getResult();
+      console.log("Deleted key:", deletedKey?.name);
+
+      // Wait for deletion to complete
+      await poller.pollUntilDone();
+
+      // Optionally purge (permanent delete)
+      await client.purgeDeletedKey("MyKeyName");
+      console.log("Key purged");
+
+  # Key Rotation
+  - name: key_rotation
+    prompt: |
+      Demonstrate manual key rotation and setting up an automatic key rotation policy
+      using KeyClient. Include getting the current rotation policy.
+    expected_patterns:
+      - "rotateKey"
+      - "updateKeyRotationPolicy"
+      - "getKeyRotationPolicy"
+      - "lifetimeActions"
+    forbidden_patterns:
+      - "createKey.*rotate"
+    tags:
+      - keys
+      - rotation
+      - advanced
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { KeyClient } from "@azure/keyvault-keys";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new KeyClient(url, credential);
+
+      // Manual rotation - creates a new version
+      const rotatedKey = await client.rotateKey("MyKeyName");
+      console.log("Rotated key version:", rotatedKey.properties.version);
+
+      // Set automatic rotation policy
+      const policy = await client.updateKeyRotationPolicy("MyKeyName", {
+        lifetimeActions: [
+          {
+            action: "Rotate",
+            timeBeforeExpiry: "P30D",
+          },
+        ],
+        expiresIn: "P90D",
+      });
+      console.log("Rotation policy set");
+
+      // Get current policy
+      const currentPolicy = await client.getKeyRotationPolicy("MyKeyName");
+      console.log("Current policy expires in:", currentPolicy.expiresIn);
+
+  # List Keys
+  - name: list_keys
+    prompt: |
+      List all keys and their versions in Azure Key Vault using async iteration.
+      Include both flat iteration and paginated iteration.
+    expected_patterns:
+      - "listPropertiesOfKeys"
+      - "listPropertiesOfKeyVersions"
+      - "for await"
+      - "byPage"
+    forbidden_patterns:
+      - "listKeys("
+      - ".then("
+    tags:
+      - keys
+      - list
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { KeyClient } from "@azure/keyvault-keys";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new KeyClient(url, credential);
+
+      // List all keys (flat iteration)
+      console.log("All keys:");
+      for await (const keyProperties of client.listPropertiesOfKeys()) {
+        console.log(`  ${keyProperties.name}`);
+      }
+
+      // List with pagination
+      console.log("Keys by page:");
+      for await (const page of client.listPropertiesOfKeys().byPage()) {
+        for (const keyProperties of page) {
+          console.log(`  ${keyProperties.name}`);
+        }
+      }
+
+      // List versions of a specific key
+      console.log("Key versions:");
+      for await (const versionProperties of client.listPropertiesOfKeyVersions("MyKeyName")) {
+        console.log(`  Version: ${versionProperties.version}`);
+      }
+
+  # Cryptography Client Encrypt/Decrypt
+  - name: crypto_encrypt_decrypt
+    prompt: |
+      Use CryptographyClient to encrypt and decrypt data using RSA encryption.
+      Show proper object parameter style for encrypt/decrypt.
+    expected_patterns:
+      - "CryptographyClient"
+      - "encrypt"
+      - "decrypt"
+      - "algorithm"
+      - "plaintext"
+      - "ciphertext"
+    forbidden_patterns:
+      - 'encrypt("RSA'
+      - "encrypt(algorithm"
+    tags:
+      - cryptography
+      - encrypt
+      - decrypt
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { KeyClient, CryptographyClient } from "@azure/keyvault-keys";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const keyClient = new KeyClient(url, credential);
+
+      // Get or create a key
+      const key = await keyClient.createKey("MyEncryptionKey", "RSA");
+
+      // Create cryptography client
+      const cryptoClient = new CryptographyClient(key, credential);
+
+      // Encrypt data
+      const encryptResult = await cryptoClient.encrypt({
+        algorithm: "RSA1_5",
+        plaintext: Buffer.from("My secret message"),
+      });
+      console.log("Encrypted:", encryptResult.result);
+
+      // Decrypt data
+      const decryptResult = await cryptoClient.decrypt({
+        algorithm: "RSA1_5",
+        ciphertext: encryptResult.result,
+      });
+      console.log("Decrypted:", decryptResult.result.toString());
+
+  # Cryptography Sign and Verify
+  - name: crypto_sign_verify
+    prompt: |
+      Use CryptographyClient to sign a message digest and verify the signature.
+      Include creating the hash using Node.js crypto module.
+    expected_patterns:
+      - "CryptographyClient"
+      - "sign"
+      - "verify"
+      - "createHash"
+      - "RS256"
+    forbidden_patterns:
+      - "signData.*createHash"
+    tags:
+      - cryptography
+      - signing
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { KeyClient, CryptographyClient } from "@azure/keyvault-keys";
+      import { createHash } from "node:crypto";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const keyClient = new KeyClient(url, credential);
+      const key = await keyClient.createKey("MySigningKey", "RSA");
+
+      const cryptoClient = new CryptographyClient(key, credential);
+
+      // Create hash of the message
+      const message = "My important message";
+      const hash = createHash("sha256").update(message).digest();
+
+      // Sign the digest
+      const signResult = await cryptoClient.sign("RS256", hash);
+      console.log("Signature:", signResult.result);
+
+      // Verify the signature
+      const verifyResult = await cryptoClient.verify("RS256", hash, signResult.result);
+      console.log("Signature valid:", verifyResult.result);
+
+  # Wrap and Unwrap Key
+  - name: crypto_wrap_unwrap
+    prompt: |
+      Use CryptographyClient to wrap (encrypt) and unwrap (decrypt) a symmetric key
+      using RSA-OAEP algorithm.
+    expected_patterns:
+      - "CryptographyClient"
+      - "wrapKey"
+      - "unwrapKey"
+      - "RSA-OAEP"
+    forbidden_patterns:
+      - "encrypt.*key-material"
+    tags:
+      - cryptography
+      - key-wrapping
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { KeyClient, CryptographyClient } from "@azure/keyvault-keys";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const keyClient = new KeyClient(url, credential);
+      const key = await keyClient.createKey("MyWrapKey", "RSA");
+
+      const cryptoClient = new CryptographyClient(key, credential);
+
+      // Symmetric key to protect (32 bytes for AES-256)
+      const symmetricKey = Buffer.from("0123456789abcdef0123456789abcdef");
+
+      // Wrap the key
+      const wrapResult = await cryptoClient.wrapKey("RSA-OAEP", symmetricKey);
+      console.log("Wrapped key length:", wrapResult.result.length);
+
+      // Unwrap the key
+      const unwrapResult = await cryptoClient.unwrapKey("RSA-OAEP", wrapResult.result);
+      console.log("Unwrapped key:", unwrapResult.result.toString());
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Demonstrate proper error handling when working with Azure Key Vault Keys.
+      Include handling key not found and other common errors.
+    expected_patterns:
+      - "try"
+      - "catch"
+      - "RestError"
+      - "statusCode"
+      - "404"
+    forbidden_patterns:
+      - "catch {}"
+      - "catch.*pass"
+    tags:
+      - error-handling
+      - production
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { KeyClient } from "@azure/keyvault-keys";
+      import { RestError } from "@azure/core-rest-pipeline";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new KeyClient(url, credential);
+
+      try {
+        const key = await client.getKey("NonExistentKey");
+        console.log("Key found:", key.name);
+      } catch (error) {
+        if (error instanceof RestError) {
+          if (error.statusCode === 404) {
+            console.log("Key not found");
+          } else if (error.statusCode === 403) {
+            console.log("Access denied - check permissions");
+          } else {
+            console.log(`Azure error: ${error.message}`);
+          }
+        } else {
+          throw error;
+        }
+      }
+
+  # Backup and Restore
+  - name: backup_restore
+    prompt: |
+      Demonstrate backing up a key and restoring it using KeyClient.
+      Show proper handling of the backup blob.
+    expected_patterns:
+      - "backupKey"
+      - "restoreKeyBackup"
+    forbidden_patterns:
+      - "exportKey"
+    tags:
+      - keys
+      - backup
+      - advanced
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { KeyClient } from "@azure/keyvault-keys";
+      import { writeFile, readFile } from "node:fs/promises";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new KeyClient(url, credential);
+
+      // Backup a key
+      const backupResult = await client.backupKey("MyKeyName");
+      if (backupResult) {
+        // Store backup securely
+        await writeFile("key-backup.bin", Buffer.from(backupResult));
+        console.log("Key backed up successfully");
+      }
+
+      // Restore a key (can be to a different vault)
+      const backupData = await readFile("key-backup.bin");
+      const restoredKey = await client.restoreKeyBackup(backupData);
+      console.log("Key restored:", restoredKey.name);

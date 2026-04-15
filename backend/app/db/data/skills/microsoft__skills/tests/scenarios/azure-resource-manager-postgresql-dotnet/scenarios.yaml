@@ -1,0 +1,461 @@
+# Test scenarios for azure-resource-manager-postgresql-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # ArmClient Setup
+  - name: armclient_setup
+    prompt: |
+      Create an ArmClient setup with DefaultAzureCredential for Azure Resource Manager
+      operations on PostgreSQL Flexible Server resources.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "ArmClient"
+      - "GetSubscriptionResource"
+      - "Azure.ResourceManager.PostgreSql.FlexibleServers"
+    forbidden_patterns:
+      - "ClientSecretCredential"
+      - "hardcoded"
+    tags:
+      - authentication
+      - setup
+    mock_response: |
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.PostgreSql;
+      using Azure.ResourceManager.PostgreSql.FlexibleServers;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID");
+      var subscription = armClient.GetSubscriptionResource(
+          new ResourceIdentifier($"/subscriptions/{subscriptionId}"));
+
+  # Create PostgreSQL Flexible Server
+  - name: create_flexible_server
+    prompt: |
+      Create a PostgreSQL 16 Flexible Server with General Purpose SKU, 128GB storage,
+      auto-grow enabled, zone-redundant HA, and both Entra ID and password authentication.
+    expected_patterns:
+      - "PostgreSqlFlexibleServerData"
+      - "PostgreSqlFlexibleServerSku"
+      - "GeneralPurpose"
+      - "StorageAutoGrow.Enabled"
+      - "ZoneRedundant"
+      - "AuthConfig"
+      - "ActiveDirectoryAuth"
+      - "PasswordAuth"
+      - "Ver16"
+      - "WaitUntil.Completed"
+    forbidden_patterns:
+      - "GetPostgreSqlServers"  # Single Server is deprecated
+    tags:
+      - server
+      - crud
+    mock_response: |
+      using Azure.ResourceManager.PostgreSql.FlexibleServers;
+      using Azure.ResourceManager.PostgreSql.FlexibleServers.Models;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+      var servers = resourceGroup.Value.GetPostgreSqlFlexibleServers();
+
+      var serverData = new PostgreSqlFlexibleServerData(AzureLocation.EastUS)
+      {
+          Sku = new PostgreSqlFlexibleServerSku("Standard_D2ds_v4", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+          AdministratorLogin = "pgadmin",
+          AdministratorLoginPassword = "YourSecurePassword123!",
+          Version = PostgreSqlFlexibleServerVersion.Ver16,
+          Storage = new PostgreSqlFlexibleServerStorage
+          {
+              StorageSizeInGB = 128,
+              AutoGrow = StorageAutoGrow.Enabled,
+              Tier = PostgreSqlStorageTierName.P30
+          },
+          Backup = new PostgreSqlFlexibleServerBackupProperties
+          {
+              BackupRetentionDays = 7,
+              GeoRedundantBackup = PostgreSqlFlexibleServerGeoRedundantBackupEnum.Disabled
+          },
+          HighAvailability = new PostgreSqlFlexibleServerHighAvailability
+          {
+              Mode = PostgreSqlFlexibleServerHighAvailabilityMode.ZoneRedundant,
+              StandbyAvailabilityZone = "2"
+          },
+          AvailabilityZone = "1",
+          AuthConfig = new PostgreSqlFlexibleServerAuthConfig
+          {
+              ActiveDirectoryAuth = PostgreSqlFlexibleServerActiveDirectoryAuthEnum.Enabled,
+              PasswordAuth = PostgreSqlFlexibleServerPasswordAuthEnum.Enabled
+          }
+      };
+
+      var operation = await servers.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-postgresql-server",
+          serverData);
+
+      PostgreSqlFlexibleServerResource server = operation.Value;
+      Console.WriteLine($"Server created: {server.Data.FullyQualifiedDomainName}");
+
+  # Create Database
+  - name: create_database
+    prompt: |
+      Create a PostgreSQL database with UTF8 character set and US English collation.
+    expected_patterns:
+      - "PostgreSqlFlexibleServerDatabaseData"
+      - "GetPostgreSqlFlexibleServerDatabases"
+      - "Charset"
+      - "UTF8"
+      - "Collation"
+      - "en_US.utf8"
+      - "CreateOrUpdateAsync"
+    tags:
+      - database
+      - crud
+    mock_response: |
+      using Azure.ResourceManager.PostgreSql.FlexibleServers;
+      using Azure.ResourceManager.PostgreSql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetPostgreSqlFlexibleServerAsync("my-postgresql-server");
+
+      var databaseCollection = server.Value.GetPostgreSqlFlexibleServerDatabases();
+
+      var dbData = new PostgreSqlFlexibleServerDatabaseData
+      {
+          Charset = "UTF8",
+          Collation = "en_US.utf8"
+      };
+
+      var operation = await databaseCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "myappdb",
+          dbData);
+
+      PostgreSqlFlexibleServerDatabaseResource database = operation.Value;
+      Console.WriteLine($"Database created: {database.Data.Name}");
+
+  # Configure Firewall Rules
+  - name: configure_firewall
+    prompt: |
+      Configure firewall rules for a PostgreSQL Flexible Server to allow internal
+      network access and Azure services.
+    expected_patterns:
+      - "PostgreSqlFlexibleServerFirewallRuleData"
+      - "GetPostgreSqlFlexibleServerFirewallRules"
+      - "StartIPAddress"
+      - "EndIPAddress"
+      - "0.0.0.0"
+    tags:
+      - firewall
+      - security
+    mock_response: |
+      using Azure.ResourceManager.PostgreSql.FlexibleServers;
+      using Azure.ResourceManager.PostgreSql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetPostgreSqlFlexibleServerAsync("my-postgresql-server");
+      var firewallRules = server.Value.GetPostgreSqlFlexibleServerFirewallRules();
+
+      // Allow specific IP range
+      var ruleData = new PostgreSqlFlexibleServerFirewallRuleData
+      {
+          StartIPAddress = System.Net.IPAddress.Parse("10.0.0.1"),
+          EndIPAddress = System.Net.IPAddress.Parse("10.0.0.255")
+      };
+
+      await firewallRules.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "allow-internal",
+          ruleData);
+
+      // Allow Azure services
+      var azureServicesRule = new PostgreSqlFlexibleServerFirewallRuleData
+      {
+          StartIPAddress = System.Net.IPAddress.Parse("0.0.0.0"),
+          EndIPAddress = System.Net.IPAddress.Parse("0.0.0.0")
+      };
+
+      await firewallRules.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "AllowAllAzureServicesAndResourcesWithinAzureIps",
+          azureServicesRule);
+
+      Console.WriteLine("Firewall rules configured");
+
+  # Update Server Configuration
+  - name: update_configuration
+    prompt: |
+      Update PostgreSQL server parameters including max_connections and shared_buffers.
+    expected_patterns:
+      - "PostgreSqlFlexibleServerConfigurationData"
+      - "GetPostgreSqlFlexibleServerConfigurations"
+      - "max_connections"
+      - "CreateOrUpdateAsync"
+    tags:
+      - configuration
+      - parameter
+    mock_response: |
+      using Azure.ResourceManager.PostgreSql.FlexibleServers;
+      using Azure.ResourceManager.PostgreSql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetPostgreSqlFlexibleServerAsync("my-postgresql-server");
+      var configurations = server.Value.GetPostgreSqlFlexibleServerConfigurations();
+
+      var configData = new PostgreSqlFlexibleServerConfigurationData
+      {
+          Value = "500",
+          Source = "user-override"
+      };
+
+      var operation = await configurations.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "max_connections",
+          configData);
+
+      Console.WriteLine($"max_connections set to {operation.Value.Data.Value}");
+
+  # Configure Entra ID Administrator
+  - name: configure_entra_admin
+    prompt: |
+      Configure an Entra ID administrator for a PostgreSQL Flexible Server.
+    expected_patterns:
+      - "PostgreSqlFlexibleServerActiveDirectoryAdministratorData"
+      - "GetPostgreSqlFlexibleServerActiveDirectoryAdministrators"
+      - "PrincipalType"
+      - "PrincipalName"
+      - "TenantId"
+    tags:
+      - authentication
+      - entra-id
+    mock_response: |
+      using Azure.ResourceManager.PostgreSql.FlexibleServers;
+      using Azure.ResourceManager.PostgreSql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetPostgreSqlFlexibleServerAsync("my-postgresql-server");
+      var admins = server.Value.GetPostgreSqlFlexibleServerActiveDirectoryAdministrators();
+
+      var adminData = new PostgreSqlFlexibleServerActiveDirectoryAdministratorData
+      {
+          PrincipalType = PostgreSqlFlexibleServerPrincipalType.User,
+          PrincipalName = "aad-admin@contoso.com",
+          TenantId = Guid.Parse("<tenant-id>")
+      };
+
+      var operation = await admins.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "<entra-object-id>",
+          adminData);
+
+      Console.WriteLine("Entra ID administrator configured");
+
+  # Point-in-Time Restore
+  - name: point_in_time_restore
+    prompt: |
+      Perform a point-in-time restore of a PostgreSQL Flexible Server to 2 hours ago.
+    expected_patterns:
+      - "CreateMode"
+      - "PointInTimeRestore"
+      - "SourceServerResourceId"
+      - "PointInTimeUtc"
+      - "AddHours(-2)"
+    tags:
+      - backup
+      - restore
+    mock_response: |
+      using Azure.ResourceManager.PostgreSql.FlexibleServers;
+      using Azure.ResourceManager.PostgreSql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetPostgreSqlFlexibleServerAsync("my-postgresql-server");
+      var servers = resourceGroup.Value.GetPostgreSqlFlexibleServers();
+
+      var restoreData = new PostgreSqlFlexibleServerData(AzureLocation.EastUS)
+      {
+          CreateMode = PostgreSqlFlexibleServerCreateMode.PointInTimeRestore,
+          SourceServerResourceId = server.Value.Id,
+          PointInTimeUtc = DateTimeOffset.UtcNow.AddHours(-2)
+      };
+
+      var operation = await servers.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-postgresql-restored",
+          restoreData);
+
+      Console.WriteLine($"Restored server: {operation.Value.Data.FullyQualifiedDomainName}");
+
+  # Create Read Replica
+  - name: create_read_replica
+    prompt: |
+      Create a read replica of a PostgreSQL Flexible Server in a different region.
+    expected_patterns:
+      - "CreateMode"
+      - "Replica"
+      - "SourceServerResourceId"
+      - "WestUS"
+    tags:
+      - replica
+      - high-availability
+    mock_response: |
+      using Azure.ResourceManager.PostgreSql.FlexibleServers;
+      using Azure.ResourceManager.PostgreSql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetPostgreSqlFlexibleServerAsync("my-postgresql-server");
+      var servers = resourceGroup.Value.GetPostgreSqlFlexibleServers();
+
+      var replicaData = new PostgreSqlFlexibleServerData(AzureLocation.WestUS)
+      {
+          CreateMode = PostgreSqlFlexibleServerCreateMode.Replica,
+          SourceServerResourceId = server.Value.Id,
+          Sku = new PostgreSqlFlexibleServerSku("Standard_D2ds_v4", PostgreSqlFlexibleServerSkuTier.GeneralPurpose)
+      };
+
+      var operation = await servers.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-postgresql-replica",
+          replicaData);
+
+      Console.WriteLine($"Replica created: {operation.Value.Data.FullyQualifiedDomainName}");
+
+  # Server Operations (Stop/Start)
+  - name: server_operations
+    prompt: |
+      Stop, start, and restart a PostgreSQL Flexible Server with failover.
+    expected_patterns:
+      - "StopAsync"
+      - "StartAsync"
+      - "RestartAsync"
+      - "WaitUntil.Completed"
+    tags:
+      - operations
+      - management
+    mock_response: |
+      using Azure.ResourceManager.PostgreSql.FlexibleServers;
+      using Azure.ResourceManager.PostgreSql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetPostgreSqlFlexibleServerAsync("my-postgresql-server");
+
+      // Stop server (saves costs when not in use)
+      await server.Value.StopAsync(WaitUntil.Completed);
+      Console.WriteLine("Server stopped");
+
+      // Start server
+      await server.Value.StartAsync(WaitUntil.Completed);
+      Console.WriteLine("Server started");
+
+      // Restart server with failover
+      await server.Value.RestartAsync(WaitUntil.Completed, new PostgreSqlFlexibleServerRestartParameter
+      {
+          RestartWithFailover = true,
+          FailoverMode = PostgreSqlFlexibleServerFailoverMode.PlannedFailover
+      });
+      Console.WriteLine("Server restarted with failover");
+
+  # Scale Server
+  - name: scale_server
+    prompt: |
+      Scale up a PostgreSQL Flexible Server to a larger SKU with more storage.
+    expected_patterns:
+      - "PostgreSqlFlexibleServerPatch"
+      - "PostgreSqlFlexibleServerSku"
+      - "Storage"
+      - "UpdateAsync"
+    tags:
+      - scale
+      - update
+    mock_response: |
+      using Azure.ResourceManager.PostgreSql.FlexibleServers;
+      using Azure.ResourceManager.PostgreSql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetPostgreSqlFlexibleServerAsync("my-postgresql-server");
+
+      var patch = new PostgreSqlFlexibleServerPatch
+      {
+          Sku = new PostgreSqlFlexibleServerSku("Standard_D4ds_v4", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+          Storage = new PostgreSqlFlexibleServerStorage
+          {
+              StorageSizeInGB = 256,
+              Tier = PostgreSqlStorageTierName.P40
+          }
+      };
+
+      var operation = await server.Value.UpdateAsync(WaitUntil.Completed, patch);
+      Console.WriteLine($"Server scaled to {operation.Value.Data.Sku.Name}");
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Create a PostgreSQL Flexible Server with proper error handling for ARM operations.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status == 409"
+      - "ex.Status == 400"
+      - "try"
+      - "catch"
+    forbidden_patterns:
+      - "catch (Exception ex)"
+      - "catch { }"
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure;
+      using Azure.ResourceManager.PostgreSql.FlexibleServers;
+      using Azure.ResourceManager.PostgreSql.FlexibleServers.Models;
+
+      try
+      {
+          var serverData = new PostgreSqlFlexibleServerData(AzureLocation.EastUS)
+          {
+              Sku = new PostgreSqlFlexibleServerSku("Standard_D2ds_v4", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+              AdministratorLogin = "pgadmin",
+              AdministratorLoginPassword = "YourSecurePassword123!",
+              Version = PostgreSqlFlexibleServerVersion.Ver16
+          };
+
+          var operation = await servers.CreateOrUpdateAsync(
+              WaitUntil.Completed,
+              "my-postgresql-server",
+              serverData);
+      }
+      catch (RequestFailedException ex) when (ex.Status == 409)
+      {
+          Console.WriteLine("Server already exists");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 400)
+      {
+          Console.WriteLine($"Invalid configuration: {ex.Message}");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"ARM Error: {ex.Status} - {ex.ErrorCode}: {ex.Message}");
+      }
+
+  # List Servers
+  - name: list_servers
+    prompt: |
+      List all PostgreSQL Flexible Servers in a resource group with their properties.
+    expected_patterns:
+      - "await foreach"
+      - "GetPostgreSqlFlexibleServers"
+      - "FullyQualifiedDomainName"
+      - "Version"
+      - "HighAvailability"
+    tags:
+      - list
+      - enumeration
+    mock_response: |
+      using Azure.ResourceManager.PostgreSql.FlexibleServers;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      await foreach (PostgreSqlFlexibleServerResource server in resourceGroup.Value.GetPostgreSqlFlexibleServers())
+      {
+          Console.WriteLine($"Server: {server.Data.Name}");
+          Console.WriteLine($"  FQDN: {server.Data.FullyQualifiedDomainName}");
+          Console.WriteLine($"  Version: {server.Data.Version}");
+          Console.WriteLine($"  State: {server.Data.State}");
+          Console.WriteLine($"  SKU: {server.Data.Sku.Name} ({server.Data.Sku.Tier})");
+          Console.WriteLine($"  HA: {server.Data.HighAvailability?.Mode}");
+      }

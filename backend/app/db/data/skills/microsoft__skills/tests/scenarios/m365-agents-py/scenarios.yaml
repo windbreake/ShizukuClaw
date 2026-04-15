@@ -1,0 +1,296 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for m365-agents-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: aiohttp_agent_hosting
+    prompt: |
+      Create a minimal aiohttp-hosted Microsoft 365 agent in Python using
+      AgentApplication, start_agent_process, and jwt_authorization_middleware.
+    expected_patterns:
+      - "AgentApplication"
+      - "start_agent_process"
+      - "jwt_authorization_middleware"
+      - "microsoft_agents.hosting.core"
+      - "microsoft_agents.hosting.aiohttp"
+      - "CloudAdapter"
+      - "MsalConnectionManager"
+    forbidden_patterns:
+      - "botbuilder"
+      - "microsoft.agents"
+      - "ActivityHandler"
+    tags:
+      - hosting
+    mock_response: |
+      import logging
+      from os import environ
+      from dotenv import load_dotenv
+      from aiohttp.web import Request, Response, Application, run_app
+
+      from microsoft_agents.activity import load_configuration_from_env
+      from microsoft_agents.hosting.core import (
+          Authorization,
+          AgentApplication,
+          TurnState,
+          TurnContext,
+          MemoryStorage,
+      )
+      from microsoft_agents.hosting.aiohttp import (
+          CloudAdapter,
+          start_agent_process,
+          jwt_authorization_middleware,
+      )
+      from microsoft_agents.authentication.msal import MsalConnectionManager
+
+      load_dotenv()
+      agents_sdk_config = load_configuration_from_env(environ)
+
+      STORAGE = MemoryStorage()
+      CONNECTION_MANAGER = MsalConnectionManager(**agents_sdk_config)
+      ADAPTER = CloudAdapter(connection_manager=CONNECTION_MANAGER)
+      AUTHORIZATION = Authorization(STORAGE, CONNECTION_MANAGER, **agents_sdk_config)
+
+      AGENT_APP = AgentApplication[TurnState](
+          storage=STORAGE, adapter=ADAPTER, authorization=AUTHORIZATION, **agents_sdk_config
+      )
+
+      @AGENT_APP.activity("message")
+      async def on_message(context: TurnContext, _state: TurnState):
+          await context.send_activity(f"You said: {context.activity.text}")
+
+      async def entry_point(req: Request) -> Response:
+          agent: AgentApplication = req.app["agent_app"]
+          adapter: CloudAdapter = req.app["adapter"]
+          return await start_agent_process(req, agent, adapter)
+
+      APP = Application(middlewares=[jwt_authorization_middleware])
+      APP.router.add_post("/api/messages", entry_point)
+      APP["agent_app"] = AGENT_APP
+      APP["adapter"] = AGENT_APP.adapter
+
+      if __name__ == "__main__":
+          run_app(APP, host="localhost", port=3978)
+
+  - name: agent_application_routing
+    prompt: |
+      Create an AgentApplication that handles welcome messages with
+      conversation_update, message handlers with regex, and an error handler.
+    expected_patterns:
+      - "AgentApplication"
+      - "@AGENT_APP.conversation_update"
+      - "@AGENT_APP.message"
+      - "@AGENT_APP.error"
+      - "re.compile"
+    forbidden_patterns:
+      - "ActivityHandler"
+      - "on_message_activity"
+    tags:
+      - routing
+    mock_response: |
+      import re
+      from microsoft_agents.hosting.core import (
+          AgentApplication, TurnState, TurnContext, MemoryStorage
+      )
+
+      AGENT_APP = AgentApplication[TurnState](storage=MemoryStorage())
+
+      @AGENT_APP.conversation_update("membersAdded")
+      async def on_members_added(context: TurnContext, _state: TurnState):
+          await context.send_activity("Welcome to the agent!")
+
+      @AGENT_APP.message(re.compile(r"^hello$", re.IGNORECASE))
+      async def on_hello(context: TurnContext, _state: TurnState):
+          await context.send_activity("Hello!")
+
+      @AGENT_APP.message("/status")
+      async def on_status(context: TurnContext, _state: TurnState):
+          await context.send_activity("Status: OK")
+
+      @AGENT_APP.activity("message")
+      async def on_message(context: TurnContext, _state: TurnState):
+          await context.send_activity(f"Echo: {context.activity.text}")
+
+      @AGENT_APP.error
+      async def on_error(context: TurnContext, error: Exception):
+          await context.send_activity("An error occurred.")
+
+  - name: streaming_response
+    prompt: |
+      Show how to stream a response using streaming_response with Azure OpenAI
+      and end the stream in a finally block.
+    expected_patterns:
+      - "streaming_response"
+      - "queue_text_chunk"
+      - "end_stream"
+      - "AsyncAzureOpenAI"
+      - "finally"
+    forbidden_patterns:
+      - "endstream"
+    tags:
+      - streaming
+    mock_response: |
+      from os import environ
+      from openai import AsyncAzureOpenAI
+      from microsoft_agents.hosting.core import AgentApplication, TurnState, TurnContext
+      from microsoft_agents.activity import SensitivityUsageInfo
+
+      CLIENT = AsyncAzureOpenAI(
+          api_version=environ["AZURE_OPENAI_API_VERSION"],
+          azure_endpoint=environ["AZURE_OPENAI_ENDPOINT"],
+          api_key=environ["AZURE_OPENAI_API_KEY"]
+      )
+
+      @AGENT_APP.message("poem")
+      async def on_poem_message(context: TurnContext, _state: TurnState):
+          context.streaming_response.set_feedback_loop(True)
+          context.streaming_response.set_generated_by_ai_label(True)
+          context.streaming_response.set_sensitivity_label(
+              SensitivityUsageInfo(
+                  type="https://schema.org/Message",
+                  schema_type="CreativeWork",
+                  name="Internal",
+              )
+          )
+          context.streaming_response.queue_informative_update("Starting a poem...")
+
+          streamed_response = await CLIENT.chat.completions.create(
+              model="gpt-4o",
+              messages=[
+                  {"role": "system", "content": "You are a creative assistant."},
+                  {"role": "user", "content": "Write a poem."}
+              ],
+              stream=True,
+          )
+          
+          try:
+              async for chunk in streamed_response:
+                  if chunk.choices and chunk.choices[0].delta.content:
+                      context.streaming_response.queue_text_chunk(
+                          chunk.choices[0].delta.content
+                      )
+          finally:
+              await context.streaming_response.end_stream()
+
+  - name: oauth_auto_signin
+    prompt: |
+      Show how to use auth_handlers for OAuth-protected routes and
+      sign out the user from an OAuth connection.
+    expected_patterns:
+      - "auth_handlers"
+      - "get_token"
+      - "sign_out"
+      - "AGENT_APP.auth"
+    tags:
+      - oauth
+      - authentication
+    mock_response: |
+      from microsoft_agents.hosting.core import (
+          AgentApplication, TurnState, TurnContext, MessageFactory
+      )
+
+      @AGENT_APP.message("/logout")
+      async def logout(context: TurnContext, state: TurnState):
+          await AGENT_APP.auth.sign_out(context, "GRAPH")
+          await context.send_activity(MessageFactory.text("You have been logged out."))
+
+      @AGENT_APP.message("/me", auth_handlers=["GRAPH"])
+      async def profile_request(context: TurnContext, state: TurnState):
+          user_token_response = await AGENT_APP.auth.get_token(context, "GRAPH")
+          if user_token_response and user_token_response.token:
+              # Use token to call Microsoft Graph
+              await context.send_activity("Profile retrieved successfully!")
+          else:
+              await context.send_activity("Token not available.")
+
+  - name: copilot_studio_client
+    prompt: |
+      Show how to configure CopilotClient with ConnectionSettings, start
+      a conversation, and ask a question using the Copilot Studio client.
+    expected_patterns:
+      - "CopilotClient"
+      - "ConnectionSettings"
+      - "start_conversation"
+      - "ask_question"
+      - "microsoft_agents.copilotstudio.client"
+    forbidden_patterns:
+      - "DirectLineClient"
+    tags:
+      - copilot-studio
+    mock_response: |
+      import asyncio
+      from os import environ
+      from msal import PublicClientApplication
+      from microsoft_agents.activity import ActivityTypes
+      from microsoft_agents.copilotstudio.client import (
+          ConnectionSettings,
+          CopilotClient,
+      )
+
+      def acquire_token(app_client_id, tenant_id):
+          pca = PublicClientApplication(
+              client_id=app_client_id,
+              authority=f"https://login.microsoftonline.com/{tenant_id}",
+          )
+          
+          token_request = {"scopes": ["https://api.powerplatform.com/.default"]}
+          accounts = pca.get_accounts()
+          
+          if accounts:
+              response = pca.acquire_token_silent(token_request["scopes"], account=accounts[0])
+              return response.get("access_token")
+          else:
+              response = pca.acquire_token_interactive(**token_request)
+              return response.get("access_token")
+
+      async def main():
+          settings = ConnectionSettings(
+              environment_id=environ.get("COPILOTSTUDIOAGENT__ENVIRONMENTID"),
+              agent_identifier=environ.get("COPILOTSTUDIOAGENT__SCHEMANAME"),
+          )
+          
+          token = acquire_token(
+              app_client_id=environ.get("COPILOTSTUDIOAGENT__AGENTAPPID"),
+              tenant_id=environ.get("COPILOTSTUDIOAGENT__TENANTID"),
+          )
+          
+          copilot_client = CopilotClient(settings, token)
+          
+          # Start conversation
+          act = copilot_client.start_conversation(True)
+          async for action in act:
+              if action.text:
+                  print(action.text)
+          
+          # Ask question
+          replies = copilot_client.ask_question("Hello!", action.conversation.id)
+          async for reply in replies:
+              if reply.type == ActivityTypes.message:
+                  print(reply.text)
+
+      asyncio.run(main())
+
+  - name: invoke_activity_response
+    prompt: |
+      Create an invoke handler that returns an invoke_response activity.
+    expected_patterns:
+      - "ActivityTypes.invoke"
+      - "invoke_response"
+      - "@AGENT_APP.activity"
+    tags:
+      - invoke
+    mock_response: |
+      from microsoft_agents.hosting.core import AgentApplication, TurnState, TurnContext
+      from microsoft_agents.activity import Activity, ActivityTypes
+
+      @AGENT_APP.activity(ActivityTypes.invoke)
+      async def on_invoke(context: TurnContext, _state: TurnState):
+          invoke_response = Activity(
+              type=ActivityTypes.invoke_response, value={"status": 200}
+          )
+          await context.send_activity(invoke_response)
+          await context.send_activity("Invoke processed.")

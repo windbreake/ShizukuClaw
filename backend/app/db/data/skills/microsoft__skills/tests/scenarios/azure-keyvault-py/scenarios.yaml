@@ -1,0 +1,307 @@
+# yaml-language-server: $schema=file:///Users/govindm4max/code/oss/agent-skills/tests/scenarios/skill-scenarios.schema.json
+# Test scenarios for azure-keyvault-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic secret CRUD
+  - name: secret_crud_basic
+    prompt: |
+      Create a basic Azure Key Vault secrets example that authenticates with
+      DefaultAzureCredential, sets a secret, gets it, then deletes and purges it.
+      Use AZURE_KEYVAULT_URL for the vault URL.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "SecretClient"
+      - "set_secret"
+      - "get_secret"
+      - "begin_delete_secret"
+      - "purge_deleted_secret"
+    forbidden_patterns:
+      - "KeyVaultClient"
+      - "from azure.keyvault import"
+    tags:
+      - basic
+      - secrets
+      - crud
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.keyvault.secrets import SecretClient
+      
+      vault_url = os.environ["AZURE_KEYVAULT_URL"]
+      credential = DefaultAzureCredential()
+      client = SecretClient(vault_url=vault_url, credential=credential)
+      
+      client.set_secret("database-password", "super-secret-value")
+      secret = client.get_secret("database-password")
+      print(secret.value)
+      
+      poller = client.begin_delete_secret("database-password")
+      poller.result()
+      client.purge_deleted_secret("database-password")
+
+  # List secret versions
+  - name: list_secret_versions
+    prompt: |
+      List all secret names and all versions for a specific secret using
+      SecretClient.list_properties_of_secrets and list_properties_of_secret_versions.
+    expected_patterns:
+      - "list_properties_of_secrets"
+      - "list_properties_of_secret_versions"
+    forbidden_patterns:
+      - "list_secrets"
+      - "list_versions"
+    tags:
+      - secrets
+      - list
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.keyvault.secrets import SecretClient
+      
+      vault_url = os.environ["AZURE_KEYVAULT_URL"]
+      credential = DefaultAzureCredential()
+      client = SecretClient(vault_url=vault_url, credential=credential)
+      
+      for secret_props in client.list_properties_of_secrets():
+          print(secret_props.name)
+      
+      for version_props in client.list_properties_of_secret_versions("database-password"):
+          print(version_props.version)
+
+  # Create and get keys
+  - name: key_create_and_get
+    prompt: |
+      Create an RSA key and an EC key using KeyClient, then retrieve one of them
+      with get_key. Use DefaultAzureCredential and AZURE_KEYVAULT_URL.
+    expected_patterns:
+      - "KeyClient"
+      - "create_rsa_key"
+      - "create_ec_key"
+      - "get_key"
+    forbidden_patterns:
+      - "SecretClient"
+      - "create_key_vault_key"
+    tags:
+      - keys
+      - create
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.keyvault.keys import KeyClient
+      
+      vault_url = os.environ["AZURE_KEYVAULT_URL"]
+      credential = DefaultAzureCredential()
+      client = KeyClient(vault_url=vault_url, credential=credential)
+      
+      client.create_rsa_key("rsa-key", size=2048)
+      client.create_ec_key("ec-key", curve="P-256")
+      key = client.get_key("rsa-key")
+      print(key.name)
+
+  # List and delete keys
+  - name: key_list_and_delete
+    prompt: |
+      List all key properties and delete a key using begin_delete_key with
+      poller.result(). Use KeyClient and DefaultAzureCredential.
+    expected_patterns:
+      - "list_properties_of_keys"
+      - "begin_delete_key"
+      - "result()"
+    forbidden_patterns:
+      - ".delete_key("
+      - "from azure.keyvault import"
+    tags:
+      - keys
+      - delete
+      - list
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.keyvault.keys import KeyClient
+      
+      vault_url = os.environ["AZURE_KEYVAULT_URL"]
+      credential = DefaultAzureCredential()
+      client = KeyClient(vault_url=vault_url, credential=credential)
+      
+      for key_props in client.list_properties_of_keys():
+          print(key_props.name)
+      
+      poller = client.begin_delete_key("rsa-key")
+      deleted = poller.result()
+      print(deleted.name)
+
+  # Certificate create/get/delete
+  - name: certificate_create_get_delete
+    prompt: |
+      Create a self-signed certificate using CertificateClient.begin_create_certificate,
+      retrieve it with get_certificate, then delete it with begin_delete_certificate.
+    expected_patterns:
+      - "CertificateClient"
+      - "CertificatePolicy"
+      - "begin_create_certificate"
+      - "get_certificate"
+      - "begin_delete_certificate"
+    forbidden_patterns:
+      - ".create_certificate("
+      - "KeyVaultClient"
+    tags:
+      - certificates
+      - crud
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.keyvault.certificates import CertificateClient, CertificatePolicy
+      
+      vault_url = os.environ["AZURE_KEYVAULT_URL"]
+      credential = DefaultAzureCredential()
+      client = CertificateClient(vault_url=vault_url, credential=credential)
+      policy = CertificatePolicy.get_default()
+      
+      poller = client.begin_create_certificate("my-cert", policy=policy)
+      poller.result()
+      certificate = client.get_certificate("my-cert")
+      print(certificate.name)
+      
+      delete_poller = client.begin_delete_certificate("my-cert")
+      delete_poller.result()
+
+  # List certificate properties
+  - name: certificate_list_properties
+    prompt: |
+      List certificate properties using CertificateClient.list_properties_of_certificates.
+    expected_patterns:
+      - "list_properties_of_certificates"
+      - "CertificateClient"
+    forbidden_patterns:
+      - "list_certificates"
+    tags:
+      - certificates
+      - list
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.keyvault.certificates import CertificateClient
+      
+      vault_url = os.environ["AZURE_KEYVAULT_URL"]
+      credential = DefaultAzureCredential()
+      client = CertificateClient(vault_url=vault_url, credential=credential)
+      
+      for cert_props in client.list_properties_of_certificates():
+          print(cert_props.name)
+
+  # Cryptography operations
+  - name: crypto_encrypt_sign_verify
+    prompt: |
+      Demonstrate cryptography operations using CryptographyClient with a key from
+      KeyClient. Include encrypt/decrypt and sign/verify examples.
+    expected_patterns:
+      - "CryptographyClient"
+      - "EncryptionAlgorithm.rsa_oaep"
+      - "SignatureAlgorithm.rs256"
+      - "encrypt"
+      - "decrypt"
+      - "sign"
+      - "verify"
+    forbidden_patterns:
+      - "azure.keyvault.keys import CryptographyClient"
+    tags:
+      - keys
+      - crypto
+    mock_response: |
+      import os
+      import hashlib
+      from azure.identity import DefaultAzureCredential
+      from azure.keyvault.keys import KeyClient
+      from azure.keyvault.keys.crypto import CryptographyClient, EncryptionAlgorithm, SignatureAlgorithm
+      
+      vault_url = os.environ["AZURE_KEYVAULT_URL"]
+      credential = DefaultAzureCredential()
+      key_client = KeyClient(vault_url=vault_url, credential=credential)
+      key = key_client.get_key("rsa-key")
+      crypto_client = CryptographyClient(key, credential=credential)
+      
+      encrypted = crypto_client.encrypt(EncryptionAlgorithm.rsa_oaep, b"hello")
+      decrypted = crypto_client.decrypt(EncryptionAlgorithm.rsa_oaep, encrypted.ciphertext)
+      print(decrypted.plaintext)
+      
+      digest = hashlib.sha256(b"data").digest()
+      signature = crypto_client.sign(SignatureAlgorithm.rs256, digest).signature
+      verified = crypto_client.verify(SignatureAlgorithm.rs256, digest, signature)
+      print(verified.is_valid)
+
+  # Async secret get
+  - name: async_get_secret
+    prompt: |
+      Provide an async example that retrieves a secret using
+      azure.keyvault.secrets.aio.SecretClient and DefaultAzureCredential from azure.identity.aio.
+    expected_patterns:
+      - "from azure.keyvault.secrets.aio import SecretClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with"
+      - "await client.get_secret"
+    forbidden_patterns:
+      - "from azure.keyvault.secrets import SecretClient"
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - async
+      - secrets
+    mock_response: |
+      import os
+      import asyncio
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.keyvault.secrets.aio import SecretClient
+      
+      async def main():
+          vault_url = os.environ["AZURE_KEYVAULT_URL"]
+          credential = DefaultAzureCredential()
+          
+          async with SecretClient(vault_url=vault_url, credential=credential) as client:
+              secret = await client.get_secret("my-secret")
+              print(secret.value)
+      
+      if __name__ == "__main__":
+          asyncio.run(main())
+
+  # Async list keys and certificates
+  - name: async_list_keys_and_certs
+    prompt: |
+      Provide an async example that lists keys and certificates using
+      KeyClient and CertificateClient from the .aio modules with async for.
+    expected_patterns:
+      - "from azure.keyvault.keys.aio import KeyClient"
+      - "from azure.keyvault.certificates.aio import CertificateClient"
+      - "async for"
+    forbidden_patterns:
+      - "from azure.keyvault.keys import KeyClient"
+      - "from azure.keyvault.certificates import CertificateClient"
+    tags:
+      - async
+      - keys
+      - certificates
+    mock_response: |
+      import os
+      import asyncio
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.keyvault.keys.aio import KeyClient
+      from azure.keyvault.certificates.aio import CertificateClient
+      
+      async def main():
+          vault_url = os.environ["AZURE_KEYVAULT_URL"]
+          credential = DefaultAzureCredential()
+          
+          async with KeyClient(vault_url=vault_url, credential=credential) as key_client:
+              async for key_props in key_client.list_properties_of_keys():
+                  print(key_props.name)
+          
+          async with CertificateClient(vault_url=vault_url, credential=credential) as cert_client:
+              async for cert_props in cert_client.list_properties_of_certificates():
+                  print(cert_props.name)
+      
+      if __name__ == "__main__":
+          asyncio.run(main())

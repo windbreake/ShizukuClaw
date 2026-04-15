@@ -1,0 +1,223 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-messaging-webpubsubservice-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: connection_string_broadcast
+    prompt: |
+      Create a WebPubSubServiceClient using a connection string from environment
+      variables, then send a text and JSON message to all connections.
+    expected_patterns:
+      - "WebPubSubServiceClient.from_connection_string"
+      - "AZURE_WEBPUBSUB_CONNECTION_STRING"
+      - "AZURE_WEBPUBSUB_HUB"
+      - "send_to_all"
+      - "content_type=\"text/plain\""
+    forbidden_patterns:
+      - "WebPubSubServiceClient.from_connectionstring"
+    tags:
+      - authentication
+      - broadcast
+    mock_response: |
+      import os
+      from azure.messaging.webpubsubservice import WebPubSubServiceClient
+      
+      client = WebPubSubServiceClient.from_connection_string(
+          connection_string=os.environ["AZURE_WEBPUBSUB_CONNECTION_STRING"],
+          hub=os.environ["AZURE_WEBPUBSUB_HUB"],
+      )
+      
+      client.send_to_all(message="Hello everyone!", content_type="text/plain")
+      client.send_to_all(
+          message={"type": "notification", "data": "Hello"},
+          content_type="application/json",
+      )
+
+  - name: default_credential_targeted_sends
+    prompt: |
+      Use DefaultAzureCredential with endpoint and hub from environment variables,
+      then send a message to a user and to a group.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "endpoint=os.environ[\"AZURE_WEBPUBSUB_ENDPOINT\"]"
+      - "send_to_user"
+      - "send_to_group"
+    forbidden_patterns:
+      - "from_connection_string"
+    tags:
+      - authentication
+      - targeted
+    mock_response: |
+      import os
+      from azure.messaging.webpubsubservice import WebPubSubServiceClient
+      from azure.identity import DefaultAzureCredential
+      
+      client = WebPubSubServiceClient(
+          endpoint=os.environ["AZURE_WEBPUBSUB_ENDPOINT"],
+          hub=os.environ["AZURE_WEBPUBSUB_HUB"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      client.send_to_user(
+          user_id="user123",
+          message="Hello user!",
+          content_type="text/plain",
+      )
+      client.send_to_group(
+          group="my-group",
+          message="Hello group!",
+          content_type="text/plain",
+      )
+
+  - name: token_generation_with_roles_groups
+    prompt: |
+      Generate client access tokens with user_id, roles, and groups. Print the
+      URL from the token response.
+    expected_patterns:
+      - "get_client_access_token"
+      - "roles=["
+      - "groups=["
+      - "token[\"url\"]"
+    forbidden_patterns:
+      - "get_client_access_url"
+    tags:
+      - token
+    mock_response: |
+      import os
+      from azure.messaging.webpubsubservice import WebPubSubServiceClient
+      
+      client = WebPubSubServiceClient.from_connection_string(
+          connection_string=os.environ["AZURE_WEBPUBSUB_CONNECTION_STRING"],
+          hub=os.environ["AZURE_WEBPUBSUB_HUB"],
+      )
+      
+      token = client.get_client_access_token()
+      print(token["url"])
+      
+      token = client.get_client_access_token(
+          user_id="user123",
+          roles=["webpubsub.sendToGroup", "webpubsub.joinLeaveGroup"],
+      )
+      
+      token = client.get_client_access_token(
+          user_id="user123",
+          groups=["group1", "group2"],
+          minutes_to_expire=30,
+      )
+
+  - name: group_management
+    prompt: |
+      Add and remove a user and a connection from a Web PubSub group.
+    expected_patterns:
+      - "add_user_to_group"
+      - "remove_user_from_group"
+      - "add_connection_to_group"
+      - "remove_connection_from_group"
+    forbidden_patterns:
+      - "group_name="
+    tags:
+      - groups
+    mock_response: |
+      import os
+      from azure.messaging.webpubsubservice import WebPubSubServiceClient
+      
+      client = WebPubSubServiceClient.from_connection_string(
+          connection_string=os.environ["AZURE_WEBPUBSUB_CONNECTION_STRING"],
+          hub=os.environ["AZURE_WEBPUBSUB_HUB"],
+      )
+      
+      client.add_user_to_group(group="my-group", user_id="user123")
+      client.remove_user_from_group(group="my-group", user_id="user123")
+      client.add_connection_to_group(group="my-group", connection_id="abc123")
+      client.remove_connection_from_group(group="my-group", connection_id="abc123")
+
+  - name: connection_management
+    prompt: |
+      Check whether a connection, user, and group exist, then close a connection
+      and close all connections for a user.
+    expected_patterns:
+      - "connection_exists"
+      - "user_exists"
+      - "group_exists"
+      - "close_connection"
+      - "close_all_connections"
+    forbidden_patterns:
+      - "close_all_connections(connection_id"
+    tags:
+      - connections
+    mock_response: |
+      import os
+      from azure.messaging.webpubsubservice import WebPubSubServiceClient
+      
+      client = WebPubSubServiceClient.from_connection_string(
+          connection_string=os.environ["AZURE_WEBPUBSUB_CONNECTION_STRING"],
+          hub=os.environ["AZURE_WEBPUBSUB_HUB"],
+      )
+      
+      exists = client.connection_exists(connection_id="abc123")
+      user_connected = client.user_exists(user_id="user123")
+      group_has_connections = client.group_exists(group="my-group")
+      
+      client.close_connection(connection_id="abc123", reason="Session ended")
+      client.close_all_connections(user_id="user123")
+
+  - name: send_to_connection_text
+    prompt: |
+      Send a text message to a specific connection using content_type text/plain.
+    expected_patterns:
+      - "send_to_connection"
+      - "content_type=\"text/plain\""
+    forbidden_patterns:
+      - "send_to_connection_id"
+    tags:
+      - connections
+      - messaging
+    mock_response: |
+      import os
+      from azure.messaging.webpubsubservice import WebPubSubServiceClient
+      
+      client = WebPubSubServiceClient.from_connection_string(
+          connection_string=os.environ["AZURE_WEBPUBSUB_CONNECTION_STRING"],
+          hub=os.environ["AZURE_WEBPUBSUB_HUB"],
+      )
+      
+      client.send_to_connection(
+          connection_id="abc123",
+          message="Hello connection!",
+          content_type="text/plain",
+      )
+
+  - name: async_send_to_all
+    prompt: |
+      Provide an async example that creates a WebPubSubServiceClient from the aio
+      package and sends a broadcast message using await.
+    expected_patterns:
+      - "from azure.messaging.webpubsubservice.aio import WebPubSubServiceClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with WebPubSubServiceClient"
+      - "await client.send_to_all"
+    forbidden_patterns:
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - async
+      - broadcast
+    mock_response: |
+      import os
+      import asyncio
+      from azure.messaging.webpubsubservice.aio import WebPubSubServiceClient
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def main():
+          async with WebPubSubServiceClient(
+              endpoint=os.environ["AZURE_WEBPUBSUB_ENDPOINT"],
+              hub=os.environ["AZURE_WEBPUBSUB_HUB"],
+              credential=DefaultAzureCredential(),
+          ) as client:
+              await client.send_to_all("Hello async!", content_type="text/plain")
+      
+      asyncio.run(main())

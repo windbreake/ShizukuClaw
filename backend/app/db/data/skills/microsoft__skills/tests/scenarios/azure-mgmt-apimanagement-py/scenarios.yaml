@@ -1,0 +1,481 @@
+# Test scenarios for azure-mgmt-apimanagement-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Client Creation
+  - name: basic_apim_client_creation
+    prompt: |
+      Create a basic Azure API Management client with proper authentication
+      and environment variable handling. Show how to connect to an APIM service.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "ApiManagementClient"
+      - "os.environ"
+      - "AZURE_SUBSCRIPTION_ID"
+      - "subscription_id="
+    forbidden_patterns:
+      - "hardcoded"
+      - "12345"
+      - "subscription_id=\""
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apimanagement import ApiManagementClient
+      
+      client = ApiManagementClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      print(f"Connected to APIM service")
+
+  # APIM Service Creation
+  - name: apim_service_creation_with_sku
+    prompt: |
+      Create an Azure API Management service with Developer SKU.
+      Include publisher email and name. Handle the long-running operation properly.
+    expected_patterns:
+      - "begin_create_or_update"
+      - ".result()"
+      - "ApiManagementServiceResource"
+      - "ApiManagementServiceSkuProperties"
+      - "SkuType"
+      - "DEVELOPER"
+      - "publisher_email"
+      - "publisher_name"
+    forbidden_patterns:
+      - "end_create_or_update"
+      - "create_or_update()"
+      - "without.*result"
+    tags:
+      - apim-service
+      - long-running
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apimanagement import ApiManagementClient
+      from azure.mgmt.apimanagement.models import (
+          ApiManagementServiceResource,
+          ApiManagementServiceSkuProperties,
+          SkuType,
+      )
+      
+      client = ApiManagementClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      service = client.api_management_service.begin_create_or_update(
+          resource_group_name="my-rg",
+          service_name="my-apim",
+          parameters=ApiManagementServiceResource(
+              location="eastus",
+              publisher_email="admin@example.com",
+              publisher_name="My Organization",
+              sku=ApiManagementServiceSkuProperties(
+                  name=SkuType.DEVELOPER,
+                  capacity=1
+              )
+          )
+      ).result()
+      
+      print(f"Created APIM service: {service.name}")
+
+  # API Import from OpenAPI
+  - name: import_api_from_openapi
+    prompt: |
+      Import an API into APIM from an OpenAPI specification.
+      Use OPENAPI_JSON format with a sample spec. Include proper protocols.
+    expected_patterns:
+      - "ApiCreateOrUpdateParameter"
+      - "ContentFormat.OPENAPI_JSON"
+      - "Protocol.HTTPS"
+      - "display_name"
+      - "path"
+      - "format="
+      - "value="
+      - "protocols="
+    forbidden_patterns:
+      - "ContentFormat.SWAGGER"
+      - 'format="swagger'
+      - "protocols=[]"
+    tags:
+      - api
+      - import
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apimanagement import ApiManagementClient
+      from azure.mgmt.apimanagement.models import (
+          ApiCreateOrUpdateParameter,
+          ContentFormat,
+          Protocol,
+      )
+      
+      client = ApiManagementClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      api = client.api.begin_create_or_update(
+          resource_group_name="my-rg",
+          service_name="my-apim",
+          api_id="petstore",
+          parameters=ApiCreateOrUpdateParameter(
+              display_name="Petstore API",
+              path="petstore",
+              protocols=[Protocol.HTTPS],
+              format=ContentFormat.OPENAPI_JSON,
+              value='{"openapi": "3.0.0", "info": {"title": "Petstore", "version": "1.0"}, "paths": {"/pets": {"get": {"responses": {"200": {"description": "Success"}}}}}}'
+          )
+      ).result()
+      
+      print(f"Imported API: {api.display_name}")
+
+  # Product and Subscription Management
+  - name: create_product_with_subscription
+    prompt: |
+      Create an APIM product that requires subscriptions. Include subscription
+      creation and key retrieval. Show how to associate APIs with products.
+    expected_patterns:
+      - "ProductContract"
+      - "subscription_required=True"
+      - "state="
+      - "create_or_update"
+      - "product_api"
+      - "SubscriptionCreateParameters"
+      - "primary_key"
+      - "secondary_key"
+    forbidden_patterns:
+      - "subscription_required=False"
+      - "subscription_required: false"
+    tags:
+      - product
+      - subscription
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apimanagement import ApiManagementClient
+      from azure.mgmt.apimanagement.models import (
+          ProductContract,
+          SubscriptionCreateParameters,
+      )
+      
+      client = ApiManagementClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      # Create product
+      product = client.product.create_or_update(
+          resource_group_name="my-rg",
+          service_name="my-apim",
+          product_id="premium",
+          parameters=ProductContract(
+              display_name="Premium",
+              description="Premium tier with unlimited access",
+              subscription_required=True,
+              approval_required=False,
+              state="published"
+          )
+      )
+      
+      # Associate API with product
+      client.product_api.create_or_update(
+          resource_group_name="my-rg",
+          service_name="my-apim",
+          product_id="premium",
+          api_id="petstore"
+      )
+      
+      # Create subscription
+      subscription = client.subscription.create_or_update(
+          resource_group_name="my-rg",
+          service_name="my-apim",
+          sid="customer-sub",
+          parameters=SubscriptionCreateParameters(
+              display_name="Customer Subscription",
+              scope="/products/premium",
+              state="active"
+          )
+      )
+      
+      print(f"Product key: {subscription.primary_key}")
+
+  # API Policy with Rate Limiting
+  - name: apply_api_policy_with_rate_limit
+    prompt: |
+      Apply a rate-limiting policy to an API in APIM. Include inbound, backend,
+      outbound, and on-error sections. Set 100 calls per 60 seconds.
+    expected_patterns:
+      - "PolicyContract"
+      - "api_policy.create_or_update"
+      - "<policies>"
+      - "<inbound>"
+      - "rate-limit"
+      - "calls="
+      - "renewal-period="
+      - "<backend>"
+      - "<forward-request"
+      - "<outbound"
+      - "<on-error"
+      - 'format="xml'
+    forbidden_patterns:
+      - "policy_xml=\""
+      - "<policy>" # Wrong - should be <policies>
+    tags:
+      - policy
+      - rate-limit
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apimanagement import ApiManagementClient
+      from azure.mgmt.apimanagement.models import PolicyContract
+      
+      client = ApiManagementClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      policy_xml = """<policies>
+          <inbound>
+              <rate-limit calls="100" renewal-period="60" />
+              <set-header name="X-API-Version" exists-action="override">
+                  <value>1.0</value>
+              </set-header>
+          </inbound>
+          <backend>
+              <forward-request />
+          </backend>
+          <outbound />
+          <on-error />
+      </policies>"""
+      
+      client.api_policy.create_or_update(
+          resource_group_name="my-rg",
+          service_name="my-apim",
+          api_id="petstore",
+          policy_id="policy",
+          parameters=PolicyContract(
+              value=policy_xml,
+              format="xml"
+          )
+      )
+      
+      print("Applied rate-limiting policy to API")
+
+  # Named Value (Secret) Management
+  - name: create_named_value_for_secrets
+    prompt: |
+      Create a named value in APIM to store a backend API key securely.
+      Mark it as secret so it's encrypted. Show how it's used in policies.
+    expected_patterns:
+      - "NamedValueCreateContract"
+      - "named_value.begin_create_or_update"
+      - ".result()"
+      - "secret=True"
+      - "display_name"
+      - "value="
+      - "{{backend-api-key}}"
+    forbidden_patterns:
+      - "secret=False"
+      - "secret: false"
+      - "secret=\"false\""
+    tags:
+      - named-value
+      - secrets
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apimanagement import ApiManagementClient
+      from azure.mgmt.apimanagement.models import NamedValueCreateContract
+      
+      client = ApiManagementClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      # Create named value for backend API key
+      named_value = client.named_value.begin_create_or_update(
+          resource_group_name="my-rg",
+          service_name="my-apim",
+          named_value_id="backend-api-key",
+          parameters=NamedValueCreateContract(
+              display_name="Backend API Key",
+              value="sk-1234567890abcdef",
+              secret=True
+          )
+      ).result()
+      
+      # Use in policy
+      policy_xml = """<policies>
+          <inbound>
+              <set-header name="Authorization" exists-action="override">
+                  <value>Bearer {{backend-api-key}}</value>
+              </set-header>
+          </inbound>
+      </policies>"""
+      
+      print(f"Created named value: {named_value.display_name}")
+
+  # Backend Service Management
+  - name: create_backend_service
+    prompt: |
+      Create a backend service in APIM pointing to a backend API endpoint.
+      Include protocol, URL, and description. Show how to list backends.
+    expected_patterns:
+      - "BackendContract"
+      - "backend.create_or_update"
+      - "url="
+      - "protocol="
+      - "description="
+      - "backend.list_by_service"
+    forbidden_patterns:
+      - "backend_url ="
+    tags:
+      - backend
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apimanagement import ApiManagementClient
+      from azure.mgmt.apimanagement.models import BackendContract
+      
+      client = ApiManagementClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      # Create backend
+      backend = client.backend.create_or_update(
+          resource_group_name="my-rg",
+          service_name="my-apim",
+          backend_id="my-backend",
+          parameters=BackendContract(
+              url="https://api.backend.example.com",
+              protocol="http",
+              description="My backend API service"
+          )
+      )
+      
+      # List all backends
+      backends = client.backend.list_by_service(
+          resource_group_name="my-rg",
+          service_name="my-apim"
+      )
+      
+      for b in backends:
+          print(f"{b.name}: {b.url}")
+
+  # List and Enumerate APIs
+  - name: list_apis_and_operations
+    prompt: |
+      List all APIs in an APIM service and their operations.
+      Show how to iterate through results and access API properties.
+    expected_patterns:
+      - "api.list_by_service"
+      - "api_operation.list_by_api"
+      - "for"
+      - "display_name"
+      - "path"
+    forbidden_patterns:
+      - "api.list()"
+      - "api.get_all"
+    tags:
+      - api
+      - listing
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apimanagement import ApiManagementClient
+      
+      client = ApiManagementClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      # List APIs
+      apis = client.api.list_by_service(
+          resource_group_name="my-rg",
+          service_name="my-apim"
+      )
+      
+      for api in apis:
+          print(f"API: {api.display_name} ({api.path})")
+          
+          # List operations for each API
+          operations = client.api_operation.list_by_api(
+              resource_group_name="my-rg",
+              service_name="my-apim",
+              api_id=api.name
+          )
+          
+          for op in operations:
+              print(f"  - {op.display_name}")
+
+  # Delete Resources
+  - name: delete_apim_resources
+    prompt: |
+      Delete APIM resources: subscription, product, API, and the APIM service.
+      Handle long-running operations where needed. Show proper cleanup order.
+    expected_patterns:
+      - "subscription.delete"
+      - "product.delete"
+      - "api.delete"
+      - "api_management_service.begin_delete"
+      - ".result()"
+    forbidden_patterns:
+      - "api_management_service.delete("
+    tags:
+      - cleanup
+      - delete
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apimanagement import ApiManagementClient
+      
+      client = ApiManagementClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = "my-rg"
+      service_name = "my-apim"
+      
+      # Delete subscription
+      client.subscription.delete(
+          resource_group_name=resource_group,
+          service_name=service_name,
+          sid="customer-sub"
+      )
+      
+      # Delete product
+      client.product.delete(
+          resource_group_name=resource_group,
+          service_name=service_name,
+          product_id="premium"
+      )
+      
+      # Delete API
+      client.api.delete(
+          resource_group_name=resource_group,
+          service_name=service_name,
+          api_id="petstore"
+      )
+      
+      # Delete APIM service (long-running)
+      poller = client.api_management_service.begin_delete(
+          resource_group_name=resource_group,
+          service_name=service_name
+      )
+      poller.result()
+      
+      print("Deleted APIM resources")
+

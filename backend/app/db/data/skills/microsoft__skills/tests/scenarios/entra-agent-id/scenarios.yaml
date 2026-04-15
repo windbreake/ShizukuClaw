@@ -1,0 +1,472 @@
+# Test scenarios for entra-agent-id skill evaluation
+# Each scenario tests Agent Identity provisioning patterns via Microsoft Graph beta API
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Authentication Setup
+  - name: python_authentication
+    prompt: |
+      Write Python code to authenticate with Microsoft Graph beta API
+      for Agent Identity operations. Use environment variables for
+      tenant ID, client ID, and client secret.
+    expected_patterns:
+      - "ClientSecretCredential"
+      - "AZURE_TENANT_ID"
+      - "AZURE_CLIENT_ID"
+      - "AZURE_CLIENT_SECRET"
+      - "graph\\.microsoft\\.com/\\.default"
+      - "OData-Version.*4\\.0"
+      - "graph\\.microsoft\\.com/beta"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+      - "v1\\.0"
+      - "api_key.*=.*[\"']"
+    tags:
+      - authentication
+      - python
+    mock_response: |
+      import os
+      import requests
+      from azure.identity import ClientSecretCredential
+
+      credential = ClientSecretCredential(
+          tenant_id=os.environ["AZURE_TENANT_ID"],
+          client_id=os.environ["AZURE_CLIENT_ID"],
+          client_secret=os.environ["AZURE_CLIENT_SECRET"],
+      )
+      token = credential.get_token("https://graph.microsoft.com/.default")
+
+      GRAPH = "https://graph.microsoft.com/beta"
+      headers = {
+          "Authorization": f"Bearer {token.token}",
+          "Content-Type": "application/json",
+          "OData-Version": "4.0",
+      }
+
+  # PowerShell Authentication
+  - name: powershell_authentication
+    prompt: |
+      Write PowerShell code to connect to Microsoft Graph for Agent Identity
+      operations. Include the correct scopes and API version.
+    expected_patterns:
+      - "Connect-MgGraph"
+      - "Scopes"
+      - "AgentIdentityBlueprint"
+      - "Set-MgRequestContext.*beta|ApiVersion.*beta"
+    forbidden_patterns:
+      - "v1\\.0"
+      - "Directory\\.AccessAsUser\\.All"
+    tags:
+      - authentication
+      - powershell
+    mock_response: |
+      Connect-MgGraph -Scopes @(
+          "AgentIdentityBlueprint.Create",
+          "AgentIdentityBlueprint.ReadWrite.All",
+          "AgentIdentityBlueprintPrincipal.Create",
+          "User.Read"
+      )
+      Set-MgRequestContext -ApiVersion beta
+
+      $currentUser = (Get-MgContext).Account
+      $userId = (Get-MgUser -UserId $currentUser).Id
+
+  # Blueprint Creation
+  - name: create_blueprint
+    prompt: |
+      Create an Agent Identity Blueprint using the Microsoft Graph beta API
+      in Python. The blueprint should have a display name and a user sponsor.
+    expected_patterns:
+      - "@odata\\.type.*AgentIdentityBlueprint"
+      - "displayName"
+      - "sponsors@odata\\.bind"
+      - "/beta/users/"
+      - "POST.*applications|requests\\.post.*applications"
+    forbidden_patterns:
+      - "servicePrincipals"
+      - "v1\\.0"
+    tags:
+      - blueprint
+      - creation
+    mock_response: |
+      blueprint_body = {
+          "@odata.type": "Microsoft.Graph.AgentIdentityBlueprint",
+          "displayName": "My Agent Blueprint",
+          "sponsors@odata.bind": [
+              f"https://graph.microsoft.com/beta/users/{user_id}"
+          ],
+      }
+      resp = requests.post(f"{GRAPH}/applications", headers=headers, json=blueprint_body)
+      resp.raise_for_status()
+      blueprint = resp.json()
+      app_id = blueprint["appId"]
+
+  # BlueprintPrincipal Creation
+  - name: create_blueprint_principal
+    prompt: |
+      After creating an Agent Identity Blueprint, create the BlueprintPrincipal.
+      Explain why this step is required.
+    expected_patterns:
+      - "@odata\\.type.*AgentIdentityBlueprintPrincipal"
+      - "appId"
+      - "POST.*servicePrincipals|requests\\.post.*servicePrincipals"
+      - "mandatory|required|must|explicit"
+    forbidden_patterns:
+      - "auto.*creat"
+    tags:
+      - blueprint-principal
+      - creation
+    mock_response: |
+      # BlueprintPrincipal must be created explicitly — it is NOT auto-created
+      # with the Blueprint. Without it, Agent Identity creation fails with:
+      # "The Agent Blueprint Principal for the Agent Blueprint does not exist."
+
+      sp_body = {
+          "@odata.type": "Microsoft.Graph.AgentIdentityBlueprintPrincipal",
+          "appId": app_id,
+      }
+      resp = requests.post(f"{GRAPH}/servicePrincipals", headers=headers, json=sp_body)
+      resp.raise_for_status()
+
+  # Agent Identity Creation
+  - name: create_agent_identity
+    prompt: |
+      Create an Agent Identity service principal linked to an existing
+      Agent Identity Blueprint. Use Python with the Graph beta API.
+    expected_patterns:
+      - "@odata\\.type.*AgentIdentity"
+      - "agentIdentityBlueprintId"
+      - "displayName"
+      - "sponsors@odata\\.bind"
+      - "POST.*servicePrincipals|requests\\.post.*servicePrincipals"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+      - "v1\\.0"
+    tags:
+      - agent-identity
+      - creation
+    mock_response: |
+      agent_body = {
+          "@odata.type": "Microsoft.Graph.AgentIdentity",
+          "displayName": "my-agent-instance-1",
+          "agentIdentityBlueprintId": app_id,
+          "sponsors@odata.bind": [
+              f"https://graph.microsoft.com/beta/users/{user_id}"
+          ],
+      }
+      resp = requests.post(f"{GRAPH}/servicePrincipals", headers=headers, json=agent_body)
+      resp.raise_for_status()
+      agent = resp.json()
+
+  # Full Provisioning Workflow
+  - name: full_provisioning_workflow
+    prompt: |
+      Write a complete Python script that provisions an Agent Identity from
+      scratch: authenticate, create the Blueprint, create the BlueprintPrincipal,
+      and create an Agent Identity. Use environment variables for credentials.
+    expected_patterns:
+      - "ClientSecretCredential"
+      - "AgentIdentityBlueprint"
+      - "AgentIdentityBlueprintPrincipal"
+      - "AgentIdentity"
+      - "OData-Version.*4\\.0"
+      - "/beta"
+      - "raise_for_status|status_code"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+      - "v1\\.0"
+      - "api_key.*=.*[\"']"
+    tags:
+      - end-to-end
+      - python
+    mock_response: |
+      import os
+      import requests
+      from azure.identity import ClientSecretCredential
+
+      credential = ClientSecretCredential(
+          tenant_id=os.environ["AZURE_TENANT_ID"],
+          client_id=os.environ["AZURE_CLIENT_ID"],
+          client_secret=os.environ["AZURE_CLIENT_SECRET"],
+      )
+      token = credential.get_token("https://graph.microsoft.com/.default")
+
+      GRAPH = "https://graph.microsoft.com/beta"
+      headers = {
+          "Authorization": f"Bearer {token.token}",
+          "Content-Type": "application/json",
+          "OData-Version": "4.0",
+      }
+
+      # Step 1: Create Blueprint
+      blueprint_body = {
+          "@odata.type": "Microsoft.Graph.AgentIdentityBlueprint",
+          "displayName": "My Agent Blueprint",
+          "sponsors@odata.bind": [
+              f"https://graph.microsoft.com/beta/users/{user_id}"
+          ],
+      }
+      resp = requests.post(f"{GRAPH}/applications", headers=headers, json=blueprint_body)
+      resp.raise_for_status()
+      blueprint = resp.json()
+      app_id = blueprint["appId"]
+
+      # Step 2: Create BlueprintPrincipal (mandatory)
+      sp_body = {
+          "@odata.type": "Microsoft.Graph.AgentIdentityBlueprintPrincipal",
+          "appId": app_id,
+      }
+      resp = requests.post(f"{GRAPH}/servicePrincipals", headers=headers, json=sp_body)
+      resp.raise_for_status()
+
+      # Step 3: Create Agent Identity
+      agent_body = {
+          "@odata.type": "Microsoft.Graph.AgentIdentity",
+          "displayName": "my-agent-instance-1",
+          "agentIdentityBlueprintId": app_id,
+          "sponsors@odata.bind": [
+              f"https://graph.microsoft.com/beta/users/{user_id}"
+          ],
+      }
+      resp = requests.post(f"{GRAPH}/servicePrincipals", headers=headers, json=agent_body)
+      resp.raise_for_status()
+      agent = resp.json()
+
+  # Cleanup
+  - name: cleanup_resources
+    prompt: |
+      Write Python code to clean up Agent Identity resources. Delete the
+      agent identity service principal first, then delete the blueprint.
+      Explain the correct order.
+    expected_patterns:
+      - "DELETE.*servicePrincipals|requests\\.delete.*servicePrincipals"
+      - "DELETE.*applications|requests\\.delete.*applications"
+      - "agent.*first|order"
+    forbidden_patterns:
+      - "only.*blueprint"
+    tags:
+      - cleanup
+      - deletion
+    mock_response: |
+      # Delete in order: agent identities first, then blueprint
+      # Deleting the blueprint without cleaning agents leaves orphaned SPs
+
+      # Delete agent identity
+      requests.delete(f"{GRAPH}/servicePrincipals/{agent_sp_id}", headers=headers).raise_for_status()
+
+      # Delete blueprint (application object)
+      requests.delete(f"{GRAPH}/applications/{blueprint_obj_id}", headers=headers).raise_for_status()
+
+  # Error: DefaultAzureCredential
+  - name: error_default_credential
+    prompt: |
+      I'm getting a 403 error when calling the Agent Identity API using
+      DefaultAzureCredential. What's wrong and how do I fix it?
+    expected_patterns:
+      - "DefaultAzureCredential.*not.*support|Directory\\.AccessAsUser\\.All"
+      - "ClientSecretCredential|client_credentials"
+      - "403"
+    forbidden_patterns:
+      - "DefaultAzureCredential.*correct|use DefaultAzureCredential"
+    tags:
+      - error-handling
+      - authentication
+    mock_response: |
+      The 403 error occurs because `DefaultAzureCredential` resolves to Azure CLI
+      tokens that include the `Directory.AccessAsUser.All` scope, which Agent Identity
+      APIs explicitly reject.
+
+      Use `ClientSecretCredential` with a dedicated app registration instead:
+
+      ```python
+      from azure.identity import ClientSecretCredential
+
+      credential = ClientSecretCredential(
+          tenant_id=os.environ["AZURE_TENANT_ID"],
+          client_id=os.environ["AZURE_CLIENT_ID"],
+          client_secret=os.environ["AZURE_CLIENT_SECRET"],
+      )
+      token = credential.get_token("https://graph.microsoft.com/.default")
+      ```
+
+  # Idempotent Provisioning
+  - name: idempotent_provisioning
+    prompt: |
+      Write Python code that creates an Agent Identity Blueprint idempotently —
+      check if it already exists before creating, and always ensure the
+      BlueprintPrincipal exists.
+    expected_patterns:
+      - "\\$filter|filter.*displayName"
+      - "existing|already"
+      - "BlueprintPrincipal|blueprint.*principal"
+    forbidden_patterns:
+      - "try.*except.*pass"
+    tags:
+      - idempotent
+      - best-practice
+    mock_response: |
+      # Check if blueprint already exists
+      resp = requests.get(
+          f"{GRAPH}/applications?$filter=displayName eq 'My Agent Blueprint'",
+          headers=headers,
+      )
+      existing = resp.json().get("value", [])
+
+      if existing:
+          blueprint = existing[0]
+      else:
+          blueprint_body = {
+              "@odata.type": "Microsoft.Graph.AgentIdentityBlueprint",
+              "displayName": "My Agent Blueprint",
+              "sponsors@odata.bind": [
+                  f"https://graph.microsoft.com/beta/users/{user_id}"
+              ],
+          }
+          resp = requests.post(f"{GRAPH}/applications", headers=headers, json=blueprint_body)
+          resp.raise_for_status()
+          blueprint = resp.json()
+
+      app_id = blueprint["appId"]
+
+      # Always ensure BlueprintPrincipal exists (previous run may have crashed after blueprint creation)
+      sp_body = {
+          "@odata.type": "Microsoft.Graph.AgentIdentityBlueprintPrincipal",
+          "appId": app_id,
+      }
+      try:
+          resp = requests.post(f"{GRAPH}/servicePrincipals", headers=headers, json=sp_body)
+          resp.raise_for_status()
+      except requests.HTTPError as e:
+          if e.response.status_code != 409:  # 409 = already exists
+              raise
+
+  # SDK Sidecar — Autonomous 3P Agent
+  - name: sidecar_autonomous_agent
+    prompt: |
+      Write Python code for a 3P AI agent that uses the Microsoft Entra SDK
+      sidecar to get an autonomous agent identity token, then calls a
+      downstream API with that token.
+    expected_patterns:
+      - "AuthorizationHeaderUnauthenticated"
+      - "AgentIdentity"
+      - "authorizationHeader"
+      - "Authorization.*Bearer"
+      - "localhost:5000|SIDECAR_URL"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+      - "ClientSecretCredential"
+      - "msal"
+      - "acquire_token"
+    tags:
+      - sidecar
+      - autonomous
+      - 3p-agent
+    mock_response: |
+      import os
+      import requests
+
+      SIDECAR_URL = os.environ.get("SIDECAR_URL", "http://localhost:5000")
+      AGENT_APP_ID = os.environ["AGENT_CLIENT_ID"]
+
+      def get_agent_token(downstream_api="Graph"):
+          url = f"{SIDECAR_URL}/AuthorizationHeaderUnauthenticated/{downstream_api}"
+          resp = requests.get(url, params={"AgentIdentity": AGENT_APP_ID}, timeout=30)
+          resp.raise_for_status()
+          return resp.json()["authorizationHeader"]
+
+      def call_api(endpoint):
+          token = get_agent_token()
+          resp = requests.get(endpoint, headers={"Authorization": token}, timeout=10)
+          resp.raise_for_status()
+          return resp.json()
+
+  # SDK Sidecar — Interactive Agent with OBO
+  - name: sidecar_interactive_agent
+    prompt: |
+      Write Python code for an agent that uses the Entra SDK sidecar to
+      validate an incoming user token and then acquire a delegated token
+      for Microsoft Graph using the on-behalf-of flow.
+    expected_patterns:
+      - "/Validate"
+      - "/AuthorizationHeader/"
+      - "Bearer.*user_token|Authorization.*Bearer"
+      - "authorizationHeader"
+    forbidden_patterns:
+      - "AuthorizationHeaderUnauthenticated"
+      - "ClientSecretCredential"
+      - "DefaultAzureCredential"
+    tags:
+      - sidecar
+      - interactive
+      - obo
+    mock_response: |
+      import requests
+
+      SIDECAR_URL = "http://localhost:5000"
+
+      def validate_token(bearer_token):
+          resp = requests.get(
+              f"{SIDECAR_URL}/Validate",
+              headers={"Authorization": f"Bearer {bearer_token}"},
+              timeout=10,
+          )
+          resp.raise_for_status()
+          return resp.json()["claims"]
+
+      def get_delegated_token(user_token, downstream_api="Graph"):
+          resp = requests.get(
+              f"{SIDECAR_URL}/AuthorizationHeader/{downstream_api}",
+              headers={"Authorization": f"Bearer {user_token}"},
+              timeout=30,
+          )
+          resp.raise_for_status()
+          return resp.json()["authorizationHeader"]
+
+  # SDK Sidecar — Docker Compose Deployment
+  - name: sidecar_docker_deployment
+    prompt: |
+      Write a Docker Compose file that deploys the Microsoft Entra SDK
+      sidecar alongside an agent application, with proper environment
+      variables for Entra ID authentication.
+    expected_patterns:
+      - "mcr\\.microsoft\\.com/entra-sdk/auth-sidecar"
+      - "AzureAd__TenantId"
+      - "AzureAd__ClientId"
+      - "AzureAd__ClientCredentials"
+      - "DownstreamApis"
+      - "5000"
+    forbidden_patterns:
+      - "LoadBalancer"
+      - "Ingress"
+    tags:
+      - sidecar
+      - deployment
+      - docker
+    mock_response: |
+      version: '3.8'
+      services:
+        sidecar:
+          image: mcr.microsoft.com/entra-sdk/auth-sidecar:1.0.0-azurelinux3.0-distroless
+          ports:
+            - "5001:5000"
+          environment:
+            - AzureAd__Instance=https://login.microsoftonline.com/
+            - AzureAd__TenantId=${TENANT_ID}
+            - AzureAd__ClientId=${BLUEPRINT_APP_ID}
+            - AzureAd__ClientCredentials__0__SourceType=ClientSecret
+            - AzureAd__ClientCredentials__0__ClientSecret=${BLUEPRINT_CLIENT_SECRET}
+            - DownstreamApis__Graph__BaseUrl=https://graph.microsoft.com/v1.0/
+            - DownstreamApis__Graph__Scopes__0=https://graph.microsoft.com/.default
+            - DownstreamApis__Graph__RequestAppToken=true
+            - ASPNETCORE_URLS=http://+:5000
+        agent:
+          build: ./agent
+          environment:
+            - SIDECAR_URL=http://sidecar:5000
+            - AGENT_CLIENT_ID=${AGENT_CLIENT_ID}
+          depends_on:
+            - sidecar

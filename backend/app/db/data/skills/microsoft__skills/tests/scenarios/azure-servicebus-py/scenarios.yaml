@@ -1,0 +1,298 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-servicebus-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: sync_queue_send_receive
+    prompt: |
+      Create a sync example that sends a message to a queue and receives it.
+      Use DefaultAzureCredential and context managers.
+    expected_patterns:
+      - "ServiceBusClient"
+      - "DefaultAzureCredential"
+      - "get_queue_sender"
+      - "get_queue_receiver"
+      - "complete_message"
+    forbidden_patterns:
+      - "from_connection_string"
+      - "azure.servicebus.aio"
+    tags:
+      - basic
+      - queues
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.servicebus import ServiceBusClient, ServiceBusMessage
+      
+      namespace = os.environ["SERVICEBUS_FULLY_QUALIFIED_NAMESPACE"]
+      queue_name = os.environ["SERVICEBUS_QUEUE_NAME"]
+      
+      client = ServiceBusClient(
+          fully_qualified_namespace=namespace,
+          credential=DefaultAzureCredential(),
+      )
+      
+      with client:
+          with client.get_queue_sender(queue_name=queue_name) as sender:
+              sender.send_messages(ServiceBusMessage("hello"))
+          
+          with client.get_queue_receiver(queue_name=queue_name) as receiver:
+              for message in receiver:
+                  print(str(message))
+                  receiver.complete_message(message)
+
+  - name: async_queue_send_receive
+    prompt: |
+      Create an async example that sends and receives messages from a queue.
+      Use async clients and await all operations.
+    expected_patterns:
+      - "from azure.servicebus.aio import ServiceBusClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with"
+      - "await sender.send_messages"
+      - "await receiver.receive_messages"
+    forbidden_patterns:
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - async
+      - queues
+    mock_response: |
+      import os
+      import asyncio
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.servicebus.aio import ServiceBusClient
+      from azure.servicebus import ServiceBusMessage
+      
+      async def main():
+          namespace = os.environ["SERVICEBUS_FULLY_QUALIFIED_NAMESPACE"]
+          queue_name = os.environ["SERVICEBUS_QUEUE_NAME"]
+          
+          async with ServiceBusClient(
+              fully_qualified_namespace=namespace,
+              credential=DefaultAzureCredential(),
+          ) as client:
+              async with client.get_queue_sender(queue_name=queue_name) as sender:
+                  await sender.send_messages(ServiceBusMessage("hello async"))
+              
+              async with client.get_queue_receiver(queue_name=queue_name) as receiver:
+                  messages = await receiver.receive_messages(max_message_count=5, max_wait_time=5)
+                  for message in messages:
+                      await receiver.complete_message(message)
+      
+      asyncio.run(main())
+
+  - name: topic_subscription_flow
+    prompt: |
+      Create a topic sender and subscription receiver example using the sync client.
+      Include the required subscription_name parameter.
+    expected_patterns:
+      - "get_topic_sender"
+      - "get_subscription_receiver"
+      - "subscription_name"
+    forbidden_patterns:
+      - "get_queue_receiver"
+    tags:
+      - topics
+      - subscriptions
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.servicebus import ServiceBusClient, ServiceBusMessage
+      
+      namespace = os.environ["SERVICEBUS_FULLY_QUALIFIED_NAMESPACE"]
+      topic_name = os.environ["SERVICEBUS_TOPIC_NAME"]
+      subscription_name = os.environ["SERVICEBUS_SUBSCRIPTION_NAME"]
+      
+      client = ServiceBusClient(
+          fully_qualified_namespace=namespace,
+          credential=DefaultAzureCredential(),
+      )
+      
+      with client:
+          with client.get_topic_sender(topic_name=topic_name) as sender:
+              sender.send_messages(ServiceBusMessage("topic message"))
+          
+          with client.get_subscription_receiver(
+              topic_name=topic_name,
+              subscription_name=subscription_name,
+          ) as receiver:
+              messages = receiver.receive_messages(max_message_count=5, max_wait_time=5)
+              for message in messages:
+                  receiver.complete_message(message)
+
+  - name: message_batch_send
+    prompt: |
+      Create a message batch and send multiple messages in a single batch.
+      Use create_message_batch and add_message.
+    expected_patterns:
+      - "create_message_batch"
+      - "add_message"
+      - "send_messages(batch)"
+    forbidden_patterns:
+      - "send(batch)"
+    tags:
+      - batching
+      - queues
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.servicebus import ServiceBusClient, ServiceBusMessage
+      
+      namespace = os.environ["SERVICEBUS_FULLY_QUALIFIED_NAMESPACE"]
+      queue_name = os.environ["SERVICEBUS_QUEUE_NAME"]
+      
+      client = ServiceBusClient(
+          fully_qualified_namespace=namespace,
+          credential=DefaultAzureCredential(),
+      )
+      
+      with client:
+          with client.get_queue_sender(queue_name=queue_name) as sender:
+              batch = sender.create_message_batch()
+              for i in range(10):
+                  batch.add_message(ServiceBusMessage(f"message-{i}"))
+              sender.send_messages(batch)
+
+  - name: receive_and_delete_mode
+    prompt: |
+      Show how to receive messages in RECEIVE_AND_DELETE mode for at-most-once delivery.
+    expected_patterns:
+      - "ServiceBusReceiveMode.RECEIVE_AND_DELETE"
+      - "receive_mode=ServiceBusReceiveMode.RECEIVE_AND_DELETE"
+    forbidden_patterns:
+      - "receive_mode=\"RECEIVE_AND_DELETE\""
+    tags:
+      - receive-mode
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.servicebus import ServiceBusClient, ServiceBusReceiveMode
+      
+      namespace = os.environ["SERVICEBUS_FULLY_QUALIFIED_NAMESPACE"]
+      queue_name = os.environ["SERVICEBUS_QUEUE_NAME"]
+      
+      client = ServiceBusClient(
+          fully_qualified_namespace=namespace,
+          credential=DefaultAzureCredential(),
+      )
+      
+      with client:
+          with client.get_queue_receiver(
+              queue_name=queue_name,
+              receive_mode=ServiceBusReceiveMode.RECEIVE_AND_DELETE,
+          ) as receiver:
+              for message in receiver:
+                  print(str(message))
+
+  - name: sessions_next_available
+    prompt: |
+      Create a session-enabled example that receives from the next available session.
+      Use NEXT_AVAILABLE_SESSION and session_id.
+    expected_patterns:
+      - "NEXT_AVAILABLE_SESSION"
+      - "session_id=NEXT_AVAILABLE_SESSION"
+    forbidden_patterns:
+      - "session="
+    tags:
+      - sessions
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.servicebus import ServiceBusClient, ServiceBusMessage, NEXT_AVAILABLE_SESSION
+      
+      namespace = os.environ["SERVICEBUS_FULLY_QUALIFIED_NAMESPACE"]
+      queue_name = os.environ["SERVICEBUS_QUEUE_NAME"]
+      
+      client = ServiceBusClient(
+          fully_qualified_namespace=namespace,
+          credential=DefaultAzureCredential(),
+      )
+      
+      with client:
+          with client.get_queue_sender(queue_name=queue_name) as sender:
+              message = ServiceBusMessage("session message")
+              message.session_id = "order-123"
+              sender.send_messages(message)
+          
+          receiver = client.get_queue_receiver(
+              queue_name=queue_name,
+              session_id=NEXT_AVAILABLE_SESSION,
+          )
+          with receiver:
+              messages = receiver.receive_messages(max_message_count=1, max_wait_time=5)
+              for message in messages:
+                  receiver.complete_message(message)
+
+  - name: dead_letter_queue_receive
+    prompt: |
+      Show how to receive messages from a dead-letter queue using ServiceBusSubQueue.
+    expected_patterns:
+      - "ServiceBusSubQueue.DEAD_LETTER"
+      - "dead_letter_reason"
+    forbidden_patterns:
+      - "sub_queue=\"DEAD_LETTER\""
+    tags:
+      - dead-letter
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.servicebus import ServiceBusClient, ServiceBusSubQueue
+      
+      namespace = os.environ["SERVICEBUS_FULLY_QUALIFIED_NAMESPACE"]
+      queue_name = os.environ["SERVICEBUS_QUEUE_NAME"]
+      
+      client = ServiceBusClient(
+          fully_qualified_namespace=namespace,
+          credential=DefaultAzureCredential(),
+      )
+      
+      with client:
+          with client.get_queue_receiver(
+              queue_name=queue_name,
+              sub_queue=ServiceBusSubQueue.DEAD_LETTER,
+          ) as receiver:
+              messages = receiver.receive_messages(max_message_count=5, max_wait_time=5)
+              for message in messages:
+                  print(message.dead_letter_reason)
+                  receiver.complete_message(message)
+
+  - name: scheduled_messages
+    prompt: |
+      Create an async example that schedules a message and then cancels it.
+      Use schedule_messages and cancel_scheduled_messages.
+    expected_patterns:
+      - "schedule_messages"
+      - "cancel_scheduled_messages"
+    forbidden_patterns:
+      - ".schedule_message("
+    tags:
+      - scheduling
+      - async
+    mock_response: |
+      import os
+      import asyncio
+      from datetime import datetime, timedelta, timezone
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.servicebus.aio import ServiceBusClient
+      from azure.servicebus import ServiceBusMessage
+      
+      async def main():
+          namespace = os.environ["SERVICEBUS_FULLY_QUALIFIED_NAMESPACE"]
+          queue_name = os.environ["SERVICEBUS_QUEUE_NAME"]
+          
+          async with ServiceBusClient(
+              fully_qualified_namespace=namespace,
+              credential=DefaultAzureCredential(),
+          ) as client:
+              async with client.get_queue_sender(queue_name=queue_name) as sender:
+                  message = ServiceBusMessage("scheduled message")
+                  scheduled_time = datetime.now(timezone.utc) + timedelta(minutes=10)
+                  sequence_number = await sender.schedule_messages(message, scheduled_time)
+                  await sender.cancel_scheduled_messages(sequence_number)
+      
+      asyncio.run(main())

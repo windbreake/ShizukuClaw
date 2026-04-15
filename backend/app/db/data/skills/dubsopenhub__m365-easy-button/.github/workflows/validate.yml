@@ -1,0 +1,138 @@
+name: Validate M365 Easy Button
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Verify plugin manifest and skill file
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          plugin = Path("plugin.json")
+          if not plugin.exists():
+              raise SystemExit("::error::plugin.json not found")
+
+          data = json.loads(plugin.read_text())
+          if data.get("name") != "m365-easy-button":
+              raise SystemExit("::error::plugin.json name must be m365-easy-button")
+
+          skills = data.get("skills")
+          valid_skills = skills == "skills/" or skills == ["skills/"] or (
+              isinstance(skills, list) and "skills/" in skills
+          )
+          if not valid_skills:
+              raise SystemExit("::error::plugin.json must point to skills/")
+
+          if Path("SKILL.md").exists():
+              raise SystemExit("::error::Root SKILL.md should not exist; use skills/m365-easy-button/SKILL.md")
+
+          skill = Path("skills/m365-easy-button/SKILL.md")
+          if not skill.exists():
+              raise SystemExit("::error::skills/m365-easy-button/SKILL.md not found")
+
+          lines = skill.read_text().splitlines()
+          if len(lines) < 100:
+              raise SystemExit(f"::error::Skill file is suspiciously small ({len(lines)} lines)")
+
+          if not lines or lines[0].strip() != "---":
+              raise SystemExit("::error::Skill file must start with YAML frontmatter")
+
+          if "name: m365-easy-button" not in "\n".join(lines[:12]):
+              raise SystemExit("::error::Skill frontmatter missing name: m365-easy-button")
+
+          if not any(line.startswith("description:") for line in lines[:12]):
+              raise SystemExit("::error::Skill frontmatter missing description")
+
+          print(f"✅ plugin.json and {skill} look valid ({len(lines)} lines)")
+          PY
+
+      - name: Verify required sections present
+        run: |
+          skill=skills/m365-easy-button/SKILL.md
+          missing=0
+          for section in \
+            "## Fast Start" \
+            "## Persona & Tone" \
+            "## Answer Format" \
+            "## Complete App Router" \
+            "## Mental Model Translations" \
+            "## Detailed Behavior Translations" \
+            "## Keyboard Shortcuts" \
+            "## Common Workflow Translations" \
+            "## First Week Survival Guide" \
+            "## Power User Tips" \
+            "## AI Features" \
+            "## Troubleshooting" \
+            "## What You Don't Do" \
+            "## Trigger Phrases"; do
+            if ! grep -q "$section" "$skill"; then
+              echo "::error::Missing section: $section"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then exit 1; fi
+          echo "✅ All required sections present"
+
+      - name: Verify repo health files
+        run: |
+          for file in plugin.json README.md LICENSE SECURITY.md CODE_OF_CONDUCT.md CONTRIBUTING.md CHANGELOG.md; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Missing $file"
+              exit 1
+            fi
+          done
+          echo "✅ All repo health files present"
+
+      - name: Check for broken markdown tables
+        run: |
+          # Ensure tables have consistent pipe counts per row
+          python3 - <<'PY'
+          import re, sys
+          with open("skills/m365-easy-button/SKILL.md", "r") as f:
+              lines = f.readlines()
+          errors = 0
+          in_table = False
+          table_cols = 0
+          for i, line in enumerate(lines, 1):
+              stripped = line.strip()
+              if stripped.startswith("|") and stripped.endswith("|"):
+                  cols = stripped.count("|") - 1
+                  if not in_table:
+                      in_table = True
+                      table_cols = cols
+                  elif cols != table_cols:
+                      # Skip separator rows with different formatting
+                      if not re.match(r'^\|[\s\-:|]+\|$', stripped):
+                          print(f"::warning::Line {i}: table column mismatch (expected {table_cols}, got {cols})")
+                          errors += 1
+              else:
+                  in_table = False
+                  table_cols = 0
+          if errors > 5:
+              print(f"::error::{errors} table formatting issues found")
+              sys.exit(1)
+          print(f"✅ Markdown tables look good ({errors} minor warnings)")
+          PY
+
+      - name: Lint markdown (advisory)
+        continue-on-error: true
+        run: |
+          npm install -g markdownlint-cli 2>/dev/null
+          markdownlint README.md skills/m365-easy-button/SKILL.md --disable MD013 MD033 MD036 MD041 MD024 || true
+          echo "ℹ️ Markdown lint complete (advisory only)"

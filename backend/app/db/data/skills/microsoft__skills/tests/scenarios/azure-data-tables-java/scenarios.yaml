@@ -1,0 +1,426 @@
+# Test scenarios for azure-data-tables-java skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # TableServiceClient with DefaultAzureCredential
+  - name: table_service_client_default_credential
+    prompt: |
+      Create a TableServiceClient using DefaultAzureCredential with
+      endpoint from environment variable.
+    expected_patterns:
+      - "TableServiceClient"
+      - "TableServiceClientBuilder"
+      - "DefaultAzureCredentialBuilder"
+      - ".endpoint("
+      - ".credential("
+      - "System.getenv"
+    forbidden_patterns:
+      - "connectionString"
+    tags:
+      - authentication
+      - client
+    mock_response: |
+      import com.azure.data.tables.TableServiceClient;
+      import com.azure.data.tables.TableServiceClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      TableServiceClient serviceClient = new TableServiceClientBuilder()
+          .endpoint(System.getenv("AZURE_TABLES_ENDPOINT"))
+          .credential(new DefaultAzureCredentialBuilder().build())
+          .buildClient();
+
+  # TableClient Direct Construction
+  - name: table_client_direct
+    prompt: |
+      Create a TableClient directly for a specific table using
+      DefaultAzureCredential.
+    expected_patterns:
+      - "TableClient"
+      - "TableClientBuilder"
+      - "tableName"
+      - "DefaultAzureCredentialBuilder"
+    forbidden_patterns:
+      - "connectionString"
+    tags:
+      - client
+    mock_response: |
+      import com.azure.data.tables.TableClient;
+      import com.azure.data.tables.TableClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      TableClient tableClient = new TableClientBuilder()
+          .endpoint(System.getenv("AZURE_TABLES_ENDPOINT"))
+          .credential(new DefaultAzureCredentialBuilder().build())
+          .tableName("products")
+          .buildClient();
+
+  # Create Table If Not Exists
+  - name: create_table_if_not_exists
+    prompt: |
+      Create a table using createTableIfNotExists pattern to avoid
+      exceptions if table already exists.
+    expected_patterns:
+      - "createTableIfNotExists"
+      - "TableClient"
+    forbidden_patterns:
+      - "createTable("
+    tags:
+      - table-operations
+    mock_response: |
+      import com.azure.data.tables.TableClient;
+      import com.azure.data.tables.TableServiceClient;
+
+      // Create table if not exists - returns TableClient
+      TableClient tableClient = serviceClient.createTableIfNotExists("products");
+
+      System.out.println("Table ready: " + tableClient.getTableName());
+
+      // Or get existing table client
+      TableClient existingTable = serviceClient.getTableClient("products");
+
+  # CRUD Operations with TableEntity
+  - name: crud_table_entity
+    prompt: |
+      Show CRUD operations for TableEntity: create, get, update (merge and replace),
+      upsert, and delete.
+    expected_patterns:
+      - "TableEntity"
+      - "createEntity"
+      - "getEntity"
+      - "updateEntity"
+      - "upsertEntity"
+      - "deleteEntity"
+      - "TableEntityUpdateMode"
+    forbidden_patterns: []
+    tags:
+      - crud
+      - entity
+    mock_response: |
+      import com.azure.data.tables.models.TableEntity;
+      import com.azure.data.tables.models.TableEntityUpdateMode;
+
+      // CREATE
+      TableEntity entity = new TableEntity("electronics", "laptop-001")
+          .addProperty("Name", "Gaming Laptop")
+          .addProperty("Price", 1299.99)
+          .addProperty("Quantity", 50)
+          .addProperty("InStock", true);
+
+      tableClient.createEntity(entity);
+      System.out.println("Entity created");
+
+      // READ
+      TableEntity readEntity = tableClient.getEntity("electronics", "laptop-001");
+      String name = (String) readEntity.getProperty("Name");
+      Double price = (Double) readEntity.getProperty("Price");
+      System.out.printf("Read: %s - $%.2f%n", name, price);
+
+      // UPDATE (Merge - only updates specified properties)
+      TableEntity mergeEntity = new TableEntity("electronics", "laptop-001")
+          .addProperty("Price", 1199.99);  // Only update price
+      tableClient.updateEntity(mergeEntity, TableEntityUpdateMode.MERGE);
+
+      // UPDATE (Replace - replaces entire entity)
+      TableEntity replaceEntity = new TableEntity("electronics", "laptop-001")
+          .addProperty("Name", "Updated Laptop")
+          .addProperty("Price", 1199.99)
+          .addProperty("Quantity", 45)
+          .addProperty("InStock", true);
+      tableClient.updateEntity(replaceEntity, TableEntityUpdateMode.REPLACE);
+
+      // UPSERT (Insert or update)
+      tableClient.upsertEntity(entity, TableEntityUpdateMode.MERGE);
+
+      // DELETE
+      tableClient.deleteEntity("electronics", "laptop-001");
+
+  # Query with OData Filter
+  - name: query_odata_filter
+    prompt: |
+      Query entities using OData filter expressions with partition key,
+      property comparisons, and select projection.
+    expected_patterns:
+      - "ListEntitiesOptions"
+      - "setFilter"
+      - "setSelect"
+      - "listEntities"
+      - "PartitionKey eq"
+    forbidden_patterns: []
+    tags:
+      - query
+      - filter
+    mock_response: |
+      import com.azure.data.tables.models.ListEntitiesOptions;
+      import com.azure.data.tables.models.TableEntity;
+
+      // Filter by partition key (most efficient)
+      ListEntitiesOptions options = new ListEntitiesOptions()
+          .setFilter("PartitionKey eq 'electronics'");
+
+      for (TableEntity entity : tableClient.listEntities(options, null, null)) {
+          System.out.printf("%s: %s - $%.2f%n",
+              entity.getRowKey(),
+              entity.getProperty("Name"),
+              entity.getProperty("Price"));
+      }
+
+      // Complex filter with multiple conditions
+      ListEntitiesOptions complexOptions = new ListEntitiesOptions()
+          .setFilter("PartitionKey eq 'electronics' and Price gt 500 and InStock eq true");
+
+      // Select specific properties (reduces bandwidth)
+      ListEntitiesOptions selectOptions = new ListEntitiesOptions()
+          .setFilter("PartitionKey eq 'electronics'")
+          .setSelect("Name", "Price");
+
+      for (TableEntity entity : tableClient.listEntities(selectOptions, null, null)) {
+          // Only Name and Price are populated
+          System.out.printf("%s: %.2f%n",
+              entity.getProperty("Name"),
+              entity.getProperty("Price"));
+      }
+
+      // Top N results
+      ListEntitiesOptions topOptions = new ListEntitiesOptions()
+          .setFilter("PartitionKey eq 'electronics'")
+          .setTop(10);
+
+  # Batch/Transaction Operations
+  - name: batch_transaction
+    prompt: |
+      Perform batch operations (transaction) with multiple entities.
+      All entities must have the same partition key.
+    expected_patterns:
+      - "TableTransactionAction"
+      - "TableTransactionActionType"
+      - "submitTransaction"
+      - "CREATE"
+      - "UPSERT_MERGE"
+    forbidden_patterns: []
+    tags:
+      - batch
+      - transaction
+    mock_response: |
+      import com.azure.data.tables.models.TableTransactionAction;
+      import com.azure.data.tables.models.TableTransactionActionType;
+      import com.azure.data.tables.models.TableEntity;
+      import java.util.Arrays;
+      import java.util.List;
+
+      // All entities MUST have same partition key
+      String partitionKey = "electronics";
+
+      List<TableTransactionAction> actions = Arrays.asList(
+          new TableTransactionAction(
+              TableTransactionActionType.CREATE,
+              new TableEntity(partitionKey, "item-001")
+                  .addProperty("Name", "Item 1")
+                  .addProperty("Price", 29.99)),
+          new TableTransactionAction(
+              TableTransactionActionType.CREATE,
+              new TableEntity(partitionKey, "item-002")
+                  .addProperty("Name", "Item 2")
+                  .addProperty("Price", 49.99)),
+          new TableTransactionAction(
+              TableTransactionActionType.UPSERT_MERGE,
+              new TableEntity(partitionKey, "item-003")
+                  .addProperty("Name", "Item 3")
+                  .addProperty("Price", 19.99)),
+          new TableTransactionAction(
+              TableTransactionActionType.DELETE,
+              new TableEntity(partitionKey, "item-old"))
+      );
+
+      // Execute as atomic transaction
+      tableClient.submitTransaction(actions);
+      System.out.println("Transaction completed successfully");
+
+  # List Tables
+  - name: list_tables
+    prompt: |
+      List all tables in the storage account with optional filtering.
+    expected_patterns:
+      - "listTables"
+      - "TableItem"
+      - "getName"
+    forbidden_patterns: []
+    tags:
+      - table-operations
+    mock_response: |
+      import com.azure.data.tables.models.TableItem;
+      import com.azure.data.tables.models.ListTablesOptions;
+
+      // List all tables
+      System.out.println("Tables in storage account:");
+      for (TableItem table : serviceClient.listTables()) {
+          System.out.println("  - " + table.getName());
+      }
+
+      // List with filter
+      ListTablesOptions options = new ListTablesOptions()
+          .setFilter("TableName ge 'a' and TableName lt 'n'");
+
+      System.out.println("Filtered tables:");
+      for (TableItem table : serviceClient.listTables(options, null, null)) {
+          System.out.println("  - " + table.getName());
+      }
+
+  # Error Handling
+  - name: table_error_handling
+    prompt: |
+      Show proper error handling for TableServiceException with status codes
+      for conflict (entity exists) and not found.
+    expected_patterns:
+      - "TableServiceException"
+      - "getResponse"
+      - "getStatusCode"
+      - "409"
+      - "404"
+    forbidden_patterns:
+      - "catch (Exception"
+      - "printStackTrace"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.data.tables.models.TableServiceException;
+      import com.azure.data.tables.models.TableEntity;
+
+      public void createEntitySafely(TableEntity entity) {
+          try {
+              tableClient.createEntity(entity);
+              System.out.println("Entity created successfully");
+          } catch (TableServiceException e) {
+              int statusCode = e.getResponse().getStatusCode();
+
+              switch (statusCode) {
+                  case 409:
+                      System.err.printf("Entity already exists: %s/%s%n",
+                          entity.getPartitionKey(),
+                          entity.getRowKey());
+                      // Use upsert instead
+                      tableClient.upsertEntity(entity);
+                      break;
+                  case 404:
+                      System.err.println("Table not found");
+                      throw e;
+                  default:
+                      System.err.printf("Error %d: %s%n", statusCode, e.getMessage());
+                      throw e;
+              }
+          }
+      }
+
+  # Partition Key Design
+  - name: partition_key_design
+    prompt: |
+      Show good partition key design patterns for different scenarios:
+      category-based, tenant-based, and date-based partitioning.
+    expected_patterns:
+      - "TableEntity"
+      - "PartitionKey"
+    forbidden_patterns:
+      - '"all-data"'
+      - "UUID.randomUUID"
+    tags:
+      - partitioning
+      - best-practices
+    mock_response: |
+      import com.azure.data.tables.models.TableEntity;
+      import java.time.LocalDate;
+      import java.time.format.DateTimeFormatter;
+
+      // Category-based partitioning for products
+      TableEntity electronics = new TableEntity("electronics", "laptop-001")
+          .addProperty("Name", "Gaming Laptop")
+          .addProperty("Price", 1299.99);
+
+      TableEntity clothing = new TableEntity("clothing", "shirt-001")
+          .addProperty("Name", "Blue Shirt")
+          .addProperty("Price", 49.99);
+
+      // Tenant-based partitioning for multi-tenant apps
+      String tenantId = "tenant-123";
+      TableEntity tenantOrder = new TableEntity("tenant-" + tenantId, "order-456")
+          .addProperty("CustomerId", "cust-789")
+          .addProperty("Total", 199.99);
+
+      // Date-based partitioning for time-series data (logs, events)
+      String datePartition = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM"));
+      TableEntity logEntry = new TableEntity(datePartition, "log-" + System.currentTimeMillis())
+          .addProperty("Level", "INFO")
+          .addProperty("Message", "Application started");
+
+      // Good: Even distribution across partitions
+      // Bad: UUID as partition key makes range queries impossible
+
+  # AzureNamedKeyCredential
+  - name: named_key_credential
+    prompt: |
+      Create a TableServiceClient using AzureNamedKeyCredential with
+      account name and key from environment variables.
+    expected_patterns:
+      - "AzureNamedKeyCredential"
+      - "System.getenv"
+      - "AZURE_STORAGE_ACCOUNT_NAME"
+      - "AZURE_STORAGE_ACCOUNT_KEY"
+    forbidden_patterns:
+      - "hardcoded"
+      - '"myaccount"'
+    tags:
+      - authentication
+    mock_response: |
+      import com.azure.data.tables.TableServiceClient;
+      import com.azure.data.tables.TableServiceClientBuilder;
+      import com.azure.core.credential.AzureNamedKeyCredential;
+
+      AzureNamedKeyCredential credential = new AzureNamedKeyCredential(
+          System.getenv("AZURE_STORAGE_ACCOUNT_NAME"),
+          System.getenv("AZURE_STORAGE_ACCOUNT_KEY")
+      );
+
+      TableServiceClient serviceClient = new TableServiceClientBuilder()
+          .endpoint(System.getenv("AZURE_TABLES_ENDPOINT"))
+          .credential(credential)
+          .buildClient();
+
+  # Query Range
+  - name: query_range
+    prompt: |
+      Query entities within a range using OData comparison operators
+      (ge, le, gt, lt).
+    expected_patterns:
+      - "ListEntitiesOptions"
+      - "setFilter"
+      - " ge "
+      - " le "
+    forbidden_patterns: []
+    tags:
+      - query
+      - range
+    mock_response: |
+      import com.azure.data.tables.models.ListEntitiesOptions;
+      import com.azure.data.tables.models.TableEntity;
+
+      // Price range query
+      ListEntitiesOptions priceRange = new ListEntitiesOptions()
+          .setFilter("PartitionKey eq 'electronics' and Price ge 100 and Price le 500");
+
+      System.out.println("Products $100-$500:");
+      for (TableEntity entity : tableClient.listEntities(priceRange, null, null)) {
+          System.out.printf("  %s: $%.2f%n",
+              entity.getProperty("Name"),
+              entity.getProperty("Price"));
+      }
+
+      // Quantity range
+      ListEntitiesOptions quantityRange = new ListEntitiesOptions()
+          .setFilter("PartitionKey eq 'electronics' and Quantity gt 10 and Quantity lt 100");
+
+      // Row key range (useful for time-based row keys)
+      ListEntitiesOptions rowKeyRange = new ListEntitiesOptions()
+          .setFilter("PartitionKey eq '2024-01' and RowKey ge 'log-1704067200000' and RowKey lt 'log-1704153600000'");

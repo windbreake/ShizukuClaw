@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>沙箱聊天</title>
+    <style>
+        html, body { height: 100%; }
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            overflow: hidden;
+        }
+        .chat-container {
+            width: min(920px, 100%);
+            margin: 0 auto;
+            height: 100vh;
+            height: 100dvh;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            background: #ff6b9e;
+            color: #fff;
+            padding: 15px;
+            text-align: center;
+            font-size: 1.2em;
+            flex: 0 0 auto;
+        }
+        .chat-messages {
+            flex: 1 1 auto;
+            min-height: 0;
+            padding: 15px;
+            overflow-y: auto;
+            background: #fafafa;
+            scroll-behavior: smooth;
+        }
+        .message {
+            margin-bottom: 15px;
+            max-width: 88%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            line-height: 1.45;
+            white-space: normal;
+            word-break: break-word;
+        }
+        .user-message {
+            background: #e3f2fd;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+        .bot-message {
+            background: #ffebee;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
+        }
+        .input-area {
+            padding: 15px;
+            background: #fff;
+            border-top: 1px solid #eee;
+            flex: 0 0 auto;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            resize: none;
+            height: 80px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background: #ff6b9e;
+            color: #fff;
+            cursor: pointer;
+        }
+        button:hover { background: #ff4785; }
+        .typing {
+            color: #888;
+            font-style: italic;
+            display: none;
+            margin-top: 5px;
+        }
+        .timestamp {
+            font-size: 0.8em;
+            color: #999;
+            margin-top: 6px;
+            text-align: right;
+        }
+        .image-upload { margin-bottom: 10px; }
+        #image-preview img {
+            max-width: 100px;
+            max-height: 100px;
+            margin-top: 5px;
+            border-radius: 5px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 10px;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #ff6b9e;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .workmode-bar {
+            margin: 12px 0;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: #fff3cd;
+            border: 1px solid #ffe69c;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.92rem;
+        }
+        .quick-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .quick-actions button {
+            padding: 8px;
+            font-size: 13px;
+        }
+        .quick-open-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .quick-open-row input {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 8px;
+        }
+        .approval-box {
+            margin-bottom: 10px;
+            border: 1px solid #f7c6cc;
+            border-radius: 8px;
+            background: #fff8f9;
+            display: none;
+        }
+        .approval-box.show { display: block; }
+        .approval-head {
+            padding: 8px 10px;
+            background: #ffeef1;
+            color: #8e2648;
+            font-size: 12px;
+            font-weight: 600;
+            border-bottom: 1px solid #f6d8df;
+        }
+        .approval-list {
+            padding: 8px;
+            display: grid;
+            gap: 8px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        .approval-item {
+            border: 1px solid #f2d9df;
+            border-radius: 6px;
+            background: #fff;
+            padding: 8px;
+            font-size: 12px;
+            color: #3a3d43;
+        }
+        .approval-actions {
+            margin-top: 6px;
+            display: flex;
+            gap: 6px;
+        }
+        .approval-actions button {
+            font-size: 12px;
+            padding: 5px 8px;
+            flex: 0 0 auto;
+        }
+        .workmode-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #6c757d;
+            color: #fff;
+            font-size: 0.8rem;
+        }
+        .wm-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .wm-modal.show { display: flex; }
+        .wm-card {
+            width: min(520px, calc(100vw - 24px));
+            background: #fff;
+            border-radius: 12px;
+            padding: 18px;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.2);
+        }
+        .wm-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .ai-trace-panel {
+            margin-top: 10px;
+            border: 1px solid #f2b8c6;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .ai-trace-panel > summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 8px 10px;
+            background: #fff6f8;
+            color: #8a1f44;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .ai-trace-panel > summary::-webkit-details-marker { display: none; }
+        .ai-trace-list {
+            padding: 8px;
+            display: grid;
+            gap: 8px;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+        .ai-trace-item {
+            border: 1px solid #f0e2e7;
+            border-radius: 6px;
+            background: #fff;
+        }
+        .ai-trace-item-head {
+            padding: 6px 8px;
+            background: #faf4f6;
+            font-size: 12px;
+            color: #6f3550;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .ai-trace-item-body {
+            margin: 0;
+            padding: 8px;
+            font-size: 12px;
+            line-height: 1.35;
+            white-space: pre-wrap;
+            color: #30343a;
+            max-height: 150px;
+            overflow: auto;
+        }
+        .ai-trace-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 999px;
+            font-size: 11px;
+            background: #eceff3;
+            color: #36404a;
+        }
+        .back-to-top-btn {
+            position: fixed;
+            right: 22px;
+            bottom: 22px;
+            width: 44px;
+            height: 44px;
+            border-radius: 999px;
+            background: #ff6b9e;
+            border: 0;
+            box-shadow: 0 6px 18px rgba(255, 107, 158, 0.35);
+            color: #fff;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9998;
+            padding: 0;
+        }
+        .back-to-top-btn:hover { background: #ff4785; }
+        .back-to-top-btn svg { width: 18px; height: 18px; }
+        @media (max-width: 768px) {
+            .chat-container {
+                width: 100%;
+                border-radius: 0;
+                box-shadow: none;
+            }
+            .input-area { padding: 12px; }
+            textarea { height: 64px; }
+            .back-to-top-btn { right: 14px; bottom: 14px; }
+        }
+    </style>
+    <script src="/static/security-auth.js"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">沙箱调试会话</div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="message bot-message">
+                已进入沙箱模式。你可以直接要求我写代码、运行代码并调试问题。
+                <div class="timestamp">刚刚</div>
+            </div>
+        </div>
+        <div class="input-area">
+            <div class="workmode-bar">
+                <div>
+                    <strong>沙箱工作模式</strong>
+                    <span id="sandbox-workmode-badge" class="workmode-badge">关闭</span>
+                    <div style="font-size:12px;color:#7a5d00;margin-top:4px;">仅当前沙箱页面可用，不影响其他前端。</div>
+                </div>
+                <button id="toggle-workmode-btn">切换工作模式</button>
+            </div>
+
+            <div class="quick-actions">
+                <button id="open-workspace-btn" type="button">打开工作空间目录</button>
+                <button id="open-sandbox-page-btn" type="button">打开当前沙箱网页</button>
+            </div>
+
+            <div class="quick-open-row">
+                <input id="quick-open-path" type="text" placeholder="输入文件或目录路径，例如 reports/output.md">
+                <button id="quick-open-path-btn" type="button">一键打开</button>
+            </div>
+
+            <div class="quick-open-row">
+                <input id="quick-open-url" type="text" placeholder="输入部署URL，例如 http://127.0.0.1:8765/">
+                <button id="quick-open-url-btn" type="button">打开网页</button>
+            </div>
+
+            <div id="approval-box" class="approval-box">
+                <div class="approval-head">外部路径访问审批（工作空间外）</div>
+                <div id="approval-list" class="approval-list"></div>
+            </div>
+
+            <textarea id="user-input" placeholder="输入需求，例如：修复启动报错并运行测试"></textarea>
+
+            <div class="image-upload">
+                <input type="file" id="image-upload" accept="image/*" style="display: none">
+                <button id="upload-button">上传图片</button>
+                <div id="image-preview"></div>
+            </div>
+
+            <div class="typing" id="typing-indicator">正在处理中...</div>
+            <div class="loading" id="loading-indicator">
+                <div class="loading-spinner"></div>
+                <p>正在处理中，请稍候...</p>
+            </div>
+
+            <div class="button-group">
+                <button id="send-button">发送</button>
+                <button id="clear-button">清空</button>
+            </div>
+        </div>
+    </div>
+
+    <button id="back-to-top-btn" class="back-to-top-btn" title="返回顶部" aria-label="返回顶部">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M12 3L18.5 9.5L16.9 11.1L13.2 7.4V18H10.8V7.4L7.1 11.1L5.5 9.5L12 3Z" fill="currentColor"/>
+        </svg>
+    </button>
+
+    <div id="wm-modal" class="wm-modal">
+        <div class="wm-card">
+            <h3 style="margin:0 0 8px 0;color:#b02a37;">🔐 安全模式系统</h3>
+            <p style="margin:0 0 6px 0;"><strong>当前系统已启用两层密码保护机制：</strong></p>
+            <ul style="margin:8px 0;padding-left:20px;font-size:13px;">
+                <li><strong>沙箱模式 (Level 0)</strong>：默认安全，代码在严格隔离环境运行</li>
+                <li><strong>工作模式 (Level 1)</strong>：需要工作模式密码，允许文件操作</li>
+                <li><strong>全局管理模式 (Level 2)</strong>：需要管理密码 + 风险确认，完全系统访问权限</li>
+            </ul>
+            <p style="margin:12px 0 6px 0;color:#6c757d;font-size:12px;">点击下方按钮进入相应安全级别。</p>
+            <div class="wm-actions">
+                <button type="button" id="wm-cancel">关闭</button>
+                <button type="button" id="wm-level2" style="background:#dc3545;display:none;">进入全局管理模式</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatMessages = document.getElementById('chat-messages');
+            const userInput = document.getElementById('user-input');
+            const sendButton = document.getElementById('send-button');
+            const clearButton = document.getElementById('clear-button');
+            const loadingIndicator = document.getElementById('loading-indicator');
+            const uploadButton = document.getElementById('upload-button');
+            const imageUpload = document.getElementById('image-upload');
+            const imagePreview = document.getElementById('image-preview');
+            const wmModal = document.getElementById('wm-modal');
+            const wmConfirm = document.getElementById('wm-confirm');
+            const wmCancel = document.getElementById('wm-cancel');
+            const wmBadge = document.getElementById('sandbox-workmode-badge');
+            const toggleWorkmodeBtn = document.getElementById('toggle-workmode-btn');
+            const backToTopBtn = document.getElementById('back-to-top-btn');
+            const approvalBox = document.getElementById('approval-box');
+            const approvalList = document.getElementById('approval-list');
+            const openWorkspaceBtn = document.getElementById('open-workspace-btn');
+            const openSandboxPageBtn = document.getElementById('open-sandbox-page-btn');
+            const quickOpenPathInput = document.getElementById('quick-open-path');
+            const quickOpenPathBtn = document.getElementById('quick-open-path-btn');
+            const quickOpenUrlInput = document.getElementById('quick-open-url');
+            const quickOpenUrlBtn = document.getElementById('quick-open-url-btn');
+
+            let sandboxSettings = {
+                sandbox_show_agent_trace: true,
+                sandbox_trace_collapsed: true,
+                sandbox_show_back_to_top: true,
+            };
+
+            function escapeHtml(text) {
+                return String(text || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function iconForTrace(type) {
+                if (type === 'tool_call') {
+                    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M11 4h2v8h4l-5 8-5-8h4V4z"/></svg>';
+                }
+                if (type === 'tool_result') {
+                    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M9 16.2l-3.5-3.5L4 14.2l5 5 11-11-1.5-1.5z"/></svg>';
+                }
+                return '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>';
+            }
+
+            function buildTracePanel(debug) {
+                if (!debug || !debug.enabled || !Array.isArray(debug.events) || debug.events.length === 0) {
+                    return null;
+                }
+
+                const details = document.createElement('details');
+                details.className = 'ai-trace-panel';
+                details.open = !debug.collapsed;
+
+                const summary = document.createElement('summary');
+                summary.innerHTML =
+                    '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3 5h18v2H3zm0 6h18v2H3zm0 6h18v2H3z"/></svg>' +
+                    `<span>AI 操作流程（${debug.events.length} 条）</span>`;
+                details.appendChild(summary);
+
+                if (debug.trace_md && debug.trace_md.path) {
+                    const traceMeta = document.createElement('div');
+                    traceMeta.className = 'ai-trace-item';
+                    const traceHead = document.createElement('div');
+                    traceHead.className = 'ai-trace-item-head';
+                    traceHead.innerHTML = `${iconForTrace('tool_result')}<span>临时过程文件</span><span class="ai-trace-badge">${escapeHtml(debug.trace_md.path)}</span>`;
+                    traceMeta.appendChild(traceHead);
+                    details.appendChild(traceMeta);
+                }
+
+                const list = document.createElement('div');
+                list.className = 'ai-trace-list';
+
+                debug.events.forEach((event) => {
+                    const item = document.createElement('div');
+                    item.className = 'ai-trace-item';
+
+                    const head = document.createElement('div');
+                    head.className = 'ai-trace-item-head';
+
+                    const lower = String((event.content || '')).toLowerCase();
+                    const codingHit = /write_file|append_file_content|delete_file|exec_python|py_compile|pytest|run|build/.test(lower);
+
+                    head.innerHTML = `${iconForTrace(event.type)}<span>${escapeHtml(event.label || '步骤')}</span>` +
+                        (codingHit ? '<span class="ai-trace-badge">代码调试</span>' : '') +
+                        ((event.tool_name || '') ? `<span class="ai-trace-badge">${escapeHtml(event.tool_name)}</span>` : '');
+
+                    const body = document.createElement('pre');
+                    body.className = 'ai-trace-item-body';
+                    body.textContent = String(event.content || '').slice(0, 6000);
+
+                    item.appendChild(head);
+                    item.appendChild(body);
+                    list.appendChild(item);
+                });
+
+                details.appendChild(list);
+                return details;
+            }
+
+            function refreshBackToTopVisibility() {
+                if (!sandboxSettings.sandbox_show_back_to_top) {
+                    backToTopBtn.style.display = 'none';
+                    return;
+                }
+                backToTopBtn.style.display = chatMessages.scrollTop > 220 ? 'flex' : 'none';
+            }
+
+            async function loadWorkModeStatus() {
+                try {
+                    const res = await fetch('/api/security/status');
+                    const data = await res.json();
+
+                    // 更新工作模式徽章 - 显示当前安全级别
+                    const securityLevel = window.SecurityAuth.securityLevel;
+                    if (securityLevel === 2) {
+                        wmBadge.innerText = '全局管理';
+                        wmBadge.style.background = '#dc3545';
+                        wmBadge.style.color = '#fff';
+                    } else if (securityLevel === 1) {
+                        wmBadge.innerText = '工作';
+                        wmBadge.style.background = '#ffc107';
+                        wmBadge.style.color = '#212529';
+                    } else {
+                        wmBadge.innerText = '沙箱';
+                        wmBadge.style.background = '#6c757d';
+                        wmBadge.style.color = '#fff';
+                    }
+
+                    const settings = data.chat_settings || {};
+                    sandboxSettings.sandbox_show_agent_trace = !!settings.sandbox_show_agent_trace;
+                    sandboxSettings.sandbox_trace_collapsed = !!settings.sandbox_trace_collapsed;
+                    sandboxSettings.sandbox_show_back_to_top = !!settings.sandbox_show_back_to_top;
+                    refreshBackToTopVisibility();
+                } catch (e) {
+                    console.warn('load security status failed', e);
+                }
+            }
+
+            async function openPath(path, externalApprovalId) {
+                const resp = await fetch('/api/sandbox/open_path', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Frontend-Source': 'sandbox'
+                    },
+                    body: JSON.stringify({path, external_approval_id: externalApprovalId || ''})
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    alert(data.error || '打开失败');
+                }
+                return data;
+            }
+
+            async function openUrl(url) {
+                const resp = await fetch('/api/sandbox/open_url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Frontend-Source': 'sandbox'
+                    },
+                    body: JSON.stringify({url})
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    alert(data.error || '打开失败');
+                }
+                return data;
+            }
+
+            async function resolveApproval(requestId, approve) {
+                const resp = await fetch(`/api/sandbox/external_approvals/${encodeURIComponent(requestId)}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Frontend-Source': 'sandbox'
+                    },
+                    body: JSON.stringify({approve})
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    alert(data.error || '审批失败');
+                }
+                await refreshApprovals();
+                return data;
+            }
+
+            async function refreshApprovals() {
+                try {
+                    const resp = await fetch('/api/sandbox/external_approvals?status=pending&limit=20', {
+                        headers: {'X-Frontend-Source': 'sandbox'}
+                    });
+                    const data = await resp.json();
+                    const rows = Array.isArray(data.data) ? data.data : [];
+                    approvalList.innerHTML = '';
+
+                    if (rows.length === 0) {
+                        approvalBox.classList.remove('show');
+                        return;
+                    }
+
+                    rows.forEach((item) => {
+                        const block = document.createElement('div');
+                        block.className = 'approval-item';
+                        const path = String(item.path || '');
+                        block.innerHTML =
+                            `<div><strong>${escapeHtml(item.action || 'read')}</strong></div>` +
+                            `<div style="margin-top:4px;word-break:break-all;">${escapeHtml(path)}</div>`;
+
+                        const actions = document.createElement('div');
+                        actions.className = 'approval-actions';
+
+                        const approveBtn = document.createElement('button');
+                        approveBtn.type = 'button';
+                        approveBtn.style.background = '#198754';
+                        approveBtn.textContent = '允许';
+                        approveBtn.addEventListener('click', () => resolveApproval(item.id, true));
+
+                        const rejectBtn = document.createElement('button');
+                        rejectBtn.type = 'button';
+                        rejectBtn.style.background = '#dc3545';
+                        rejectBtn.textContent = '拒绝';
+                        rejectBtn.addEventListener('click', () => resolveApproval(item.id, false));
+
+                        const openBtn = document.createElement('button');
+                        openBtn.type = 'button';
+                        openBtn.style.background = '#0d6efd';
+                        openBtn.textContent = '打开路径';
+                        openBtn.addEventListener('click', () => openPath(path, item.id));
+
+                        actions.appendChild(approveBtn);
+                        actions.appendChild(rejectBtn);
+                        actions.appendChild(openBtn);
+                        block.appendChild(actions);
+                        approvalList.appendChild(block);
+                    });
+
+                    approvalBox.classList.add('show');
+                } catch (e) {
+                    console.warn('refresh approvals failed', e);
+                }
+            }
+
+            async function toggleSandboxWorkMode() {
+                // 先获取安全状态
+                try {
+                    const statusRes = await fetch('/api/security/status');
+                    const statusData = await statusRes.json();
+                    
+                    // 如果没有配置密码，提示用户
+                    if (!statusData.passwords_configured) {
+                        alert('系统未配置安全密码。请联系管理员设置密码。');
+                        return;
+                    }
+
+                    // 如果已启用 Level1，显示切换确认
+                    if (wmBadge.innerText === '工作') {
+                        const confirmed = confirm('确认退出工作模式？');
+                        if (!confirmed) return;
+                        
+                        wmBadge.innerText = '沙箱';
+                        wmBadge.style.background = '#6c757d';
+                        wmBadge.style.color = '#fff';
+                        window.SecurityAuth.level1SessionId = null;
+                        window.SecurityAuth.securityLevel = 0;
+                        return;
+                    }
+
+                    // 尝试进入 Level1
+                    const success = await window.SecurityAuth.showLevel1Dialog();
+                    if (success) {
+                        wmBadge.innerText = '工作';
+                        wmBadge.style.background = '#ffc107';
+                        wmBadge.style.color = '#212529';
+                        addMessage('✅ 已进入工作模式（Level 1）。可以执行文件操作。', false, null);
+                    }
+                } catch (err) {
+                    console.error('Toggle work mode failed:', err);
+                    alert(`切换失败: ${err.message}`);
+                }
+            }
+
+            function addMessage(text, isUser, options) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+
+                const contentDiv = document.createElement('div');
+                if (isUser) {
+                    contentDiv.innerHTML = text;
+                } else {
+                    contentDiv.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
+                }
+                messageDiv.appendChild(contentDiv);
+
+                if (!isUser && options && options.debug) {
+                    const merged = {
+                        enabled: sandboxSettings.sandbox_show_agent_trace && !!options.debug.enabled,
+                        collapsed: options.debug.collapsed !== undefined ? !!options.debug.collapsed : sandboxSettings.sandbox_trace_collapsed,
+                        events: Array.isArray(options.debug.events) ? options.debug.events : [],
+                    };
+                    const panel = buildTracePanel(merged);
+                    if (panel) {
+                        messageDiv.appendChild(panel);
+                    }
+                }
+
+                const ts = document.createElement('div');
+                ts.className = 'timestamp';
+                ts.textContent = new Date().toLocaleTimeString();
+                messageDiv.appendChild(ts);
+
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                refreshBackToTopVisibility();
+            }
+
+            function createPendingAssistantMessage() {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message bot-message';
+
+                const contentDiv = document.createElement('div');
+                contentDiv.innerHTML = '正在输出中...';
+                messageDiv.appendChild(contentDiv);
+
+                const pendingDebug = {
+                    enabled: sandboxSettings.sandbox_show_agent_trace,
+                    collapsed: sandboxSettings.sandbox_trace_collapsed,
+                    events: [
+                        {
+                            type: 'assistant_message',
+                            label: '处理中',
+                            content: '模型正在思考与执行操作，完成后会将详细流程归档到本条消息。'
+                        }
+                    ]
+                };
+
+                let panel = buildTracePanel(pendingDebug);
+                if (panel) {
+                    panel.setAttribute('data-live-trace', '1');
+                    messageDiv.appendChild(panel);
+                }
+
+                const ts = document.createElement('div');
+                ts.className = 'timestamp';
+                ts.textContent = new Date().toLocaleTimeString();
+                messageDiv.appendChild(ts);
+
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                refreshBackToTopVisibility();
+
+                return {
+                    setText(text) {
+                        contentDiv.innerHTML = escapeHtml(text || '').replace(/\n/g, '<br>');
+                    },
+                    setError(text) {
+                        contentDiv.innerHTML = escapeHtml(text || '未知错误').replace(/\n/g, '<br>');
+                    },
+                    setDebug(debug) {
+                        const oldPanel = messageDiv.querySelector('[data-live-trace="1"], .ai-trace-panel');
+                        if (oldPanel) oldPanel.remove();
+
+                        const merged = {
+                            enabled: sandboxSettings.sandbox_show_agent_trace && !!(debug && debug.enabled),
+                            collapsed: debug && debug.collapsed !== undefined ? !!debug.collapsed : sandboxSettings.sandbox_trace_collapsed,
+                            events: debug && Array.isArray(debug.events) ? debug.events : [],
+                            trace_md: debug && debug.trace_md ? debug.trace_md : null,
+                        };
+                        const realPanel = buildTracePanel(merged);
+                        if (realPanel) {
+                            messageDiv.insertBefore(realPanel, ts);
+                        }
+                    }
+                };
+            }
+
+            async function sendMessage() {
+                const message = userInput.value.trim();
+                const image = imagePreview.querySelector('img');
+                let imageData = null;
+
+                if (image) imageData = image.src;
+                if (!message && !imageData) return;
+
+                let userMessageContent = escapeHtml(message).replace(/\n/g, '<br>');
+                if (imageData) {
+                    userMessageContent += `<br><img src="${imageData}" style="max-width: 200px; max-height: 200px; border-radius: 6px;">`;
+                }
+                addMessage(userMessageContent, true, null);
+
+                userInput.value = '';
+                imagePreview.innerHTML = '';
+                imageUpload.value = '';
+                loadingIndicator.style.display = 'block';
+                const pendingAssistant = createPendingAssistantMessage();
+
+                try {
+                    // 准备请求体，包含当前的安全级别和会话信息
+                    const requestBody = {
+                        message: message,
+                        image: imageData,
+                        security_level: window.SecurityAuth.securityLevel,
+                        session_id: window.SecurityAuth.securityLevel === 1 ? 
+                                   window.SecurityAuth.level1SessionId : 
+                                   (window.SecurityAuth.securityLevel === 2 ? 
+                                    window.SecurityAuth.level2SessionId : null)
+                    };
+
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Frontend-Source': 'sandbox'
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    const data = await response.json();
+                    
+                    // 检查会话是否过期
+                    if (response.status === 401) {
+                        pendingAssistant.setError('❌ 安全会话已过期，请重新选择安全级别');
+                        pendingAssistant.setDebug(null);
+                        window.SecurityAuth.level1SessionId = null;
+                        window.SecurityAuth.level2SessionId = null;
+                        window.SecurityAuth.securityLevel = 0;
+                        wmBadge.innerText = '沙箱';
+                        wmBadge.style.background = '#6c757d';
+                        wmBadge.style.color = '#fff';
+                        return;
+                    }
+
+                    if (data.success) {
+                        pendingAssistant.setText(data.reply || '');
+                        pendingAssistant.setDebug(data.debug || null);
+                        if (data.debug && data.debug.show_back_to_top !== undefined) {
+                            sandboxSettings.sandbox_show_back_to_top = !!data.debug.show_back_to_top;
+                        }
+                        const foundUrl = String(data.reply || '').match(/https?:\/\/[^\s<>"]+/i);
+                        if (foundUrl) {
+                            quickOpenUrlInput.value = foundUrl[0];
+                        }
+                    } else {
+                        pendingAssistant.setError(`出错啦: ${data.error || '未知错误'}`);
+                        pendingAssistant.setDebug(null);
+                    }
+                } catch (error) {
+                    pendingAssistant.setError(`网络错误: ${error.message}`);
+                    pendingAssistant.setDebug(null);
+                } finally {
+                    loadingIndicator.style.display = 'none';
+                    refreshApprovals();
+                    refreshBackToTopVisibility();
+                }
+            }
+
+            // 工作模式按钮点击：显示当前状态和操作选项
+            toggleWorkmodeBtn.addEventListener('click', async function() {
+                const currentLevel = window.SecurityAuth.securityLevel;
+                
+                // 如果还在沙箱模式，进入工作模式
+                if (currentLevel === 0) {
+                    wmModal.classList.add('show');
+                } 
+                // 如果在工作模式，显示切换菜单（可以升级到全局管理或退出）
+                else if (currentLevel === 1) {
+                    const choice = confirm('当前在工作模式。\n\n按"确定"进入全局管理模式，按"取消"返回沙箱模式？');
+                    if (choice) {
+                        // 尝试进入 Level 2
+                        const success = await window.SecurityAuth.showLevel2Dialog();
+                        if (success) {
+                            wmBadge.innerText = '全局管理';
+                            wmBadge.style.background = '#dc3545';
+                            wmBadge.style.color = '#fff';
+                            addMessage('🚨 已进入全局管理模式（Level 2）。具有完全系统访问权限。', false, null);
+                        }
+                    } else {
+                        // 退出到沙箱模式
+                        wmBadge.innerText = '沙箱';
+                        wmBadge.style.background = '#6c757d';
+                        wmBadge.style.color = '#fff';
+                        window.SecurityAuth.level1SessionId = null;
+                        window.SecurityAuth.level2SessionId = null;
+                        window.SecurityAuth.securityLevel = 0;
+                    }
+                }
+                // 如果在全局管理模式，只需退出
+                else if (currentLevel === 2) {
+                    const confirmed = confirm('确认退出全局管理模式，返回沙箱模式？');
+                    if (confirmed) {
+                        wmBadge.innerText = '沙箱';
+                        wmBadge.style.background = '#6c757d';
+                        wmBadge.style.color = '#fff';
+                        window.SecurityAuth.level1SessionId = null;
+                        window.SecurityAuth.level2SessionId = null;
+                        window.SecurityAuth.securityLevel = 0;
+                    }
+                }
+            });
+            
+            wmCancel.addEventListener('click', function() {
+                wmModal.classList.remove('show');
+                // 点击关闭后主动进入 Level 1 工作模式
+                toggleSandboxWorkMode();
+            });
+
+            uploadButton.addEventListener('click', function() {
+                imageUpload.click();
+            });
+
+            imageUpload.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (file.size > 2 * 1024 * 1024) {
+                    alert('图片太大啦！请选择小于2MB的图片。');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = document.createElement('img');
+                    img.src = event.target.result;
+                    imagePreview.innerHTML = '';
+                    imagePreview.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            });
+
+            sendButton.addEventListener('click', sendMessage);
+            userInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            clearButton.addEventListener('click', function() {
+                userInput.value = '';
+                imagePreview.innerHTML = '';
+                imageUpload.value = '';
+            });
+
+            openWorkspaceBtn.addEventListener('click', function() {
+                openPath('.', '');
+            });
+            openSandboxPageBtn.addEventListener('click', function() {
+                openUrl(window.location.origin + '/sandbox');
+            });
+            quickOpenPathBtn.addEventListener('click', function() {
+                const value = quickOpenPathInput.value.trim();
+                if (!value) return;
+                openPath(value, '');
+            });
+            quickOpenUrlBtn.addEventListener('click', function() {
+                const value = quickOpenUrlInput.value.trim();
+                if (!value) return;
+                openUrl(value);
+            });
+
+            chatMessages.addEventListener('scroll', refreshBackToTopVisibility);
+            backToTopBtn.addEventListener('click', function() {
+                chatMessages.scrollTo({top: 0, behavior: 'smooth'});
+            });
+
+            // 初始化安全系统状态
+            (async function initSecuritySystem() {
+                try {
+                    const statusRes = await fetch('/api/security/status');
+                    const statusData = await statusRes.json();
+                    
+                    if (statusData.passwords_configured) {
+                        addMessage(
+                            '🔐 安全系统已启用。系统支持三个安全级别：\n' +
+                            '• 沙箱模式 (默认)：严格隔离\n' +
+                            '• 工作模式 (Level 1)：文件操作\n' +
+                            '• 全局管理 (Level 2)：完全系统访问\n' +
+                            '点击左侧"切换工作模式"按钮选择安全级别。',
+                            false,
+                            null
+                        );
+                    }
+                } catch (err) {
+                    console.warn('Security system init failed:', err);
+                }
+            })();
+            
+            loadWorkModeStatus();
+            refreshApprovals();
+            setInterval(refreshApprovals, 10000);
+        });
+    </script>
+</body>
+</html>

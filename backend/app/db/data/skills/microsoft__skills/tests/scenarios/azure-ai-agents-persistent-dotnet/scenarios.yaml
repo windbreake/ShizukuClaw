@@ -1,0 +1,660 @@
+# Test scenarios for azure-ai-agents-persistent-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Agent Creation
+  - name: basic_agent_creation
+    prompt: |
+      Create a basic Azure AI persistent agent in C# that can respond to 
+      user messages. Include proper authentication, agent creation, thread
+      management, and cleanup.
+    expected_patterns:
+      - "PersistentAgentsClient"
+      - "DefaultAzureCredential"
+      - "CreateAgentAsync"
+      - "CreateThreadAsync"
+      - "CreateMessageAsync"
+      - "CreateRunAsync"
+      - "DeleteAgentAsync"
+    forbidden_patterns:
+      - "new AgentsClient("
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      using Azure.AI.Agents.Persistent;
+      using Azure.Identity;
+
+      var projectEndpoint = Environment.GetEnvironmentVariable("PROJECT_ENDPOINT");
+      var modelDeploymentName = Environment.GetEnvironmentVariable("MODEL_DEPLOYMENT_NAME");
+
+      PersistentAgentsClient client = new(projectEndpoint, new DefaultAzureCredential());
+
+      // Create agent
+      PersistentAgent agent = await client.Administration.CreateAgentAsync(
+          model: modelDeploymentName,
+          name: "My Assistant",
+          instructions: "You are a helpful assistant."
+      );
+
+      // Create thread
+      PersistentAgentThread thread = await client.Threads.CreateThreadAsync();
+
+      // Create message
+      await client.Messages.CreateMessageAsync(
+          thread.Id,
+          MessageRole.User,
+          "Hello!"
+      );
+
+      // Create and poll run
+      ThreadRun run = await client.Runs.CreateRunAsync(thread.Id, agent.Id);
+
+      do
+      {
+          await Task.Delay(500);
+          run = await client.Runs.GetRunAsync(thread.Id, run.Id);
+      }
+      while (run.Status == RunStatus.Queued || run.Status == RunStatus.InProgress);
+
+      // Get messages
+      if (run.Status == RunStatus.Completed)
+      {
+          await foreach (var msg in client.Messages.GetMessagesAsync(thread.Id))
+          {
+              foreach (var content in msg.ContentItems)
+              {
+                  if (content is MessageTextContent textContent)
+                      Console.WriteLine($"{msg.Role}: {textContent.Text}");
+              }
+          }
+      }
+
+      // Cleanup
+      await client.Threads.DeleteThreadAsync(thread.Id);
+      await client.Administration.DeleteAgentAsync(agent.Id);
+
+  # Code Interpreter Tool
+  - name: code_interpreter_tool
+    prompt: |
+      Create a persistent agent in C# with code interpreter capability 
+      that can execute Python code and analyze data.
+    expected_patterns:
+      - "CodeInterpreterToolDefinition"
+      - "tools:"
+      - "CreateAgentAsync"
+    forbidden_patterns:
+      - "CodeInterpreterTool("
+    tags:
+      - code-interpreter
+      - tools
+    mock_response: |
+      using Azure.AI.Agents.Persistent;
+      using Azure.Identity;
+
+      var projectEndpoint = Environment.GetEnvironmentVariable("PROJECT_ENDPOINT");
+      var modelDeploymentName = Environment.GetEnvironmentVariable("MODEL_DEPLOYMENT_NAME");
+
+      PersistentAgentsClient client = new(projectEndpoint, new DefaultAzureCredential());
+
+      PersistentAgent agent = await client.Administration.CreateAgentAsync(
+          model: modelDeploymentName,
+          name: "Data Analyst",
+          instructions: "You are a data analyst. Write and run Python code to analyze data.",
+          tools: [new CodeInterpreterToolDefinition()]
+      );
+
+      PersistentAgentThread thread = await client.Threads.CreateThreadAsync();
+
+      await client.Messages.CreateMessageAsync(
+          thread.Id,
+          MessageRole.User,
+          "Calculate the factorial of 10 using Python code."
+      );
+
+      ThreadRun run = await client.Runs.CreateRunAsync(thread.Id, agent.Id);
+
+      do
+      {
+          await Task.Delay(500);
+          run = await client.Runs.GetRunAsync(thread.Id, run.Id);
+      }
+      while (run.Status == RunStatus.Queued || run.Status == RunStatus.InProgress);
+
+      await foreach (var msg in client.Messages.GetMessagesAsync(thread.Id, order: ListSortOrder.Ascending))
+      {
+          foreach (var content in msg.ContentItems)
+          {
+              if (content is MessageTextContent textContent)
+                  Console.WriteLine(textContent.Text);
+          }
+      }
+
+      await client.Threads.DeleteThreadAsync(thread.Id);
+      await client.Administration.DeleteAgentAsync(agent.Id);
+
+  # File Search with Vector Store
+  - name: file_search_vector_store
+    prompt: |
+      Create a persistent agent in C# with file search capability using 
+      a vector store for RAG over documents.
+    expected_patterns:
+      - "FileSearchToolDefinition"
+      - "PersistentAgentsVectorStore"
+      - "CreateVectorStoreAsync"
+      - "FileSearchToolResource"
+      - "ToolResources"
+      - "UploadFileAsync"
+    tags:
+      - file-search
+      - rag
+      - tools
+    mock_response: |
+      using Azure.AI.Agents.Persistent;
+      using Azure.Identity;
+
+      var projectEndpoint = Environment.GetEnvironmentVariable("PROJECT_ENDPOINT");
+      var modelDeploymentName = Environment.GetEnvironmentVariable("MODEL_DEPLOYMENT_NAME");
+
+      PersistentAgentsClient client = new(projectEndpoint, new DefaultAzureCredential());
+
+      // Upload file
+      PersistentAgentFileInfo file = await client.Files.UploadFileAsync(
+          filePath: "documentation.txt",
+          purpose: PersistentAgentFilePurpose.Agents
+      );
+
+      // Create vector store
+      PersistentAgentsVectorStore vectorStore = await client.VectorStores.CreateVectorStoreAsync(
+          fileIds: [file.Id],
+          name: "docs_vector_store"
+      );
+
+      // Create file search resource
+      FileSearchToolResource fileSearchResource = new();
+      fileSearchResource.VectorStoreIds.Add(vectorStore.Id);
+
+      // Create agent with file search
+      PersistentAgent agent = await client.Administration.CreateAgentAsync(
+          model: modelDeploymentName,
+          name: "Document Assistant",
+          instructions: "You help users find information in documents. Always cite sources.",
+          tools: [new FileSearchToolDefinition()],
+          toolResources: new ToolResources { FileSearch = fileSearchResource }
+      );
+
+      PersistentAgentThread thread = await client.Threads.CreateThreadAsync();
+
+      await client.Messages.CreateMessageAsync(
+          thread.Id,
+          MessageRole.User,
+          "What does the documentation say about authentication?"
+      );
+
+      ThreadRun run = await client.Runs.CreateRunAsync(thread.Id, agent.Id);
+
+      do
+      {
+          await Task.Delay(500);
+          run = await client.Runs.GetRunAsync(thread.Id, run.Id);
+      }
+      while (run.Status == RunStatus.Queued || run.Status == RunStatus.InProgress);
+
+      // Get response
+      await foreach (var msg in client.Messages.GetMessagesAsync(thread.Id))
+      {
+          if (msg.Role == MessageRole.Assistant)
+          {
+              foreach (var content in msg.ContentItems)
+              {
+                  if (content is MessageTextContent textContent)
+                      Console.WriteLine(textContent.Text);
+              }
+          }
+      }
+
+      // Cleanup
+      await client.Threads.DeleteThreadAsync(thread.Id);
+      await client.Administration.DeleteAgentAsync(agent.Id);
+      await client.VectorStores.DeleteVectorStoreAsync(vectorStore.Id);
+      await client.Files.DeleteFileAsync(file.Id);
+
+  # Function Calling
+  - name: function_calling
+    prompt: |
+      Create a persistent agent in C# with a custom function tool that 
+      can get weather information. Handle the function call and submit
+      tool outputs.
+    expected_patterns:
+      - "FunctionToolDefinition"
+      - "RequiresAction"
+      - "SubmitToolOutputsAction"
+      - "RequiredFunctionToolCall"
+      - "ToolOutput"
+      - "SubmitToolOutputsToRunAsync"
+      - "BinaryData.FromObjectAsJson"
+    tags:
+      - function-calling
+      - tools
+    mock_response: |
+      using Azure.AI.Agents.Persistent;
+      using Azure.Identity;
+      using System.Text.Json;
+
+      var projectEndpoint = Environment.GetEnvironmentVariable("PROJECT_ENDPOINT");
+      var modelDeploymentName = Environment.GetEnvironmentVariable("MODEL_DEPLOYMENT_NAME");
+
+      PersistentAgentsClient client = new(projectEndpoint, new DefaultAzureCredential());
+
+      // Define function tool
+      FunctionToolDefinition weatherTool = new(
+          name: "getCurrentWeather",
+          description: "Gets the current weather at a location.",
+          parameters: BinaryData.FromObjectAsJson(new
+          {
+              Type = "object",
+              Properties = new
+              {
+                  Location = new { Type = "string", Description = "City and state, e.g. Seattle, WA" },
+                  Unit = new { Type = "string", Enum = new[] { "celsius", "fahrenheit" } }
+              },
+              Required = new[] { "location" }
+          }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+      );
+
+      PersistentAgent agent = await client.Administration.CreateAgentAsync(
+          model: modelDeploymentName,
+          name: "Weather Bot",
+          instructions: "You help users get weather information.",
+          tools: [weatherTool]
+      );
+
+      PersistentAgentThread thread = await client.Threads.CreateThreadAsync();
+
+      await client.Messages.CreateMessageAsync(
+          thread.Id,
+          MessageRole.User,
+          "What's the weather in Seattle?"
+      );
+
+      ThreadRun run = await client.Runs.CreateRunAsync(thread.Id, agent.Id);
+
+      // Poll and handle function calls
+      do
+      {
+          await Task.Delay(500);
+          run = await client.Runs.GetRunAsync(thread.Id, run.Id);
+
+          if (run.Status == RunStatus.RequiresAction 
+              && run.RequiredAction is SubmitToolOutputsAction submitAction)
+          {
+              List<ToolOutput> outputs = [];
+              foreach (RequiredToolCall toolCall in submitAction.ToolCalls)
+              {
+                  if (toolCall is RequiredFunctionToolCall funcCall)
+                  {
+                      // Execute function (mock implementation)
+                      string result = funcCall.Name == "getCurrentWeather" 
+                          ? "{\"temperature\": 65, \"condition\": \"cloudy\", \"unit\": \"fahrenheit\"}" 
+                          : "{}";
+                      outputs.Add(new ToolOutput(toolCall, result));
+                  }
+              }
+              run = await client.Runs.SubmitToolOutputsToRunAsync(run, outputs, toolApprovals: null);
+          }
+      }
+      while (run.Status == RunStatus.Queued 
+          || run.Status == RunStatus.InProgress 
+          || run.Status == RunStatus.RequiresAction);
+
+      // Get final response
+      await foreach (var msg in client.Messages.GetMessagesAsync(thread.Id))
+      {
+          if (msg.Role == MessageRole.Assistant)
+          {
+              foreach (var content in msg.ContentItems)
+              {
+                  if (content is MessageTextContent textContent)
+                      Console.WriteLine(textContent.Text);
+              }
+              break;
+          }
+      }
+
+      await client.Threads.DeleteThreadAsync(thread.Id);
+      await client.Administration.DeleteAgentAsync(agent.Id);
+
+  # Streaming Response
+  - name: streaming_response
+    prompt: |
+      Create a persistent agent in C# that uses streaming responses to 
+      process real-time message updates.
+    expected_patterns:
+      - "CreateRunStreamingAsync"
+      - "StreamingUpdate"
+      - "await foreach"
+      - "MessageContentUpdate"
+      - "StreamingUpdateReason"
+    forbidden_patterns:
+      - "stream: true"
+    tags:
+      - streaming
+      - advanced
+    mock_response: |
+      using Azure.AI.Agents.Persistent;
+      using Azure.Identity;
+      using System.ClientModel;
+
+      var projectEndpoint = Environment.GetEnvironmentVariable("PROJECT_ENDPOINT");
+      var modelDeploymentName = Environment.GetEnvironmentVariable("MODEL_DEPLOYMENT_NAME");
+
+      PersistentAgentsClient client = new(projectEndpoint, new DefaultAzureCredential());
+
+      PersistentAgent agent = await client.Administration.CreateAgentAsync(
+          model: modelDeploymentName,
+          name: "Streaming Agent",
+          instructions: "You are a helpful assistant."
+      );
+
+      PersistentAgentThread thread = await client.Threads.CreateThreadAsync();
+
+      await client.Messages.CreateMessageAsync(
+          thread.Id,
+          MessageRole.User,
+          "Tell me a short story about a robot."
+      );
+
+      // Use streaming
+      AsyncCollectionResult<StreamingUpdate> stream = client.Runs.CreateRunStreamingAsync(
+          thread.Id, 
+          agent.Id
+      );
+
+      await foreach (StreamingUpdate update in stream)
+      {
+          if (update.UpdateKind == StreamingUpdateReason.RunCreated)
+          {
+              Console.WriteLine("--- Run started! ---");
+          }
+          else if (update is MessageContentUpdate contentUpdate)
+          {
+              Console.Write(contentUpdate.Text);
+          }
+          else if (update.UpdateKind == StreamingUpdateReason.RunCompleted)
+          {
+              Console.WriteLine("\n--- Run completed! ---");
+          }
+          else if (update.UpdateKind == StreamingUpdateReason.RunFailed)
+          {
+              Console.WriteLine("\n--- Run failed! ---");
+          }
+      }
+
+      await client.Threads.DeleteThreadAsync(thread.Id);
+      await client.Administration.DeleteAgentAsync(agent.Id);
+
+  # Bing Grounding Tool
+  - name: bing_grounding_tool
+    prompt: |
+      Create a persistent agent in C# that uses Bing grounding to search
+      the web for current information.
+    expected_patterns:
+      - "BingGroundingToolDefinition"
+      - "BingGroundingSearchToolParameters"
+      - "BingGroundingSearchConfiguration"
+      - "AZURE_BING_CONNECTION_ID"
+    tags:
+      - bing
+      - grounding
+      - tools
+    mock_response: |
+      using Azure.AI.Agents.Persistent;
+      using Azure.Identity;
+
+      var projectEndpoint = Environment.GetEnvironmentVariable("PROJECT_ENDPOINT");
+      var modelDeploymentName = Environment.GetEnvironmentVariable("MODEL_DEPLOYMENT_NAME");
+      var bingConnectionId = Environment.GetEnvironmentVariable("AZURE_BING_CONNECTION_ID");
+
+      PersistentAgentsClient client = new(projectEndpoint, new DefaultAzureCredential());
+
+      BingGroundingToolDefinition bingTool = new(
+          new BingGroundingSearchToolParameters(
+              [new BingGroundingSearchConfiguration(bingConnectionId)]
+          )
+      );
+
+      PersistentAgent agent = await client.Administration.CreateAgentAsync(
+          model: modelDeploymentName,
+          name: "Search Agent",
+          instructions: "Use Bing to answer questions about current events. Always cite sources.",
+          tools: [bingTool]
+      );
+
+      PersistentAgentThread thread = await client.Threads.CreateThreadAsync();
+
+      await client.Messages.CreateMessageAsync(
+          thread.Id,
+          MessageRole.User,
+          "What are the latest developments in AI?"
+      );
+
+      ThreadRun run = await client.Runs.CreateRunAsync(thread.Id, agent.Id);
+
+      do
+      {
+          await Task.Delay(500);
+          run = await client.Runs.GetRunAsync(thread.Id, run.Id);
+      }
+      while (run.Status == RunStatus.Queued || run.Status == RunStatus.InProgress);
+
+      await foreach (var msg in client.Messages.GetMessagesAsync(thread.Id))
+      {
+          if (msg.Role == MessageRole.Assistant)
+          {
+              foreach (var content in msg.ContentItems)
+              {
+                  if (content is MessageTextContent textContent)
+                      Console.WriteLine(textContent.Text);
+              }
+              break;
+          }
+      }
+
+      await client.Threads.DeleteThreadAsync(thread.Id);
+      await client.Administration.DeleteAgentAsync(agent.Id);
+
+  # Azure AI Search Tool
+  - name: azure_ai_search_tool
+    prompt: |
+      Create a persistent agent in C# that uses Azure AI Search to query
+      an existing search index.
+    expected_patterns:
+      - "AzureAISearchToolDefinition"
+      - "AzureAISearchToolResource"
+      - "indexName"
+      - "connectionId"
+      - "ToolResources"
+    tags:
+      - azure-search
+      - tools
+    mock_response: |
+      using Azure.AI.Agents.Persistent;
+      using Azure.Identity;
+
+      var projectEndpoint = Environment.GetEnvironmentVariable("PROJECT_ENDPOINT");
+      var modelDeploymentName = Environment.GetEnvironmentVariable("MODEL_DEPLOYMENT_NAME");
+      var searchConnectionId = Environment.GetEnvironmentVariable("AZURE_AI_SEARCH_CONNECTION_ID");
+
+      PersistentAgentsClient client = new(projectEndpoint, new DefaultAzureCredential());
+
+      AzureAISearchToolResource searchResource = new(
+          connectionId: searchConnectionId,
+          indexName: "products-index",
+          topK: 5,
+          filter: "",
+          queryType: AzureAISearchQueryType.Simple
+      );
+
+      PersistentAgent agent = await client.Administration.CreateAgentAsync(
+          model: modelDeploymentName,
+          name: "Product Search Agent",
+          instructions: "Help users find products using the search index.",
+          tools: [new AzureAISearchToolDefinition()],
+          toolResources: new ToolResources { AzureAISearch = searchResource }
+      );
+
+      PersistentAgentThread thread = await client.Threads.CreateThreadAsync();
+
+      await client.Messages.CreateMessageAsync(
+          thread.Id,
+          MessageRole.User,
+          "Find products related to Azure services"
+      );
+
+      ThreadRun run = await client.Runs.CreateRunAsync(thread.Id, agent.Id);
+
+      do
+      {
+          await Task.Delay(500);
+          run = await client.Runs.GetRunAsync(thread.Id, run.Id);
+      }
+      while (run.Status == RunStatus.Queued || run.Status == RunStatus.InProgress);
+
+      await foreach (var msg in client.Messages.GetMessagesAsync(thread.Id))
+      {
+          if (msg.Role == MessageRole.Assistant)
+          {
+              foreach (var content in msg.ContentItems)
+              {
+                  if (content is MessageTextContent textContent)
+                      Console.WriteLine(textContent.Text);
+              }
+              break;
+          }
+      }
+
+      await client.Threads.DeleteThreadAsync(thread.Id);
+      await client.Administration.DeleteAgentAsync(agent.Id);
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Implement proper error handling for Azure AI Agents Persistent
+      operations in C# using RequestFailedException.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status"
+      - "catch"
+      - "when"
+    tags:
+      - error-handling
+      - best-practice
+    mock_response: |
+      using Azure;
+      using Azure.AI.Agents.Persistent;
+      using Azure.Identity;
+
+      var projectEndpoint = Environment.GetEnvironmentVariable("PROJECT_ENDPOINT");
+      var modelDeploymentName = Environment.GetEnvironmentVariable("MODEL_DEPLOYMENT_NAME");
+
+      PersistentAgentsClient client = new(projectEndpoint, new DefaultAzureCredential());
+
+      PersistentAgent? agent = null;
+      PersistentAgentThread? thread = null;
+
+      try
+      {
+          agent = await client.Administration.CreateAgentAsync(
+              model: modelDeploymentName,
+              name: "My Agent",
+              instructions: "You are helpful."
+          );
+
+          thread = await client.Threads.CreateThreadAsync();
+
+          await client.Messages.CreateMessageAsync(
+              thread.Id,
+              MessageRole.User,
+              "Hello!"
+          );
+
+          ThreadRun run = await client.Runs.CreateRunAsync(thread.Id, agent.Id);
+
+          do
+          {
+              await Task.Delay(500);
+              run = await client.Runs.GetRunAsync(thread.Id, run.Id);
+          }
+          while (run.Status == RunStatus.Queued || run.Status == RunStatus.InProgress);
+
+          if (run.Status == RunStatus.Failed)
+          {
+              Console.WriteLine($"Run failed: {run.LastError?.Message}");
+          }
+      }
+      catch (RequestFailedException ex) when (ex.Status == 404)
+      {
+          Console.WriteLine("Resource not found - check endpoint or IDs");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 401)
+      {
+          Console.WriteLine("Unauthorized - check credentials");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"Error: {ex.Status} - {ex.ErrorCode}: {ex.Message}");
+      }
+      finally
+      {
+          // Always cleanup
+          if (thread != null)
+              await client.Threads.DeleteThreadAsync(thread.Id);
+          if (agent != null)
+              await client.Administration.DeleteAgentAsync(agent.Id);
+      }
+
+  # Get Agent from AIProjectClient
+  - name: get_from_project_client
+    prompt: |
+      Get the PersistentAgentsClient from AIProjectClient in C#.
+      This is the recommended pattern.
+    expected_patterns:
+      - "AIProjectClient"
+      - "GetPersistentAgentsClient"
+      - "Azure.AI.Projects"
+    forbidden_patterns:
+      - "new PersistentAgentsClient(projectEndpoint"
+    tags:
+      - client-hierarchy
+      - best-practice
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.AI.Agents.Persistent;
+      using Azure.Identity;
+
+      var endpoint = Environment.GetEnvironmentVariable("PROJECT_ENDPOINT");
+      var modelDeploymentName = Environment.GetEnvironmentVariable("MODEL_DEPLOYMENT_NAME");
+
+      // Create project client (recommended approach)
+      AIProjectClient projectClient = new AIProjectClient(
+          new Uri(endpoint), 
+          new DefaultAzureCredential());
+
+      // Get persistent agents client from project client
+      PersistentAgentsClient agentsClient = projectClient.GetPersistentAgentsClient();
+
+      // Now use agentsClient for all agent operations
+      PersistentAgent agent = await agentsClient.Administration.CreateAgentAsync(
+          model: modelDeploymentName,
+          name: "My Agent",
+          instructions: "You are a helpful assistant."
+      );
+
+      Console.WriteLine($"Created agent: {agent.Id}");
+
+      await agentsClient.Administration.DeleteAgentAsync(agent.Id);

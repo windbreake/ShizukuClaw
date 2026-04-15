@@ -1,0 +1,175 @@
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+scenarios:
+- name: basic_client_creation
+  prompt: Create a basic Azure App Configuration client that retrieves a configuration
+    setting. Include proper authentication using DefaultAzureCredential, getting a
+    setting, and cleanup.
+  expected_patterns:
+  - DefaultAzureCredential
+  - AzureAppConfigurationClient
+  - get_configuration_setting
+  - base_url
+  forbidden_patterns:
+  - hardcoded
+  - endpoint=
+  tags:
+  - basic
+  - authentication
+  mock_response: "import os\nfrom azure.identity import DefaultAzureCredential\nfrom\
+    \ azure.appconfiguration import AzureAppConfigurationClient\n\nclient = AzureAppConfigurationClient(\n\
+    \    base_url=os.environ[\"AZURE_APPCONFIGURATION_ENDPOINT\"],\n    credential=DefaultAzureCredential()\n\
+    )\n\nsetting = client.get_configuration_setting(key=\"app:message\")\nprint(f\"\
+    {setting.key} = {setting.value}\")\n\nclient.close()"
+- name: key_value_settings
+  prompt: Create and manage key-value configuration settings with labels for different
+    environments. Include creating a setting, retrieving it with a label filter, listing
+    settings, and deleting.
+  expected_patterns:
+  - ConfigurationSetting
+  - set_configuration_setting
+  - list_configuration_settings
+  - delete_configuration_setting
+  - key_filter
+  - label_filter
+  forbidden_patterns:
+  - from_connection_string
+  - endpoint=
+  tags:
+  - key-value
+  - settings
+  mock_response: "import os\nfrom azure.identity import DefaultAzureCredential\nfrom\
+    \ azure.appconfiguration import (\n    AzureAppConfigurationClient,\n    ConfigurationSetting\n\
+    )\n\nclient = AzureAppConfigurationClient(\n    base_url=os.environ[\"AZURE_APPCONFIGURATION_ENDPOINT\"\
+    ],\n    credential=DefaultAzureCredential()\n)\n\nsetting = ConfigurationSetting(\n\
+    \    key=\"app:database:connection\",\n    value=\"Server=localhost;User=admin\"\
+    ,\n    label=\"development\",\n    tags={\"environment\": \"dev\"}\n)\nclient.set_configuration_setting(setting)\n\
+    \nretrieved = client.get_configuration_setting(\n    key=\"app:database:connection\"\
+    ,\n    label=\"development\"\n)\nprint(f\"Retrieved: {retrieved.value}\")\n\n\
+    settings = client.list_configuration_settings(\n    key_filter=\"app:database:*\"\
+    ,\n    label_filter=\"development\"\n)\nfor setting in settings:\n    print(f\"\
+    {setting.key}: {setting.value}\")\n\nclient.delete_configuration_setting(\n  \
+    \  key=\"app:database:connection\",\n    label=\"development\"\n)\n\nclient.close()"
+- name: feature_flag_usage
+  prompt: Create and manage feature flags in Azure App Configuration. Include setting
+    a feature flag, reading it, and checking if it's enabled.
+  expected_patterns:
+  - .appconfig.featureflag
+  - json.dumps
+  - json.loads
+  - application/vnd.microsoft.appconfig.ff
+  - '"enabled"'
+  forbidden_patterns:
+  - application/json
+  tags:
+  - feature-flags
+  - settings
+  mock_response: "import os\nimport json\nfrom azure.identity import DefaultAzureCredential\n\
+    from azure.appconfiguration import (\n    AzureAppConfigurationClient,\n    ConfigurationSetting\n\
+    )\n\nclient = AzureAppConfigurationClient(\n    base_url=os.environ[\"AZURE_APPCONFIGURATION_ENDPOINT\"\
+    ],\n    credential=DefaultAzureCredential()\n)\n\nfeature_flag = ConfigurationSetting(\n\
+    \    key=\".appconfig.featureflag/beta-features\",\n    value=json.dumps({\n \
+    \       \"id\": \"beta-features\",\n        \"enabled\": True,\n        \"conditions\"\
+    : {\n            \"client_filters\": []\n        }\n    }),\n    content_type=\"\
+    application/vnd.microsoft.appconfig.ff+json;charset=utf-8\"\n)\nclient.set_configuration_setting(feature_flag)\n\
+    \nflag = client.get_configuration_setting(key=\".appconfig.featureflag/beta-features\"\
+    )\nflag_data = json.loads(flag.value)\nprint(f\"Feature enabled: {flag_data['enabled']}\"\
+    )\n\nclient.close()"
+- name: async_client_usage
+  prompt: Create an async example using the async Azure App Configuration client.
+    Include proper imports from azure.appconfiguration.aio, async/await patterns,
+    and context manager.
+  expected_patterns:
+  - from azure.appconfiguration.aio import AzureAppConfigurationClient
+  - from azure.identity.aio import DefaultAzureCredential
+  - async with
+  - await client.get_configuration_setting
+  forbidden_patterns:
+  - from azure.appconfiguration import AzureAppConfigurationClient
+  tags:
+  - async
+  - authentication
+  mock_response: "import asyncio\nimport os\nfrom azure.appconfiguration.aio import\
+    \ AzureAppConfigurationClient\nfrom azure.identity.aio import DefaultAzureCredential\n\
+    \nasync def main():\n    async with AzureAppConfigurationClient(\n        base_url=os.environ[\"\
+    AZURE_APPCONFIGURATION_ENDPOINT\"],\n        credential=DefaultAzureCredential()\n\
+    \    ) as client:\n        setting = await client.get_configuration_setting(key=\"\
+    app:message\")\n        print(f\"{setting.key} = {setting.value}\")\n\nasyncio.run(main())"
+- name: read_only_settings
+  prompt: Create a read-only configuration setting that cannot be modified in production.
+    Include setting the read-only flag and attempting to verify it.
+  expected_patterns:
+  - read_only=True
+  - set_configuration_setting
+  forbidden_patterns: []
+  tags:
+  - production
+  - settings
+  mock_response: "import os\nfrom azure.identity import DefaultAzureCredential\nfrom\
+    \ azure.appconfiguration import (\n    AzureAppConfigurationClient,\n    ConfigurationSetting\n\
+    )\n\nclient = AzureAppConfigurationClient(\n    base_url=os.environ[\"AZURE_APPCONFIGURATION_ENDPOINT\"\
+    ],\n    credential=DefaultAzureCredential()\n)\n\nsetting = ConfigurationSetting(\n\
+    \    key=\"app:database:url\",\n    value=\"postgres://prod.db\",\n    label=\"\
+    production\",\n    read_only=True\n)\nclient.set_configuration_setting(setting)\n\
+    \nretrieved = client.get_configuration_setting(\n    key=\"app:database:url\"\
+    ,\n    label=\"production\"\n)\nprint(f\"Read-only: {retrieved.read_only}\")\n\
+    \nclient.close()"
+- name: snapshot_management
+  prompt: Create and retrieve configuration snapshots for point-in-time backups. Include
+    creating a snapshot with filters and retrieving settings from the snapshot.
+  expected_patterns:
+  - create_snapshot
+  - list_snapshots
+  - get_snapshot
+  - ConfigurationSettingFilter
+  - snapshot
+  forbidden_patterns: []
+  tags:
+  - snapshot
+  - backup
+  mock_response: "import os\nfrom azure.identity import DefaultAzureCredential\nfrom\
+    \ azure.appconfiguration import (\n    AzureAppConfigurationClient,\n    ConfigurationSettingFilter\n\
+    )\n\nclient = AzureAppConfigurationClient(\n    base_url=os.environ[\"AZURE_APPCONFIGURATION_ENDPOINT\"\
+    ],\n    credential=DefaultAzureCredential()\n)\n\nfilters = [ConfigurationSettingFilter(key=\"\
+    app:*\")]\nsnapshot = client.create_snapshot(name=\"v1-backup\", filters=filters)\n\
+    print(f\"Snapshot status: {snapshot.status}\")\n\nsnapshots = client.list_snapshots()\n\
+    for snap in snapshots:\n    print(f\"Snapshot: {snap.name} ({snap.status})\")\n\
+    \nretrieved_snapshot = client.get_snapshot(name=\"v1-backup\")\nprint(f\"Retrieved:\
+    \ {retrieved_snapshot.name}\")\n\nclient.close()"
+- name: context_manager_pattern
+  prompt: Use context manager pattern to automatically close the App Configuration
+    client. Include the with statement for proper resource cleanup.
+  expected_patterns:
+  - with AzureAppConfigurationClient
+  - as client
+  forbidden_patterns:
+  - client.close()
+  tags:
+  - cleanup
+  - context-manager
+  mock_response: "import os\nfrom azure.identity import DefaultAzureCredential\nfrom\
+    \ azure.appconfiguration import AzureAppConfigurationClient\n\nwith AzureAppConfigurationClient(\n\
+    \    base_url=os.environ[\"AZURE_APPCONFIGURATION_ENDPOINT\"],\n    credential=DefaultAzureCredential()\n\
+    ) as client:\n    setting = client.get_configuration_setting(key=\"app:config\"\
+    )\n    print(f\"Config: {setting.value}\")"
+- name: list_with_filters
+  prompt: Create a filtered list of configuration settings using key and label filters.
+    Include listing settings for a specific environment using label filters.
+  expected_patterns:
+  - list_configuration_settings
+  - key_filter
+  - label_filter
+  forbidden_patterns:
+  - from_connection_string
+  tags:
+  - filtering
+  - list
+  - settings
+  mock_response: "import os\nfrom azure.identity import DefaultAzureCredential\nfrom\
+    \ azure.appconfiguration import AzureAppConfigurationClient\n\nclient = AzureAppConfigurationClient(\n\
+    \    base_url=os.environ[\"AZURE_APPCONFIGURATION_ENDPOINT\"],\n    credential=DefaultAzureCredential()\n\
+    )\n\nprod_settings = client.list_configuration_settings(\n    key_filter=\"app:*\"\
+    ,\n    label_filter=\"production\"\n)\n\nfor setting in prod_settings:\n    print(f\"\
+    {setting.key} = {setting.value}\")\n\nclient.close()"

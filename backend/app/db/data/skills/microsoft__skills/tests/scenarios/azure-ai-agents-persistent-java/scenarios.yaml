@@ -1,0 +1,771 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-ai-agents-persistent-java skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Client Creation
+  - name: client_creation_default_credential
+    prompt: |
+      Create Java code to set up a PersistentAgentsClient using
+      DefaultAzureCredential. Include both sync and async client creation.
+    expected_patterns:
+      - "PersistentAgentsClientBuilder"
+      - "PersistentAgentsClient"
+      - "DefaultAzureCredentialBuilder"
+      - "buildClient"
+      - "buildAsyncClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'endpoint\("https://'  # Hardcoded endpoint
+      - 'AzureKeyCredential\("'  # Hardcoded key
+    tags:
+      - basic
+      - authentication
+      - client
+    mock_response: |
+      import com.azure.ai.agents.persistent.PersistentAgentsClient;
+      import com.azure.ai.agents.persistent.PersistentAgentsAsyncClient;
+      import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              
+              // Sync client
+              PersistentAgentsClient client = new PersistentAgentsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              // Async client
+              PersistentAgentsAsyncClient asyncClient = new PersistentAgentsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildAsyncClient();
+              
+              System.out.println("Clients initialized successfully");
+          }
+      }
+
+  # Create Agent - Simple
+  - name: create_agent_simple
+    prompt: |
+      Create a Java example that creates a simple persistent agent with
+      a name and instructions using the three-parameter createAgent method.
+    expected_patterns:
+      - "createAgent"
+      - "PersistentAgent"
+      - "agent.getId()"
+      - "agent.getName()"
+      - "MODEL_DEPLOYMENT_NAME"
+    forbidden_patterns:
+      - "createAgentVersion"  # Wrong method
+      - "PromptAgentDefinition"  # Wrong SDK
+    tags:
+      - agents
+      - create
+      - basic
+    mock_response: |
+      import com.azure.ai.agents.persistent.PersistentAgentsClient;
+      import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
+      import com.azure.ai.agents.persistent.models.PersistentAgent;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class CreateAgentSimple {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              String modelDeploymentName = System.getenv("MODEL_DEPLOYMENT_NAME");
+              
+              PersistentAgentsClient client = new PersistentAgentsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              PersistentAgent agent = client.createAgent(
+                  modelDeploymentName,
+                  "Math Tutor",
+                  "You are a personal math tutor. Help students understand mathematical concepts."
+              );
+              
+              System.out.println("Agent created:");
+              System.out.println("  ID: " + agent.getId());
+              System.out.println("  Name: " + agent.getName());
+              System.out.println("  Model: " + agent.getModel());
+          }
+      }
+
+  # Create Agent with Options
+  - name: create_agent_with_options
+    prompt: |
+      Create a Java example that creates an agent with CreateAgentOptions
+      including temperature, topP, and description.
+    expected_patterns:
+      - "CreateAgentOptions"
+      - "setName"
+      - "setInstructions"
+      - "setTemperature"
+      - "setTopP"
+      - "setDescription"
+    tags:
+      - agents
+      - create
+      - options
+    mock_response: |
+      import com.azure.ai.agents.persistent.PersistentAgentsClient;
+      import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
+      import com.azure.ai.agents.persistent.models.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class CreateAgentWithOptions {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              String modelDeploymentName = System.getenv("MODEL_DEPLOYMENT_NAME");
+              
+              PersistentAgentsClient client = new PersistentAgentsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              CreateAgentOptions options = new CreateAgentOptions(modelDeploymentName)
+                  .setName("Customer Support Agent")
+                  .setInstructions("You are a customer support agent. Help users politely.")
+                  .setDescription("Handles customer inquiries")
+                  .setTemperature(0.7)
+                  .setTopP(0.9);
+              
+              PersistentAgent agent = client.createAgent(options);
+              
+              System.out.println("Agent created: " + agent.getName());
+              System.out.println("ID: " + agent.getId());
+          }
+      }
+
+  # Create Agent with Code Interpreter
+  - name: create_agent_with_code_interpreter
+    prompt: |
+      Create a Java example that creates an agent with the code interpreter
+      tool using CodeInterpreterToolDefinition.
+    expected_patterns:
+      - "CodeInterpreterToolDefinition"
+      - "setTools"
+      - "Arrays.asList"
+      - "ToolDefinition"
+    forbidden_patterns:
+      - 'tools=["code_interpreter"]'  # Wrong pattern
+    tags:
+      - agents
+      - tools
+      - code-interpreter
+    mock_response: |
+      import com.azure.ai.agents.persistent.PersistentAgentsClient;
+      import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
+      import com.azure.ai.agents.persistent.models.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      import java.util.Arrays;
+
+      public class CreateAgentWithCodeInterpreter {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              String modelDeploymentName = System.getenv("MODEL_DEPLOYMENT_NAME");
+              
+              PersistentAgentsClient client = new PersistentAgentsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              ToolDefinition codeInterpreter = new CodeInterpreterToolDefinition();
+              
+              CreateAgentOptions options = new CreateAgentOptions(modelDeploymentName)
+                  .setName("Code Assistant")
+                  .setInstructions("You can write and run Python code to help users.")
+                  .setTools(Arrays.asList(codeInterpreter));
+              
+              PersistentAgent agent = client.createAgent(options);
+              
+              System.out.println("Agent with code interpreter created: " + agent.getId());
+          }
+      }
+
+  # Thread and Message Operations
+  - name: thread_and_message_operations
+    prompt: |
+      Create a Java example that creates a thread, adds a user message,
+      and lists the messages in the thread.
+    expected_patterns:
+      - "createThread"
+      - "PersistentAgentThread"
+      - "createMessage"
+      - "MessageRole.USER"
+      - "listMessages"
+      - "PersistentThreadMessage"
+    forbidden_patterns:
+      - "MessageRole.HUMAN"  # Wrong role
+    tags:
+      - threads
+      - messages
+    mock_response: |
+      import com.azure.ai.agents.persistent.PersistentAgentsClient;
+      import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
+      import com.azure.ai.agents.persistent.models.*;
+      import com.azure.core.http.rest.PagedIterable;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ThreadAndMessageOperations {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              
+              PersistentAgentsClient client = new PersistentAgentsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              // Create thread
+              PersistentAgentThread thread = client.createThread();
+              System.out.println("Thread created: " + thread.getId());
+              
+              // Add user message
+              PersistentThreadMessage message = client.createMessage(
+                  thread.getId(),
+                  MessageRole.USER,
+                  "What is the derivative of x squared?"
+              );
+              System.out.println("Message created: " + message.getId());
+              
+              // List messages
+              PagedIterable<PersistentThreadMessage> messages = client.listMessages(thread.getId());
+              
+              System.out.println("\n=== Messages ===");
+              for (PersistentThreadMessage msg : messages) {
+                  System.out.println("[" + msg.getRole() + "]");
+                  for (MessageContent content : msg.getContent()) {
+                      if (content instanceof MessageTextContent) {
+                          System.out.println(((MessageTextContent) content).getText().getValue());
+                      }
+                  }
+              }
+              
+              // Cleanup
+              client.deleteThread(thread.getId());
+          }
+      }
+
+  # Run and Poll
+  - name: create_run_and_poll
+    prompt: |
+      Create a Java example that creates a run and polls for completion
+      using a while loop with Thread.sleep and RunStatus checks.
+    expected_patterns:
+      - "createRun"
+      - "ThreadRun"
+      - "RunStatus"
+      - "QUEUED"
+      - "IN_PROGRESS"
+      - "COMPLETED"
+      - "getRun"
+      - "Thread.sleep"
+      - "while"
+    forbidden_patterns:
+      - 'status\.equals\("'  # Should use enum
+    tags:
+      - runs
+      - polling
+    mock_response: |
+      import com.azure.ai.agents.persistent.PersistentAgentsClient;
+      import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
+      import com.azure.ai.agents.persistent.models.*;
+      import com.azure.core.http.rest.PagedIterable;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class RunAndPollExample {
+          public static void main(String[] args) throws InterruptedException {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              String modelDeploymentName = System.getenv("MODEL_DEPLOYMENT_NAME");
+              
+              PersistentAgentsClient client = new PersistentAgentsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              // Create agent
+              PersistentAgent agent = client.createAgent(
+                  modelDeploymentName,
+                  "Assistant",
+                  "You are a helpful assistant."
+              );
+              
+              // Create thread and message
+              PersistentAgentThread thread = client.createThread();
+              client.createMessage(thread.getId(), MessageRole.USER, "Hello, what's 2+2?");
+              
+              // Create run
+              ThreadRun run = client.createRun(thread.getId(), agent.getId());
+              System.out.println("Run created: " + run.getId());
+              
+              // Poll for completion
+              while (run.getStatus() == RunStatus.QUEUED || run.getStatus() == RunStatus.IN_PROGRESS) {
+                  Thread.sleep(500);  // Wait 500ms
+                  run = client.getRun(thread.getId(), run.getId());
+                  System.out.println("Status: " + run.getStatus());
+              }
+              
+              // Check final status
+              if (run.getStatus() == RunStatus.COMPLETED) {
+                  System.out.println("Run completed successfully!");
+                  
+                  // Get response
+                  PagedIterable<PersistentThreadMessage> messages = client.listMessages(thread.getId());
+                  for (PersistentThreadMessage msg : messages) {
+                      if (msg.getRole() == MessageRole.ASSISTANT) {
+                          for (MessageContent content : msg.getContent()) {
+                              if (content instanceof MessageTextContent) {
+                                  System.out.println("Response: " + 
+                                      ((MessageTextContent) content).getText().getValue());
+                              }
+                          }
+                          break;
+                      }
+                  }
+              } else if (run.getStatus() == RunStatus.FAILED) {
+                  System.err.println("Run failed: " + run.getLastError().getMessage());
+              }
+              
+              // Cleanup
+              client.deleteThread(thread.getId());
+              client.deleteAgent(agent.getId());
+          }
+      }
+
+  # Handle Tool Calls
+  - name: handle_tool_calls
+    prompt: |
+      Create a Java example that handles function tool calls when a run
+      requires action. Check for REQUIRES_ACTION status and submit tool outputs.
+    expected_patterns:
+      - "REQUIRES_ACTION"
+      - "getRequiredAction"
+      - "SubmitToolOutputsAction"
+      - "RequiredFunctionToolCall"
+      - "ToolOutput"
+      - "submitToolOutputsToRun"
+    tags:
+      - runs
+      - tools
+      - function-calling
+    mock_response: |
+      import com.azure.ai.agents.persistent.PersistentAgentsClient;
+      import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
+      import com.azure.ai.agents.persistent.models.*;
+      import com.azure.core.util.BinaryData;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      import java.util.*;
+
+      public class HandleToolCalls {
+          public static void main(String[] args) throws InterruptedException {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              String modelDeploymentName = System.getenv("MODEL_DEPLOYMENT_NAME");
+              
+              PersistentAgentsClient client = new PersistentAgentsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              // Create function tool
+              FunctionDefinition funcDef = new FunctionDefinition("get_weather")
+                  .setDescription("Get weather for a location")
+                  .setParameters(BinaryData.fromObject(Map.of(
+                      "type", "object",
+                      "properties", Map.of(
+                          "location", Map.of("type", "string")
+                      ),
+                      "required", new String[]{"location"}
+                  )));
+              
+              CreateAgentOptions options = new CreateAgentOptions(modelDeploymentName)
+                  .setName("Weather Agent")
+                  .setInstructions("Help users with weather info.")
+                  .setTools(Arrays.asList(new FunctionToolDefinition(funcDef)));
+              
+              PersistentAgent agent = client.createAgent(options);
+              PersistentAgentThread thread = client.createThread();
+              client.createMessage(thread.getId(), MessageRole.USER, "What's the weather in Seattle?");
+              
+              ThreadRun run = client.createRun(thread.getId(), agent.getId());
+              
+              // Poll and handle tool calls
+              while (run.getStatus() == RunStatus.QUEUED || 
+                     run.getStatus() == RunStatus.IN_PROGRESS ||
+                     run.getStatus() == RunStatus.REQUIRES_ACTION) {
+                  
+                  if (run.getStatus() == RunStatus.REQUIRES_ACTION) {
+                      RequiredAction requiredAction = run.getRequiredAction();
+                      
+                      if (requiredAction instanceof SubmitToolOutputsAction) {
+                          SubmitToolOutputsAction submitAction = (SubmitToolOutputsAction) requiredAction;
+                          List<RequiredToolCall> toolCalls = submitAction.getSubmitToolOutputs().getToolCalls();
+                          
+                          List<ToolOutput> outputs = new ArrayList<>();
+                          
+                          for (RequiredToolCall toolCall : toolCalls) {
+                              if (toolCall instanceof RequiredFunctionToolCall) {
+                                  RequiredFunctionToolCall funcCall = (RequiredFunctionToolCall) toolCall;
+                                  String functionName = funcCall.getFunction().getName();
+                                  
+                                  // Execute function
+                                  String result = "{\"temperature\": 72, \"condition\": \"sunny\"}";
+                                  outputs.add(new ToolOutput(toolCall.getId(), result));
+                              }
+                          }
+                          
+                          // Submit tool outputs
+                          run = client.submitToolOutputsToRun(thread.getId(), run.getId(), outputs);
+                      }
+                  } else {
+                      Thread.sleep(500);
+                      run = client.getRun(thread.getId(), run.getId());
+                  }
+              }
+              
+              System.out.println("Final status: " + run.getStatus());
+              
+              // Cleanup
+              client.deleteThread(thread.getId());
+              client.deleteAgent(agent.getId());
+          }
+      }
+
+  # Streaming
+  - name: streaming_run
+    prompt: |
+      Create a Java example that uses createRunStream to stream
+      run events and print text deltas as they arrive.
+    expected_patterns:
+      - "createRunStream"
+      - "forEach"
+      - "ThreadMessageDeltaEvent"
+      - "MessageDeltaTextContent"
+      - "ThreadRunCompletedEvent"
+    tags:
+      - streaming
+      - runs
+    mock_response: |
+      import com.azure.ai.agents.persistent.PersistentAgentsClient;
+      import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
+      import com.azure.ai.agents.persistent.models.*;
+      import com.azure.ai.agents.persistent.models.streaming.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class StreamingRunExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              String modelDeploymentName = System.getenv("MODEL_DEPLOYMENT_NAME");
+              
+              PersistentAgentsClient client = new PersistentAgentsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              // Create agent, thread, and message
+              PersistentAgent agent = client.createAgent(
+                  modelDeploymentName,
+                  "Storyteller",
+                  "You tell engaging short stories."
+              );
+              
+              PersistentAgentThread thread = client.createThread();
+              client.createMessage(thread.getId(), MessageRole.USER, "Tell me a short story.");
+              
+              // Stream the run
+              System.out.println("Streaming response:");
+              client.createRunStream(thread.getId(), agent.getId())
+                  .forEach(event -> {
+                      if (event instanceof ThreadRunCreatedEvent) {
+                          System.out.println("Run started...");
+                      } else if (event instanceof ThreadMessageDeltaEvent) {
+                          ThreadMessageDeltaEvent delta = (ThreadMessageDeltaEvent) event;
+                          for (MessageDeltaContent content : delta.getDelta().getContent()) {
+                              if (content instanceof MessageDeltaTextContent) {
+                                  String text = ((MessageDeltaTextContent) content).getText().getValue();
+                                  System.out.print(text);
+                              }
+                          }
+                      } else if (event instanceof ThreadRunCompletedEvent) {
+                          System.out.println("\n\nRun completed!");
+                      }
+                  });
+              
+              // Cleanup
+              client.deleteThread(thread.getId());
+              client.deleteAgent(agent.getId());
+          }
+      }
+
+  # File Upload and Vector Store
+  - name: file_upload_and_vector_store
+    prompt: |
+      Create a Java example that uploads a file, creates a vector store,
+      and creates an agent with file search capability.
+    expected_patterns:
+      - "uploadFile"
+      - "BinaryData.fromFile"
+      - "AgentFilePurpose.AGENTS"
+      - "createVectorStore"
+      - "FileSearchToolDefinition"
+      - "setToolResources"
+      - "FileSearchToolResource"
+    tags:
+      - files
+      - vector-store
+      - file-search
+    mock_response: |
+      import com.azure.ai.agents.persistent.PersistentAgentsClient;
+      import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
+      import com.azure.ai.agents.persistent.models.*;
+      import com.azure.core.util.BinaryData;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      import java.io.File;
+      import java.util.Arrays;
+
+      public class FileSearchExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              String modelDeploymentName = System.getenv("MODEL_DEPLOYMENT_NAME");
+              
+              PersistentAgentsClient client = new PersistentAgentsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              // Upload file
+              File file = new File("documentation.pdf");
+              AgentFile uploadedFile = client.uploadFile(
+                  BinaryData.fromFile(file.toPath()),
+                  AgentFilePurpose.AGENTS
+              );
+              System.out.println("File uploaded: " + uploadedFile.getId());
+              
+              // Create vector store
+              VectorStore vectorStore = client.createVectorStore(
+                  new CreateVectorStoreOptions().setName("Knowledge Base")
+              );
+              System.out.println("Vector store created: " + vectorStore.getId());
+              
+              // Add file to vector store
+              client.uploadFileToVectorStore(
+                  vectorStore.getId(),
+                  BinaryData.fromFile(file.toPath())
+              );
+              
+              // Create agent with file search
+              CreateAgentOptions options = new CreateAgentOptions(modelDeploymentName)
+                  .setName("Research Assistant")
+                  .setInstructions("Search the uploaded documents to answer questions.")
+                  .setTools(Arrays.asList(new FileSearchToolDefinition()))
+                  .setToolResources(new ToolResources()
+                      .setFileSearch(new FileSearchToolResource()
+                          .setVectorStoreIds(Arrays.asList(vectorStore.getId()))));
+              
+              PersistentAgent agent = client.createAgent(options);
+              System.out.println("Agent with file search created: " + agent.getId());
+              
+              // Cleanup
+              client.deleteAgent(agent.getId());
+          }
+      }
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Create a Java example with proper error handling for agent operations.
+      Handle HttpResponseException and print appropriate error messages.
+    expected_patterns:
+      - "HttpResponseException"
+      - "try"
+      - "catch"
+      - "getResponse().getStatusCode()"
+      - "getMessage()"
+    forbidden_patterns:
+      - "catch (Exception e) {}"
+      - "catch (Exception e) { }"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.ai.agents.persistent.PersistentAgentsClient;
+      import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
+      import com.azure.ai.agents.persistent.models.*;
+      import com.azure.core.exception.HttpResponseException;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ErrorHandlingExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("PROJECT_ENDPOINT");
+              String modelDeploymentName = System.getenv("MODEL_DEPLOYMENT_NAME");
+              
+              PersistentAgentsClient client = new PersistentAgentsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              try {
+                  PersistentAgent agent = client.createAgent(
+                      modelDeploymentName,
+                      "Test Agent",
+                      "Test instructions"
+                  );
+                  System.out.println("Agent created: " + agent.getId());
+                  
+              } catch (HttpResponseException e) {
+                  int statusCode = e.getResponse().getStatusCode();
+                  System.err.println("HTTP Status: " + statusCode);
+                  System.err.println("Error: " + e.getMessage());
+                  
+                  switch (statusCode) {
+                      case 400:
+                          System.err.println("Bad request - check parameters");
+                          break;
+                      case 401:
+                          System.err.println("Unauthorized - check credentials");
+                          break;
+                      case 404:
+                          System.err.println("Resource not found");
+                          break;
+                      case 429:
+                          System.err.println("Rate limited - retry with backoff");
+                          break;
+                      default:
+                          System.err.println("Unexpected error");
+                  }
+              }
+          }
+      }
+
+  # Complete Application
+  - name: complete_application
+    prompt: |
+      Create a complete Java application that creates an agent, manages
+      conversations, and cleans up resources. Include a chat loop.
+    expected_patterns:
+      - "PersistentAgentsClient"
+      - "createAgent"
+      - "createThread"
+      - "createMessage"
+      - "createRun"
+      - "getRun"
+      - "listMessages"
+      - "deleteAgent"
+      - "deleteThread"
+    tags:
+      - complete
+      - application
+    mock_response: |
+      import com.azure.ai.agents.persistent.PersistentAgentsClient;
+      import com.azure.ai.agents.persistent.PersistentAgentsClientBuilder;
+      import com.azure.ai.agents.persistent.models.*;
+      import com.azure.core.http.rest.PagedIterable;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      import java.util.Scanner;
+
+      public class ChatbotApplication {
+          private final PersistentAgentsClient client;
+          private final String modelDeploymentName;
+          private PersistentAgent agent;
+          
+          public ChatbotApplication() {
+              this.client = new PersistentAgentsClientBuilder()
+                  .endpoint(System.getenv("PROJECT_ENDPOINT"))
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              this.modelDeploymentName = System.getenv("MODEL_DEPLOYMENT_NAME");
+          }
+          
+          public void initialize() {
+              CreateAgentOptions options = new CreateAgentOptions(modelDeploymentName)
+                  .setName("Assistant")
+                  .setInstructions("You are a helpful assistant.")
+                  .setTemperature(0.7);
+              
+              this.agent = client.createAgent(options);
+              System.out.println("Agent initialized: " + agent.getId());
+          }
+          
+          public String chat(String threadId, String userMessage) throws InterruptedException {
+              // Add message
+              client.createMessage(threadId, MessageRole.USER, userMessage);
+              
+              // Create and poll run
+              ThreadRun run = client.createRun(threadId, agent.getId());
+              while (run.getStatus() == RunStatus.QUEUED || run.getStatus() == RunStatus.IN_PROGRESS) {
+                  Thread.sleep(500);
+                  run = client.getRun(threadId, run.getId());
+              }
+              
+              if (run.getStatus() != RunStatus.COMPLETED) {
+                  return "Error: " + run.getStatus();
+              }
+              
+              // Get response
+              PagedIterable<PersistentThreadMessage> messages = client.listMessages(threadId);
+              for (PersistentThreadMessage msg : messages) {
+                  if (msg.getRole() == MessageRole.ASSISTANT) {
+                      for (MessageContent content : msg.getContent()) {
+                          if (content instanceof MessageTextContent) {
+                              return ((MessageTextContent) content).getText().getValue();
+                          }
+                      }
+                  }
+              }
+              return "No response";
+          }
+          
+          public String createConversation() {
+              return client.createThread().getId();
+          }
+          
+          public void cleanup(String threadId) {
+              client.deleteThread(threadId);
+          }
+          
+          public void shutdown() {
+              if (agent != null) {
+                  client.deleteAgent(agent.getId());
+                  System.out.println("Agent cleaned up");
+              }
+          }
+          
+          public static void main(String[] args) throws InterruptedException {
+              ChatbotApplication app = new ChatbotApplication();
+              
+              try {
+                  app.initialize();
+                  String threadId = app.createConversation();
+                  
+                  Scanner scanner = new Scanner(System.in);
+                  System.out.println("\nChat started! Type 'quit' to exit.\n");
+                  
+                  while (true) {
+                      System.out.print("You: ");
+                      String input = scanner.nextLine().trim();
+                      
+                      if ("quit".equalsIgnoreCase(input)) break;
+                      if (input.isEmpty()) continue;
+                      
+                      String response = app.chat(threadId, input);
+                      System.out.println("Assistant: " + response + "\n");
+                  }
+                  
+                  app.cleanup(threadId);
+                  
+              } finally {
+                  app.shutdown();
+              }
+          }
+      }

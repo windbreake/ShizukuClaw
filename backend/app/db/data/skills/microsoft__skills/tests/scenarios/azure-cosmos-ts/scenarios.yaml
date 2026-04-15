@@ -1,0 +1,517 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+# Test scenarios for azure-cosmos-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: cosmos_client_aad_auth
+    prompt: |
+      Create a CosmosClient in TypeScript using DefaultAzureCredential
+      for AAD authentication. Use environment variables for the endpoint.
+    expected_patterns:
+      - "import { CosmosClient } from \"@azure/cosmos\""
+      - "import { DefaultAzureCredential } from \"@azure/identity\""
+      - "aadCredentials"
+      - "new CosmosClient"
+      - "process.env"
+    forbidden_patterns:
+      - "require("
+      - "key:"
+      - "hardcoded-endpoint"
+    tags:
+      - authentication
+      - aad
+    mock_response: |
+      import { CosmosClient } from "@azure/cosmos";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new CosmosClient({
+        endpoint: process.env.COSMOS_ENDPOINT!,
+        aadCredentials: new DefaultAzureCredential(),
+      });
+
+  - name: create_database_container
+    prompt: |
+      Create a database and container with a partition key in Azure Cosmos DB
+      using TypeScript. Use createIfNotExists for idempotency.
+    expected_patterns:
+      - "createIfNotExists"
+      - "partitionKey"
+      - "paths"
+      - "database"
+      - "container"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - database
+      - container
+    mock_response: |
+      import { CosmosClient } from "@azure/cosmos";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new CosmosClient({
+        endpoint: process.env.COSMOS_ENDPOINT!,
+        aadCredentials: new DefaultAzureCredential(),
+      });
+
+      const { database } = await client.databases.createIfNotExists({
+        id: "my-database",
+      });
+
+      const { container } = await database.containers.createIfNotExists({
+        id: "my-container",
+        partitionKey: { paths: ["/category"] },
+      });
+
+  - name: crud_operations_typed
+    prompt: |
+      Show typed CRUD operations (create, read, update, delete) for a Product
+      document in Cosmos DB using TypeScript. Include proper partition key usage.
+    expected_patterns:
+      - "interface Product"
+      - "container.items.create"
+      - "container.item("
+      - "read<Product>"
+      - "replace<Product>"
+      - "delete()"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - crud
+      - typed
+    mock_response: |
+      import { CosmosClient, Container } from "@azure/cosmos";
+
+      interface Product {
+        id: string;
+        category: string;
+        name: string;
+        price: number;
+      }
+
+      async function crudOperations(container: Container) {
+        // Create
+        const newProduct: Product = {
+          id: "product-1",
+          category: "electronics",
+          name: "Laptop",
+          price: 999.99,
+        };
+        const { resource: created } = await container.items.create<Product>(newProduct);
+        console.log("Created:", created?.id);
+
+        // Read
+        const { resource: read } = await container
+          .item("product-1", "electronics")
+          .read<Product>();
+        console.log("Read:", read?.name);
+
+        // Update (Replace)
+        if (read) {
+          read.price = 899.99;
+          const { resource: updated } = await container
+            .item("product-1", "electronics")
+            .replace<Product>(read);
+          console.log("Updated price:", updated?.price);
+        }
+
+        // Delete
+        await container.item("product-1", "electronics").delete();
+        console.log("Deleted");
+      }
+
+  - name: parameterized_query
+    prompt: |
+      Write a parameterized SQL query in TypeScript for Cosmos DB that searches
+      for products by category and price range. Use SqlQuerySpec.
+    expected_patterns:
+      - "SqlQuerySpec"
+      - "query:"
+      - "parameters:"
+      - "@"
+      - "fetchAll"
+    forbidden_patterns:
+      - "require("
+      - "`SELECT"
+      - "'SELECT"
+    tags:
+      - query
+      - parameterized
+    mock_response: |
+      import { CosmosClient, SqlQuerySpec } from "@azure/cosmos";
+
+      interface Product {
+        id: string;
+        category: string;
+        name: string;
+        price: number;
+      }
+
+      async function findProducts(
+        container: Container,
+        category: string,
+        minPrice: number,
+        maxPrice: number
+      ): Promise<Product[]> {
+        const querySpec: SqlQuerySpec = {
+          query: "SELECT * FROM c WHERE c.category = @category AND c.price >= @minPrice AND c.price <= @maxPrice",
+          parameters: [
+            { name: "@category", value: category },
+            { name: "@minPrice", value: minPrice },
+            { name: "@maxPrice", value: maxPrice },
+          ],
+        };
+
+        const { resources } = await container.items
+          .query<Product>(querySpec)
+          .fetchAll();
+        
+        return resources;
+      }
+
+  - name: paginated_query
+    prompt: |
+      Implement paginated query results in TypeScript for Cosmos DB using
+      maxItemCount and continuation tokens.
+    expected_patterns:
+      - "maxItemCount"
+      - "hasMoreResults"
+      - "fetchNext"
+      - "continuationToken"
+    forbidden_patterns:
+      - "require("
+      - "fetchAll"
+    tags:
+      - query
+      - pagination
+    mock_response: |
+      import { CosmosClient, SqlQuerySpec, Container } from "@azure/cosmos";
+
+      interface Product {
+        id: string;
+        category: string;
+        name: string;
+        price: number;
+      }
+
+      async function* paginatedQuery(
+        container: Container,
+        querySpec: SqlQuerySpec,
+        pageSize: number
+      ): AsyncGenerator<Product[]> {
+        const queryIterator = container.items.query<Product>(querySpec, {
+          maxItemCount: pageSize,
+        });
+
+        while (queryIterator.hasMoreResults()) {
+          const { resources, continuationToken } = await queryIterator.fetchNext();
+          if (resources && resources.length > 0) {
+            yield resources;
+          }
+        }
+      }
+
+      // Usage
+      async function main(container: Container) {
+        const querySpec: SqlQuerySpec = {
+          query: "SELECT * FROM c WHERE c.category = @category",
+          parameters: [{ name: "@category", value: "electronics" }],
+        };
+
+        for await (const page of paginatedQuery(container, querySpec, 10)) {
+          console.log(`Processing page with ${page.length} items`);
+          for (const product of page) {
+            console.log(product.name);
+          }
+        }
+      }
+
+  - name: bulk_operations
+    prompt: |
+      Execute bulk operations in TypeScript for Cosmos DB including create,
+      upsert, and delete operations in a single batch.
+    expected_patterns:
+      - "BulkOperationType"
+      - "OperationInput"
+      - "executeBulkOperations"
+      - "statusCode"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - bulk
+      - batch
+    mock_response: |
+      import { 
+        CosmosClient, 
+        Container,
+        BulkOperationType, 
+        OperationInput 
+      } from "@azure/cosmos";
+
+      async function bulkOperations(container: Container) {
+        const operations: OperationInput[] = [
+          {
+            operationType: BulkOperationType.Create,
+            resourceBody: { 
+              id: "product-1", 
+              partitionKey: "electronics", 
+              name: "Laptop",
+              price: 999.99
+            },
+          },
+          {
+            operationType: BulkOperationType.Upsert,
+            resourceBody: { 
+              id: "product-2", 
+              partitionKey: "electronics", 
+              name: "Phone",
+              price: 699.99
+            },
+          },
+          {
+            operationType: BulkOperationType.Delete,
+            id: "product-old",
+            partitionKey: "electronics",
+          },
+        ];
+
+        const response = await container.items.executeBulkOperations(operations);
+
+        response.forEach((result, index) => {
+          if (result.statusCode >= 200 && result.statusCode < 300) {
+            console.log(`Operation ${index} succeeded`);
+          } else {
+            console.error(`Operation ${index} failed: ${result.statusCode}`);
+          }
+        });
+      }
+
+  - name: patch_operations
+    prompt: |
+      Use Cosmos DB patch operations in TypeScript to perform partial updates
+      on a document. Include replace, add, and remove operations.
+    expected_patterns:
+      - "PatchOperation"
+      - "op:"
+      - "path:"
+      - "value:"
+      - "patch"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - patch
+      - partial-update
+    mock_response: |
+      import { CosmosClient, Container, PatchOperation } from "@azure/cosmos";
+
+      interface Product {
+        id: string;
+        category: string;
+        name: string;
+        price: number;
+        discount?: boolean;
+        oldField?: string;
+      }
+
+      async function patchProduct(
+        container: Container,
+        id: string,
+        category: string
+      ): Promise<Product | undefined> {
+        const operations: PatchOperation[] = [
+          { op: "replace", path: "/price", value: 799.99 },
+          { op: "add", path: "/discount", value: true },
+          { op: "remove", path: "/oldField" },
+        ];
+
+        const { resource } = await container
+          .item(id, category)
+          .patch<Product>(operations);
+
+        return resource;
+      }
+
+  - name: error_handling
+    prompt: |
+      Implement proper error handling for Cosmos DB operations in TypeScript.
+      Handle 404, 409, 412, and 429 status codes appropriately.
+    expected_patterns:
+      - "ErrorResponse"
+      - "error.code"
+      - "404"
+      - "409"
+      - "429"
+      - "catch"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - error-handling
+    mock_response: |
+      import { CosmosClient, Container, ErrorResponse } from "@azure/cosmos";
+
+      interface Product {
+        id: string;
+        category: string;
+        name: string;
+        price: number;
+      }
+
+      async function getProductSafely(
+        container: Container,
+        id: string,
+        category: string
+      ): Promise<Product | null> {
+        try {
+          const { resource } = await container
+            .item(id, category)
+            .read<Product>();
+          return resource ?? null;
+        } catch (error) {
+          if (error instanceof ErrorResponse) {
+            switch (error.code) {
+              case 404:
+                console.log("Document not found");
+                return null;
+              case 409:
+                console.log("Conflict - document already exists");
+                throw new Error("Document conflict");
+              case 412:
+                console.log("Precondition failed (ETag mismatch)");
+                throw new Error("Concurrent modification detected");
+              case 429:
+                console.log(`Rate limited - retry after ${error.retryAfterInMs}ms`);
+                throw new Error("Too many requests");
+              default:
+                console.error(`Cosmos error ${error.code}: ${error.message}`);
+            }
+          }
+          throw error;
+        }
+      }
+
+  - name: etag_concurrency
+    prompt: |
+      Implement optimistic concurrency using ETags in TypeScript for Cosmos DB.
+      Use accessCondition to prevent lost updates.
+    expected_patterns:
+      - "etag"
+      - "accessCondition"
+      - "IfMatch"
+      - "412"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - concurrency
+      - etag
+    mock_response: |
+      import { CosmosClient, Container, ErrorResponse } from "@azure/cosmos";
+
+      interface Product {
+        id: string;
+        category: string;
+        name: string;
+        price: number;
+      }
+
+      async function updateWithConcurrencyControl(
+        container: Container,
+        id: string,
+        category: string,
+        updateFn: (product: Product) => Product
+      ): Promise<Product> {
+        const { resource, etag } = await container
+          .item(id, category)
+          .read<Product>();
+
+        if (!resource || !etag) {
+          throw new Error("Document not found");
+        }
+
+        const updated = updateFn(resource);
+
+        try {
+          const { resource: result } = await container
+            .item(id, category)
+            .replace<Product>(updated, {
+              accessCondition: { type: "IfMatch", condition: etag },
+            });
+          return result!;
+        } catch (error) {
+          if (error instanceof ErrorResponse && error.code === 412) {
+            throw new Error("Document was modified by another process - retry required");
+          }
+          throw error;
+        }
+      }
+
+  - name: hierarchical_partition_key
+    prompt: |
+      Create a container with hierarchical partition keys (MultiHash) in TypeScript
+      and show how to perform operations with multi-level partition keys.
+    expected_patterns:
+      - "PartitionKeyDefinitionVersion"
+      - "PartitionKeyKind"
+      - "MultiHash"
+      - "paths"
+      - "\\["
+    forbidden_patterns:
+      - "require("
+    tags:
+      - partition-key
+      - hierarchical
+    mock_response: |
+      import { 
+        CosmosClient, 
+        PartitionKeyDefinitionVersion, 
+        PartitionKeyKind 
+      } from "@azure/cosmos";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      interface Order {
+        id: string;
+        tenantId: string;
+        userId: string;
+        sessionId: string;
+        total: number;
+      }
+
+      async function setupHierarchicalPartitionKey() {
+        const client = new CosmosClient({
+          endpoint: process.env.COSMOS_ENDPOINT!,
+          aadCredentials: new DefaultAzureCredential(),
+        });
+
+        const { database } = await client.databases.createIfNotExists({
+          id: "my-database",
+        });
+
+        const { container } = await database.containers.createIfNotExists({
+          id: "orders",
+          partitionKey: {
+            paths: ["/tenantId", "/userId", "/sessionId"],
+            version: PartitionKeyDefinitionVersion.V2,
+            kind: PartitionKeyKind.MultiHash,
+          },
+        });
+
+        // Create with hierarchical partition key
+        const order: Order = {
+          id: "order-1",
+          tenantId: "tenant-a",
+          userId: "user-123",
+          sessionId: "session-xyz",
+          total: 99.99,
+        };
+        await container.items.create(order);
+
+        // Read with hierarchical partition key (array of values)
+        const { resource } = await container
+          .item("order-1", ["tenant-a", "user-123", "session-xyz"])
+          .read<Order>();
+
+        return resource;
+      }

@@ -1,0 +1,8 @@
+{
+  "source": "github",
+  "skill_id": "microsoft__skills",
+  "name": "skills",
+  "url": "https://github.com/microsoft/skills",
+  "deployed_at": "2026-04-10 11:45:50",
+  "layout": "github_clone_with_root_skill_md"
+}

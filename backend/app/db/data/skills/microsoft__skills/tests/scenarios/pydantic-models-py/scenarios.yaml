@@ -1,0 +1,422 @@
+# Test scenarios for pydantic-models-py skill evaluation
+# Each scenario tests a specific Pydantic model pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Multi-Model Pattern
+  - name: base_create_response_indb
+    prompt: |
+      Create a complete set of Pydantic models for a "Document" resource following the 
+      multi-model pattern. Include Base, Create, Update, Response, and InDB models.
+      Use Field constraints, proper inheritance, and camelCase aliases with populate_by_name.
+    expected_patterns:
+      - "from pydantic import BaseModel, Field"
+      - "class DocumentBase"
+      - "class DocumentCreate"
+      - "class DocumentUpdate"
+      - "class Document\\(DocumentBase\\)"
+      - "class DocumentInDB\\(Document\\)"
+      - "doc_type: str = \"document\""
+      - "populate_by_name = True"
+    forbidden_patterns:
+      - "class Config:\\s+orm_mode"
+      - "from pydantic import validator"
+      - "Optional\\[.*\\] = Field\\(\\.\\.\\.\\)"
+    tags:
+      - multi-model
+      - basic
+    mock_response: |
+      from pydantic import BaseModel, Field
+      from datetime import datetime
+      from typing import Optional
+
+      class DocumentBase(BaseModel):
+          """Base model with common fields."""
+          name: str = Field(..., min_length=1, max_length=200)
+          content: str = Field(...)
+          
+          class Config:
+              populate_by_name = True
+
+      class DocumentCreate(DocumentBase):
+          """Create model requires workspace."""
+          workspace_id: str = Field(..., alias="workspaceId")
+
+      class DocumentUpdate(BaseModel):
+          """Update model with all optional fields."""
+          name: Optional[str] = Field(None, min_length=1, max_length=200)
+          content: Optional[str] = None
+          
+          class Config:
+              populate_by_name = True
+
+      class Document(DocumentBase):
+          """Response model with metadata."""
+          id: str = Field(...)
+          created_at: datetime = Field(..., alias="createdAt")
+          updated_at: Optional[datetime] = Field(None, alias="updatedAt")
+          
+          class Config:
+              from_attributes = True
+              populate_by_name = True
+
+      class DocumentInDB(Document):
+          """Database model with doc_type."""
+          doc_type: str = "document"
+
+  # Field Aliases and camelCase
+  - name: camel_case_aliases
+    prompt: |
+      Create a Pydantic model for a "Project" resource with snake_case fields but camelCase 
+      aliases for API responses. Include created_at and updated_at with aliases.
+      Ensure populate_by_name is True to accept both formats.
+    expected_patterns:
+      - "owner_id: str = Field\\(\\.\\.\\..*alias=\"ownerId\"\\)"
+      - "created_at: datetime = Field\\(\\.\\.\\..*alias=\"createdAt\"\\)"
+      - "populate_by_name = True"
+    forbidden_patterns:
+      - "ownerId:"
+      - "createdAt:"
+    tags:
+      - aliases
+      - configuration
+    mock_response: |
+      from pydantic import BaseModel, Field
+      from datetime import datetime
+
+      class Project(BaseModel):
+          """Project with camelCase aliases."""
+          name: str = Field(...)
+          owner_id: str = Field(..., alias="ownerId")
+          created_at: datetime = Field(..., alias="createdAt")
+          
+          class Config:
+              populate_by_name = True
+
+  # Validation with Constraints
+  - name: field_validation_constraints
+    prompt: |
+      Create a Pydantic model for a "User" resource with field validation constraints.
+      Include: string length validation, email pattern, age range, and list item constraints.
+    expected_patterns:
+      - "min_length="
+      - "max_length="
+      - "pattern="
+      - "ge="
+      - "le="
+      - "min_items="
+      - "max_items="
+    forbidden_patterns:
+      - "@validator"
+      - "@pydantic.validator"
+    tags:
+      - validation
+      - constraints
+    mock_response: |
+      from pydantic import BaseModel, Field
+      from typing import Optional
+
+      class User(BaseModel):
+          """User model with field constraints."""
+          username: str = Field(..., min_length=3, max_length=50)
+          email: str = Field(..., pattern=r"^[\\w\\.-]+@[\\w\\.-]+\\.\\w+$")
+          age: int = Field(..., ge=0, le=150)
+          tags: list[str] = Field(default_factory=list, min_items=0, max_items=10)
+          bio: Optional[str] = Field(None, max_length=500)
+
+  # Custom Validators (v2 style)
+  - name: field_validator_v2
+    prompt: |
+      Create a Pydantic model with custom validators using v2 syntax.
+      Include a @field_validator for name validation and @model_validator for date validation.
+      Use ValidationInfo for context access.
+    expected_patterns:
+      - "from pydantic import field_validator"
+      - "@field_validator"
+      - "@classmethod"
+      - "from pydantic import model_validator"
+      - "@model_validator"
+    forbidden_patterns:
+      - "@validator"
+      - "from pydantic import validator"
+      - "def .*\\(self.*v\\):"
+    tags:
+      - validators
+      - advanced
+    mock_response: |
+      from pydantic import BaseModel, Field, field_validator, model_validator
+      from typing import Optional
+      from datetime import datetime
+
+      class Event(BaseModel):
+          """Event with custom validators."""
+          name: str
+          start_date: datetime
+          end_date: datetime
+          
+          @field_validator('name')
+          @classmethod
+          def name_not_empty(cls, v):
+              if not v or not v.strip():
+                  raise ValueError('Name cannot be empty')
+              return v.strip()
+          
+          @model_validator(mode='after')
+          def validate_dates(self):
+              if self.start_date >= self.end_date:
+                  raise ValueError('start_date must be before end_date')
+              return self
+
+  # ORM Mode (from_attributes)
+  - name: orm_mode_support
+    prompt: |
+      Create a Pydantic model that supports ORM object deserialization with from_attributes.
+      Include nested model relationships and ensure Config is properly set.
+    expected_patterns:
+      - "from_attributes = True"
+      - "class Config:"
+    forbidden_patterns:
+      - "orm_mode = True"
+    tags:
+      - orm
+      - configuration
+    mock_response: |
+      from pydantic import BaseModel, Field
+      from datetime import datetime
+
+      class Author(BaseModel):
+          """Author model for nesting."""
+          id: str
+          name: str
+
+      class Article(BaseModel):
+          """Article model with ORM support."""
+          id: str
+          title: str
+          content: str
+          author: Author
+          created_at: datetime
+          
+          class Config:
+              from_attributes = True
+              populate_by_name = True
+
+  # Create Model with Required Fields
+  - name: create_model_required_fields
+    prompt: |
+      Create two models: a Base model and a Create model. 
+      The Create model should require workspace_id (not in Base) while inheriting 
+      other required fields from Base.
+    expected_patterns:
+      - "class .*Create\\(.*Base\\):"
+      - "workspace_id: str = Field\\(\\.\\.\\.\\)"
+    forbidden_patterns:
+      - "Optional\\[.*workspace_id"
+      - "workspace_id.*= None"
+    tags:
+      - create-model
+      - inheritance
+    mock_response: |
+      from pydantic import BaseModel, Field
+      from typing import Optional
+
+      class ResourceBase(BaseModel):
+          """Base with common fields."""
+          name: str = Field(..., min_length=1)
+          description: Optional[str] = None
+          
+          class Config:
+              populate_by_name = True
+
+      class ResourceCreate(ResourceBase):
+          """Create requires workspace."""
+          workspace_id: str = Field(...)
+
+  # Update Model All Optional
+  - name: update_model_all_optional
+    prompt: |
+      Create an Update model where all fields are optional for PATCH requests.
+      Ensure it does NOT inherit from Create (which has required fields).
+      Include constraints but with Optional types.
+    expected_patterns:
+      - "class .*Update\\(BaseModel\\):"
+      - "Optional\\["
+      - "= None"
+    forbidden_patterns:
+      - "class .*Update\\(.*Create"
+      - "= Field\\(\\.\\.\\.\\)"
+    tags:
+      - update-model
+      - inheritance
+    mock_response: |
+      from pydantic import BaseModel, Field
+      from typing import Optional
+
+      class ResourceUpdate(BaseModel):
+          """Update with all optional fields."""
+          name: Optional[str] = Field(None, min_length=1, max_length=200)
+          description: Optional[str] = Field(None, max_length=2000)
+          status: Optional[str] = Field(None, pattern="^(active|inactive)$")
+          
+          class Config:
+              populate_by_name = True
+
+  # Response with Timestamps
+  - name: response_with_timestamps
+    prompt: |
+      Create a Response model that includes id, created_at, and updated_at fields.
+      Use camelCase aliases for timestamps. Include from_attributes=True for ORM.
+    expected_patterns:
+      - "id: str"
+      - "created_at: datetime = Field\\(\\.\\.\\..*alias=\"createdAt\"\\)"
+      - "updated_at: Optional\\[datetime\\] = Field\\(None.*alias=\"updatedAt\"\\)"
+      - "from_attributes = True"
+    forbidden_patterns:
+      - "class Response\\(.*Create"
+    tags:
+      - response-model
+      - timestamps
+    mock_response: |
+      from pydantic import BaseModel, Field
+      from datetime import datetime
+      from typing import Optional
+
+      class Item(BaseModel):
+          """Item response model."""
+          id: str = Field(...)
+          name: str = Field(...)
+          created_at: datetime = Field(..., alias="createdAt")
+          updated_at: Optional[datetime] = Field(None, alias="updatedAt")
+          
+          class Config:
+              from_attributes = True
+              populate_by_name = True
+
+  # InDB Model with doc_type
+  - name: indb_model_with_doc_type
+    prompt: |
+      Create a complete model hierarchy ending with an InDB model.
+      The InDB model should inherit from the Response model and add a doc_type constant.
+      Demonstrate the full inheritance chain: Base -> Response -> InDB
+    expected_patterns:
+      - "class .*InDB\\(.*\\):"
+      - "doc_type: str = "
+    forbidden_patterns:
+      - "doc_type: Optional"
+      - "doc_type = Field\\(\\.\\.\\.\\)"
+    tags:
+      - indb-model
+      - inheritance
+    mock_response: |
+      from pydantic import BaseModel, Field
+      from datetime import datetime
+      from typing import Optional
+
+      class ItemBase(BaseModel):
+          """Base model."""
+          name: str = Field(...)
+          
+          class Config:
+              populate_by_name = True
+
+      class Item(ItemBase):
+          """Response model."""
+          id: str = Field(...)
+          created_at: datetime = Field(..., alias="createdAt")
+          
+          class Config:
+              from_attributes = True
+              populate_by_name = True
+
+      class ItemInDB(Item):
+          """Database model with doc_type."""
+          doc_type: str = "item"
+
+  # Nested Models
+  - name: nested_models_relationships
+    prompt: |
+      Create two related models where one is nested in the other.
+      For example: an Author model nested inside an Article model.
+      Include proper typing for the nested model.
+    expected_patterns:
+      - "class .*\\(BaseModel\\):"
+      - ":\\s.*"
+      - "class .*\\(BaseModel\\):"
+    tags:
+      - nested-models
+      - relationships
+    mock_response: |
+      from pydantic import BaseModel, Field
+      from datetime import datetime
+
+      class Author(BaseModel):
+          """Author model."""
+          id: str
+          name: str
+          email: str
+
+      class Article(BaseModel):
+          """Article with nested Author."""
+          id: str
+          title: str
+          author: Author
+          created_at: datetime
+
+  # Complex Types
+  - name: complex_field_types
+    prompt: |
+      Create a Pydantic model with complex field types including:
+      list, dict, Literal union types, and nested Optional types.
+      Use proper Python 3.10+ syntax where applicable.
+    expected_patterns:
+      - "list\\["
+      - "dict\\["
+      - "Literal\\["
+      - "\\|"
+    tags:
+      - complex-types
+      - typing
+    mock_response: |
+      from pydantic import BaseModel, Field
+      from typing import Literal
+
+      class Configuration(BaseModel):
+          """Model with complex types."""
+          tags: list[str] = Field(default_factory=list)
+          settings: dict[str, str | int | bool] = Field(default_factory=dict)
+          status: Literal["active", "inactive", "pending"]
+          metadata: dict[str, list[str]] | None = None
+
+  # Pydantic v2 ConfigDict
+  - name: configdict_v2_style
+    prompt: |
+      Create a Pydantic model using ConfigDict (v2 style) instead of Config class.
+      Include populate_by_name, from_attributes, and str_strip_whitespace settings.
+    expected_patterns:
+      - "from pydantic import.*ConfigDict"
+      - "model_config = ConfigDict"
+      - "populate_by_name"
+      - "from_attributes"
+    forbidden_patterns:
+      - "class Config:"
+    tags:
+      - configdict
+      - v2-style
+    mock_response: |
+      from pydantic import BaseModel, ConfigDict, Field
+
+      class Project(BaseModel):
+          """Model with ConfigDict (v2)."""
+          
+          model_config = ConfigDict(
+              populate_by_name=True,
+              from_attributes=True,
+              str_strip_whitespace=True,
+          )
+          
+          name: str = Field(...)
+          description: str = Field(...)

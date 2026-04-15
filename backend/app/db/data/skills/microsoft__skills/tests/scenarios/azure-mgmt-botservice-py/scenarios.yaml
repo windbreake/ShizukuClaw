@@ -1,0 +1,461 @@
+# Test scenarios for azure-mgmt-botservice-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Bot Creation
+  - name: basic_bot_creation
+    prompt: |
+      Create a basic Azure Bot Service using the management SDK.
+      Include proper authentication, bot creation with F0 SKU, and cleanup.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "AzureBotService"
+      - "Sku"
+      - "BotProperties"
+      - "create"
+      - "location=.global"
+      - "msa_app_id"
+    forbidden_patterns:
+      - "hardcoded"
+      - "credentials="
+    tags:
+      - basic
+      - authentication
+      - bot-management
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.botservice import AzureBotService
+      from azure.mgmt.botservice.models import Bot, BotProperties, Sku
+      
+      credential = DefaultAzureCredential()
+      client = AzureBotService(
+          credential=credential,
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      bot_name = "my-chat-bot"
+      
+      bot = client.bots.create(
+          resource_group_name=resource_group,
+          resource_name=bot_name,
+          parameters=Bot(
+              location="global",
+              sku=Sku(name="F0"),  # Free tier
+              kind="azurebot",
+              properties=BotProperties(
+                  display_name="My Chat Bot",
+                  description="A conversational AI bot",
+                  endpoint="https://my-bot-app.azurewebsites.net/api/messages",
+                  msa_app_id="<your-app-id>",
+                  msa_app_type="MultiTenant"
+              )
+          )
+      )
+      
+      print(f"Bot created: {bot.name}")
+      
+      client.bots.delete(
+          resource_group_name=resource_group,
+          resource_name=bot_name
+      )
+
+  # Bot Retrieval Operations
+  - name: bot_retrieval_operations
+    prompt: |
+      Write code to retrieve bot information from Azure Bot Service.
+      Include getting a specific bot, listing bots in a resource group,
+      and accessing bot properties.
+    expected_patterns:
+      - "client.bots.get"
+      - "client.bots.list_by_resource_group"
+      - "bot.properties"
+      - "bot.sku"
+    forbidden_patterns:
+      - "client.get_bot"
+      - "client.list_bots"
+    tags:
+      - basic
+      - bot-management
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.botservice import AzureBotService
+      
+      credential = DefaultAzureCredential()
+      client = AzureBotService(
+          credential=credential,
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      bot_name = "my-chat-bot"
+      
+      # Get specific bot
+      bot = client.bots.get(
+          resource_group_name=resource_group,
+          resource_name=bot_name
+      )
+      
+      print(f"Bot: {bot.properties.display_name}")
+      print(f"Endpoint: {bot.properties.endpoint}")
+      print(f"SKU: {bot.sku.name}")
+      
+      # List bots in resource group
+      bots = client.bots.list_by_resource_group(
+          resource_group_name=resource_group
+      )
+      
+      for b in bots:
+          print(f"Bot: {b.name} - {b.properties.display_name}")
+
+  # Teams Channel Configuration
+  - name: teams_channel_creation
+    prompt: |
+      Create a Teams channel for an Azure Bot Service.
+      Use the BotChannel model with MsTeamsChannel properties.
+    expected_patterns:
+      - "MsTeamsChannel"
+      - "MsTeamsChannelProperties"
+      - "BotChannel"
+      - "channels.create"
+      - "MsTeamsChannel"
+    forbidden_patterns:
+      - 'channel_name="teams"'
+      - "is_enabled=False"
+    tags:
+      - channels
+      - teams
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.botservice import AzureBotService
+      from azure.mgmt.botservice.models import (
+          BotChannel,
+          MsTeamsChannel,
+          MsTeamsChannelProperties,
+      )
+      
+      credential = DefaultAzureCredential()
+      client = AzureBotService(
+          credential=credential,
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      bot_name = "my-chat-bot"
+      
+      channel = client.channels.create(
+          resource_group_name=resource_group,
+          resource_name=bot_name,
+          channel_name="MsTeamsChannel",
+          parameters=BotChannel(
+              location="global",
+              properties=MsTeamsChannel(
+                  properties=MsTeamsChannelProperties(
+                      is_enabled=True
+                  )
+              )
+          )
+      )
+      
+      print(f"Teams channel created for bot: {bot_name}")
+
+  # Direct Line Channel with Sites
+  - name: direct_line_channel_creation
+    prompt: |
+      Create a Direct Line channel for an Azure Bot Service.
+      Configure it with a site for direct line v3 protocol.
+    expected_patterns:
+      - "DirectLineChannel"
+      - "DirectLineChannelProperties"
+      - "DirectLineSite"
+      - "is_v3_enabled=True"
+      - "channels.create"
+    forbidden_patterns:
+      - "is_v1_enabled=True"
+      - 'channel_name="directline"'
+    tags:
+      - channels
+      - direct-line
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.botservice import AzureBotService
+      from azure.mgmt.botservice.models import (
+          BotChannel,
+          DirectLineChannel,
+          DirectLineChannelProperties,
+          DirectLineSite,
+      )
+      
+      credential = DefaultAzureCredential()
+      client = AzureBotService(
+          credential=credential,
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      bot_name = "my-chat-bot"
+      
+      channel = client.channels.create(
+          resource_group_name=resource_group,
+          resource_name=bot_name,
+          channel_name="DirectLineChannel",
+          parameters=BotChannel(
+              location="global",
+              properties=DirectLineChannel(
+                  properties=DirectLineChannelProperties(
+                      sites=[
+                          DirectLineSite(
+                              site_name="Default Site",
+                              is_enabled=True,
+                              is_v1_enabled=False,
+                              is_v3_enabled=True
+                          )
+                      ]
+                  )
+              )
+          )
+      )
+      
+      print(f"Direct Line channel created for bot: {bot_name}")
+
+  # Web Chat Channel Creation
+  - name: web_chat_channel_creation
+    prompt: |
+      Create a Web Chat channel for an Azure Bot Service.
+      Configure it with an embeddable web chat site.
+    expected_patterns:
+      - "WebChatChannel"
+      - "WebChatChannelProperties"
+      - "WebChatSite"
+      - "channels.create"
+    forbidden_patterns:
+      - 'channel_name="webchat"'
+    tags:
+      - channels
+      - web-chat
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.botservice import AzureBotService
+      from azure.mgmt.botservice.models import (
+          BotChannel,
+          WebChatChannel,
+          WebChatChannelProperties,
+          WebChatSite,
+      )
+      
+      credential = DefaultAzureCredential()
+      client = AzureBotService(
+          credential=credential,
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      bot_name = "my-chat-bot"
+      
+      channel = client.channels.create(
+          resource_group_name=resource_group,
+          resource_name=bot_name,
+          channel_name="WebChatChannel",
+          parameters=BotChannel(
+              location="global",
+              properties=WebChatChannel(
+                  properties=WebChatChannelProperties(
+                      sites=[
+                          WebChatSite(
+                              site_name="Default Site",
+                              is_enabled=True
+                          )
+                      ]
+                  )
+              )
+          )
+      )
+      
+      print(f"Web Chat channel created for bot: {bot_name}")
+
+  # Channel Key Retrieval and Direct Line Keys
+  - name: channel_keys_retrieval
+    prompt: |
+      Retrieve channel keys and Direct Line site information from an
+      existing Direct Line channel for a bot.
+    expected_patterns:
+      - "channels.list_with_keys"
+      - "DirectLineChannel"
+      - "site"
+      - "site.key"
+    tags:
+      - channels
+      - direct-line
+      - advanced
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.botservice import AzureBotService
+      
+      credential = DefaultAzureCredential()
+      client = AzureBotService(
+          credential=credential,
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      bot_name = "my-chat-bot"
+      
+      keys = client.channels.list_with_keys(
+          resource_group_name=resource_group,
+          resource_name=bot_name,
+          channel_name="DirectLineChannel"
+      )
+      
+      if hasattr(keys.properties, 'properties'):
+          for site in keys.properties.properties.sites:
+              print(f"Site: {site.site_name}")
+              print(f"Key: {site.key}")
+
+  # OAuth Connection Configuration
+  - name: oauth_connection_creation
+    prompt: |
+      Create an OAuth connection for a bot to enable authentication
+      with Microsoft Graph or Azure AD.
+    expected_patterns:
+      - "ConnectionSetting"
+      - "ConnectionSettingProperties"
+      - "bot_connection.create"
+      - "client_id"
+      - "client_secret"
+      - "scopes"
+    forbidden_patterns:
+      - "client_secret=.hardcoded"
+      - "os.environ\\[.client_secret"
+    tags:
+      - connections
+      - oauth
+      - advanced
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.botservice import AzureBotService
+      from azure.mgmt.botservice.models import (
+          ConnectionSetting,
+          ConnectionSettingProperties,
+      )
+      
+      credential = DefaultAzureCredential()
+      client = AzureBotService(
+          credential=credential,
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      bot_name = "my-chat-bot"
+      
+      connection = client.bot_connection.create(
+          resource_group_name=resource_group,
+          resource_name=bot_name,
+          connection_name="graph-connection",
+          parameters=ConnectionSetting(
+              location="global",
+              properties=ConnectionSettingProperties(
+                  client_id=os.environ["AZURE_AD_APP_ID"],
+                  client_secret=os.environ["AZURE_AD_APP_SECRET"],
+                  scopes="User.Read",
+                  service_provider_id="azure-active-directory"
+              )
+          )
+      )
+      
+      print(f"Connection created: {connection.name}")
+
+  # List OAuth Connections
+  - name: list_oauth_connections
+    prompt: |
+      List all OAuth connections for a bot service.
+    expected_patterns:
+      - "bot_connection.list_by_bot_service"
+      - "for conn in connections"
+      - "conn.name"
+    tags:
+      - connections
+      - oauth
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.botservice import AzureBotService
+      
+      credential = DefaultAzureCredential()
+      client = AzureBotService(
+          credential=credential,
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      bot_name = "my-chat-bot"
+      
+      connections = client.bot_connection.list_by_bot_service(
+          resource_group_name=resource_group,
+          resource_name=bot_name
+      )
+      
+      for conn in connections:
+          print(f"Connection: {conn.name}")
+
+  # Production Bot with S1 SKU
+  - name: production_bot_creation
+    prompt: |
+      Create a production-grade Azure Bot with S1 Standard SKU,
+      proper configuration for high-volume messaging.
+    expected_patterns:
+      - "Sku.name..S1"
+      - "BotProperties"
+      - "location=.global"
+      - "msa_app_type=.MultiTenant"
+    forbidden_patterns:
+      - "F0"
+      - "location=.eastus"
+    tags:
+      - production
+      - bot-management
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.botservice import AzureBotService
+      from azure.mgmt.botservice.models import Bot, BotProperties, Sku
+      
+      credential = DefaultAzureCredential()
+      client = AzureBotService(
+          credential=credential,
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      bot_name = "production-bot"
+      
+      bot = client.bots.create(
+          resource_group_name=resource_group,
+          resource_name=bot_name,
+          parameters=Bot(
+              location="global",
+              sku=Sku(name="S1"),  # Standard tier for production
+              kind="azurebot",
+              properties=BotProperties(
+                  display_name="Production Chat Bot",
+                  description="Production conversational AI bot",
+                  endpoint="https://prod-bot-app.azurewebsites.net/api/messages",
+                  msa_app_id=os.environ["AZURE_AD_APP_ID"],
+                  msa_app_type="MultiTenant"
+              )
+          )
+      )
+      
+      print(f"Production bot created: {bot.name}")
+      print(f"SKU: {bot.sku.name}")

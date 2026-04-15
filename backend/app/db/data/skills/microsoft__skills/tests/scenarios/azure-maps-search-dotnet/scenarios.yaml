@@ -1,0 +1,562 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-maps-search-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Geocoding
+  - name: basic_geocoding
+    prompt: |
+      Create a basic Azure Maps geocoding example that converts an address
+      to coordinates using subscription key authentication.
+    expected_patterns:
+      - "MapsSearchClient"
+      - "AzureKeyCredential"
+      - "GetGeocoding"
+      - "Coordinates"
+    forbidden_patterns:
+      - 'SearchAddress'
+      - 'FuzzySearch'
+    tags:
+      - basic
+      - geocoding
+    mock_response: |
+      using Azure;
+      using Azure.Maps.Search;
+      using Azure.Maps.Search.Models;
+      
+      string subscriptionKey = Environment.GetEnvironmentVariable("AZURE_MAPS_SUBSCRIPTION_KEY")
+          ?? throw new InvalidOperationException("AZURE_MAPS_SUBSCRIPTION_KEY not set");
+      
+      AzureKeyCredential credential = new AzureKeyCredential(subscriptionKey);
+      MapsSearchClient client = new MapsSearchClient(credential);
+      
+      Response<GeocodingResponse> result = client.GetGeocoding("1 Microsoft Way, Redmond, WA 98052");
+      
+      for (int i = 0; i < result.Value.Features.Count; i++)
+      {
+          var coords = result.Value.Features[i].Geometry.Coordinates;
+          Console.WriteLine($"Coordinate: {coords[0]}, {coords[1]}");
+      }
+
+  # Microsoft Entra ID Authentication
+  - name: entra_id_authentication
+    prompt: |
+      Create a Maps Search client using Microsoft Entra ID (Azure AD)
+      authentication with DefaultAzureCredential and Maps Client ID.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "AZURE_MAPS_CLIENT_ID"
+      - "MapsSearchClient"
+    forbidden_patterns:
+      - 'AzureKeyCredential'
+    tags:
+      - authentication
+      - entra-id
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Maps.Search;
+      
+      string clientId = Environment.GetEnvironmentVariable("AZURE_MAPS_CLIENT_ID")
+          ?? throw new InvalidOperationException("AZURE_MAPS_CLIENT_ID not set");
+      
+      DefaultAzureCredential credential = new DefaultAzureCredential();
+      MapsSearchClient client = new MapsSearchClient(credential, clientId);
+      
+      var result = await client.GetGeocodingAsync("Space Needle, Seattle");
+      
+      foreach (var feature in result.Value.Features)
+      {
+          Console.WriteLine($"Address: {feature.Properties.Address.FormattedAddress}");
+      }
+
+  # Batch Geocoding
+  - name: batch_geocoding
+    prompt: |
+      Create a batch geocoding example that geocodes multiple addresses
+      in a single request.
+    expected_patterns:
+      - "GeocodingQuery"
+      - "GetGeocodingBatch"
+      - "BatchItems"
+      - "List<GeocodingQuery>"
+    forbidden_patterns:
+      - 'foreach.*GetGeocoding'
+    tags:
+      - batch
+      - geocoding
+    mock_response: |
+      using Azure;
+      using Azure.Maps.Search;
+      using Azure.Maps.Search.Models;
+      
+      string subscriptionKey = Environment.GetEnvironmentVariable("AZURE_MAPS_SUBSCRIPTION_KEY")
+          ?? throw new InvalidOperationException("AZURE_MAPS_SUBSCRIPTION_KEY not set");
+      
+      MapsSearchClient client = new MapsSearchClient(new AzureKeyCredential(subscriptionKey));
+      
+      List<GeocodingQuery> queries = new List<GeocodingQuery>
+      {
+          new GeocodingQuery()
+          {
+              Query = "15171 NE 24th St, Redmond, WA 98052, United States"
+          },
+          new GeocodingQuery()
+          {
+              AddressLine = "400 Broad St",
+              Locality = "Seattle",
+              AdminDistrict = "WA"
+          },
+      };
+      
+      Response<GeocodingBatchResponse> results = client.GetGeocodingBatch(queries);
+      
+      for (var i = 0; i < results.Value.BatchItems.Count; i++)
+      {
+          Console.WriteLine($"Query {i + 1}:");
+          foreach (var feature in results.Value.BatchItems[i].Features)
+          {
+              var coords = feature.Geometry.Coordinates;
+              Console.WriteLine($"  Coordinates: {coords[0]}, {coords[1]}");
+          }
+      }
+
+  # Reverse Geocoding
+  - name: reverse_geocoding
+    prompt: |
+      Create a reverse geocoding example that converts coordinates
+      to an address using GeoPosition.
+    expected_patterns:
+      - "GetReverseGeocoding"
+      - "GeoPosition"
+      - "FormattedAddress"
+    forbidden_patterns:
+      - 'new GeoPosition\(47\.'
+    tags:
+      - reverse-geocoding
+    mock_response: |
+      using Azure;
+      using Azure.Core.GeoJson;
+      using Azure.Maps.Search;
+      using Azure.Maps.Search.Models;
+      
+      string subscriptionKey = Environment.GetEnvironmentVariable("AZURE_MAPS_SUBSCRIPTION_KEY")
+          ?? throw new InvalidOperationException("AZURE_MAPS_SUBSCRIPTION_KEY not set");
+      
+      MapsSearchClient client = new MapsSearchClient(new AzureKeyCredential(subscriptionKey));
+      
+      // Note: GeoPosition is (longitude, latitude)
+      GeoPosition coordinates = new GeoPosition(-122.138685, 47.6305637);
+      
+      Response<GeocodingResponse> result = client.GetReverseGeocoding(coordinates);
+      
+      for (int i = 0; i < result.Value.Features.Count; i++)
+      {
+          Console.WriteLine(result.Value.Features[i].Properties.Address.FormattedAddress);
+      }
+
+  # Batch Reverse Geocoding
+  - name: batch_reverse_geocoding
+    prompt: |
+      Create a batch reverse geocoding example with multiple coordinates
+      and different result types.
+    expected_patterns:
+      - "ReverseGeocodingQuery"
+      - "GetReverseGeocodingBatch"
+      - "ReverseGeocodingResultTypeEnum"
+      - "BatchItems"
+    forbidden_patterns:
+      - 'foreach.*GetReverseGeocoding'
+    tags:
+      - batch
+      - reverse-geocoding
+    mock_response: |
+      using Azure;
+      using Azure.Core.GeoJson;
+      using Azure.Maps.Search;
+      using Azure.Maps.Search.Models;
+      
+      string subscriptionKey = Environment.GetEnvironmentVariable("AZURE_MAPS_SUBSCRIPTION_KEY")
+          ?? throw new InvalidOperationException("AZURE_MAPS_SUBSCRIPTION_KEY not set");
+      
+      MapsSearchClient client = new MapsSearchClient(new AzureKeyCredential(subscriptionKey));
+      
+      List<ReverseGeocodingQuery> items = new List<ReverseGeocodingQuery>
+      {
+          new ReverseGeocodingQuery()
+          {
+              Coordinates = new GeoPosition(-122.349309, 47.620498)
+          },
+          new ReverseGeocodingQuery()
+          {
+              Coordinates = new GeoPosition(-122.138679, 47.630356),
+              ResultTypes = new List<ReverseGeocodingResultTypeEnum>
+              {
+                  ReverseGeocodingResultTypeEnum.Address,
+                  ReverseGeocodingResultTypeEnum.Neighborhood
+              }
+          },
+      };
+      
+      Response<GeocodingBatchResponse> result = client.GetReverseGeocodingBatch(items);
+      
+      for (var i = 0; i < result.Value.BatchItems.Count; i++)
+      {
+          var feature = result.Value.BatchItems[i].Features[0];
+          Console.WriteLine($"Address: {feature.Properties.Address.AddressLine}");
+          Console.WriteLine($"Neighborhood: {feature.Properties.Address.Neighborhood}");
+      }
+
+  # Get Polygon
+  - name: get_polygon
+    prompt: |
+      Create an example that gets the boundary polygon for a location,
+      such as a city boundary.
+    expected_patterns:
+      - "GetPolygon"
+      - "GetPolygonOptions"
+      - "BoundaryResultTypeEnum"
+      - "ResolutionEnum"
+      - "Geometry"
+    forbidden_patterns:
+      - 'SearchPolygon'
+    tags:
+      - polygon
+      - boundary
+    mock_response: |
+      using Azure;
+      using Azure.Core.GeoJson;
+      using Azure.Maps.Search;
+      using Azure.Maps.Search.Models;
+      
+      string subscriptionKey = Environment.GetEnvironmentVariable("AZURE_MAPS_SUBSCRIPTION_KEY")
+          ?? throw new InvalidOperationException("AZURE_MAPS_SUBSCRIPTION_KEY not set");
+      
+      MapsSearchClient client = new MapsSearchClient(new AzureKeyCredential(subscriptionKey));
+      
+      GetPolygonOptions options = new GetPolygonOptions()
+      {
+          Coordinates = new GeoPosition(-122.204141, 47.61256),
+          ResultType = BoundaryResultTypeEnum.Locality,
+          Resolution = ResolutionEnum.Small,
+      };
+      
+      Response<Boundary> result = client.GetPolygon(options);
+      
+      Console.WriteLine($"Boundary copyright: {result.Value.Properties?.Copyright}");
+      Console.WriteLine($"{result.Value.Geometry.Count} polygons in the result.");
+      
+      // Print polygon coordinates
+      if (result.Value.Geometry[0] is GeoPolygon polygon)
+      {
+          Console.WriteLine("First polygon coordinates (latitude, longitude):");
+          foreach (var coordinate in polygon.Coordinates[0])
+          {
+              Console.WriteLine($"  {coordinate.Latitude:N5}, {coordinate.Longitude:N5}");
+          }
+      }
+
+  # Async Geocoding
+  - name: async_geocoding
+    prompt: |
+      Create an async geocoding example using GetGeocodingAsync.
+    expected_patterns:
+      - "GetGeocodingAsync"
+      - "await"
+      - "async"
+    forbidden_patterns:
+      - 'GetGeocoding\('
+      - '\.Result'
+    tags:
+      - async
+      - geocoding
+    mock_response: |
+      using Azure;
+      using Azure.Maps.Search;
+      using Azure.Maps.Search.Models;
+      
+      string subscriptionKey = Environment.GetEnvironmentVariable("AZURE_MAPS_SUBSCRIPTION_KEY")
+          ?? throw new InvalidOperationException("AZURE_MAPS_SUBSCRIPTION_KEY not set");
+      
+      MapsSearchClient client = new MapsSearchClient(new AzureKeyCredential(subscriptionKey));
+      
+      async Task GeocodeAddressesAsync()
+      {
+          Response<GeocodingResponse> result = await client.GetGeocodingAsync(
+              "1 Microsoft Way, Redmond, WA 98052");
+          
+          foreach (var feature in result.Value.Features)
+          {
+              var coords = feature.Geometry.Coordinates;
+              var address = feature.Properties.Address;
+              
+              Console.WriteLine($"Address: {address.FormattedAddress}");
+              Console.WriteLine($"Coordinates: {coords[0]}, {coords[1]}");
+          }
+      }
+      
+      await GeocodeAddressesAsync();
+
+  # Address Components
+  - name: address_components
+    prompt: |
+      Create an example that extracts individual address components
+      from a geocoding response (street, city, state, postal code, country).
+    expected_patterns:
+      - "Properties.Address"
+      - "AddressLine"
+      - "Locality"
+      - "AdminDistrict"
+      - "PostalCode"
+    forbidden_patterns:
+      - 'Split\('
+    tags:
+      - address
+      - components
+    mock_response: |
+      using Azure;
+      using Azure.Maps.Search;
+      using Azure.Maps.Search.Models;
+      
+      string subscriptionKey = Environment.GetEnvironmentVariable("AZURE_MAPS_SUBSCRIPTION_KEY")
+          ?? throw new InvalidOperationException("AZURE_MAPS_SUBSCRIPTION_KEY not set");
+      
+      MapsSearchClient client = new MapsSearchClient(new AzureKeyCredential(subscriptionKey));
+      
+      Response<GeocodingResponse> result = await client.GetGeocodingAsync(
+          "1 Microsoft Way, Redmond, WA 98052");
+      
+      foreach (var feature in result.Value.Features)
+      {
+          var address = feature.Properties.Address;
+          
+          Console.WriteLine($"Street: {address.AddressLine}");
+          Console.WriteLine($"City: {address.Locality}");
+          Console.WriteLine($"State: {address.AdminDistrict}");
+          Console.WriteLine($"Postal Code: {address.PostalCode}");
+          Console.WriteLine($"Country: {address.CountryRegion?.Name}");
+          Console.WriteLine($"Formatted: {address.FormattedAddress}");
+      }
+
+  # Structured Address Query
+  - name: structured_address_query
+    prompt: |
+      Create a geocoding example using a structured address query
+      with individual address components instead of a single string.
+    expected_patterns:
+      - "GeocodingQuery"
+      - "AddressLine"
+      - "Locality"
+      - "AdminDistrict"
+    forbidden_patterns:
+      - 'Query.*='
+    tags:
+      - structured-query
+      - address
+    mock_response: |
+      using Azure;
+      using Azure.Maps.Search;
+      using Azure.Maps.Search.Models;
+      
+      string subscriptionKey = Environment.GetEnvironmentVariable("AZURE_MAPS_SUBSCRIPTION_KEY")
+          ?? throw new InvalidOperationException("AZURE_MAPS_SUBSCRIPTION_KEY not set");
+      
+      MapsSearchClient client = new MapsSearchClient(new AzureKeyCredential(subscriptionKey));
+      
+      var query = new GeocodingQuery
+      {
+          AddressLine = "400 Broad St",
+          Locality = "Seattle",
+          AdminDistrict = "WA",
+          CountryRegion = "US"
+      };
+      
+      var queries = new List<GeocodingQuery> { query };
+      Response<GeocodingBatchResponse> result = await client.GetGeocodingBatchAsync(queries);
+      
+      foreach (var item in result.Value.BatchItems)
+      {
+          foreach (var feature in item.Features)
+          {
+              Console.WriteLine($"Found: {feature.Properties.Address.FormattedAddress}");
+              Console.WriteLine($"Coordinates: {string.Join(", ", feature.Geometry.Coordinates)}");
+          }
+      }
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Show how to handle errors when geocoding, including
+      invalid requests and empty results.
+    expected_patterns:
+      - "RequestFailedException"
+      - "catch"
+      - "ex.Status"
+      - "Features.Count.*0"
+    forbidden_patterns:
+      - 'catch \{\s*\}'
+      - 'catch \(Exception\)'
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure;
+      using Azure.Maps.Search;
+      using Azure.Maps.Search.Models;
+      
+      string subscriptionKey = Environment.GetEnvironmentVariable("AZURE_MAPS_SUBSCRIPTION_KEY")
+          ?? throw new InvalidOperationException("AZURE_MAPS_SUBSCRIPTION_KEY not set");
+      
+      MapsSearchClient client = new MapsSearchClient(new AzureKeyCredential(subscriptionKey));
+      
+      async Task GeocodeWithErrorHandlingAsync(string query)
+      {
+          try
+          {
+              Response<GeocodingResponse> result = await client.GetGeocodingAsync(query);
+              
+              if (result.Value.Features.Count == 0)
+              {
+                  Console.WriteLine("No results found for the query.");
+                  return;
+              }
+              
+              foreach (var feature in result.Value.Features)
+              {
+                  Console.WriteLine(feature.Properties.Address.FormattedAddress);
+              }
+          }
+          catch (RequestFailedException ex) when (ex.Status == 400)
+          {
+              Console.WriteLine($"Invalid request: {ex.Message}");
+          }
+          catch (RequestFailedException ex) when (ex.Status == 401)
+          {
+              Console.WriteLine($"Authentication failed: {ex.Message}");
+          }
+          catch (RequestFailedException ex)
+          {
+              Console.WriteLine($"Maps API error ({ex.Status}): {ex.Message}");
+          }
+      }
+      
+      await GeocodeWithErrorHandlingAsync("invalid query xyz123");
+
+  # Service Class Pattern
+  - name: service_class_pattern
+    prompt: |
+      Create a reusable Maps service class that wraps the MapsSearchClient
+      for geocoding and reverse geocoding operations.
+    expected_patterns:
+      - "class.*Service"
+      - "MapsSearchClient"
+      - "GetGeocodingAsync"
+      - "GetReverseGeocodingAsync"
+    forbidden_patterns:
+      - 'new MapsSearchClient.*GetGeocoding'
+    tags:
+      - service
+      - best-practice
+    mock_response: |
+      using Azure;
+      using Azure.Core.GeoJson;
+      using Azure.Maps.Search;
+      using Azure.Maps.Search.Models;
+      
+      public class MapsService
+      {
+          private readonly MapsSearchClient _client;
+          
+          public MapsService()
+          {
+              var subscriptionKey = Environment.GetEnvironmentVariable("AZURE_MAPS_SUBSCRIPTION_KEY")
+                  ?? throw new InvalidOperationException("AZURE_MAPS_SUBSCRIPTION_KEY not set");
+              _client = new MapsSearchClient(new AzureKeyCredential(subscriptionKey));
+          }
+          
+          public async Task<GeocodingResponse> GeocodeAddressAsync(string address)
+          {
+              var result = await _client.GetGeocodingAsync(address);
+              return result.Value;
+          }
+          
+          public async Task<GeocodingResponse> ReverseGeocodeAsync(double longitude, double latitude)
+          {
+              var result = await _client.GetReverseGeocodingAsync(new GeoPosition(longitude, latitude));
+              return result.Value;
+          }
+          
+          public async Task<GeocodingBatchResponse> GeocodeMultipleAsync(List<string> addresses)
+          {
+              var queries = addresses.Select(a => new GeocodingQuery { Query = a }).ToList();
+              var result = await _client.GetGeocodingBatchAsync(queries);
+              return result.Value;
+          }
+      }
+      
+      // Usage
+      var mapsService = new MapsService();
+      var result = await mapsService.GeocodeAddressAsync("Space Needle, Seattle");
+      Console.WriteLine(result.Features[0].Properties.Address.FormattedAddress);
+
+  # Different Boundary Types
+  - name: different_boundary_types
+    prompt: |
+      Create examples showing how to get different types of boundaries
+      (country, administrative district, locality) using GetPolygon.
+    expected_patterns:
+      - "BoundaryResultTypeEnum.CountryRegion"
+      - "BoundaryResultTypeEnum.AdminDistrict"
+      - "BoundaryResultTypeEnum.Locality"
+      - "GetPolygon"
+    forbidden_patterns:
+      - 'SearchPolygon'
+    tags:
+      - polygon
+      - boundary-types
+    mock_response: |
+      using Azure;
+      using Azure.Core.GeoJson;
+      using Azure.Maps.Search;
+      using Azure.Maps.Search.Models;
+      
+      string subscriptionKey = Environment.GetEnvironmentVariable("AZURE_MAPS_SUBSCRIPTION_KEY")
+          ?? throw new InvalidOperationException("AZURE_MAPS_SUBSCRIPTION_KEY not set");
+      
+      MapsSearchClient client = new MapsSearchClient(new AzureKeyCredential(subscriptionKey));
+      
+      // Seattle coordinates
+      var seattleCoords = new GeoPosition(-122.3321, 47.6062);
+      
+      // Get city boundary
+      var cityOptions = new GetPolygonOptions()
+      {
+          Coordinates = seattleCoords,
+          ResultType = BoundaryResultTypeEnum.Locality,
+          Resolution = ResolutionEnum.Small,
+      };
+      Response<Boundary> cityBoundary = await client.GetPolygonAsync(cityOptions);
+      Console.WriteLine($"City boundary has {cityBoundary.Value.Geometry.Count} polygons");
+      
+      // Get state boundary
+      var stateOptions = new GetPolygonOptions()
+      {
+          Coordinates = seattleCoords,
+          ResultType = BoundaryResultTypeEnum.AdminDistrict,
+          Resolution = ResolutionEnum.Medium,
+      };
+      Response<Boundary> stateBoundary = await client.GetPolygonAsync(stateOptions);
+      Console.WriteLine($"State boundary has {stateBoundary.Value.Geometry.Count} polygons");
+      
+      // Get country boundary
+      var countryOptions = new GetPolygonOptions()
+      {
+          Coordinates = seattleCoords,
+          ResultType = BoundaryResultTypeEnum.CountryRegion,
+          Resolution = ResolutionEnum.Large,
+      };
+      Response<Boundary> countryBoundary = await client.GetPolygonAsync(countryOptions);
+      Console.WriteLine($"Country boundary has {countryBoundary.Value.Geometry.Count} polygons");

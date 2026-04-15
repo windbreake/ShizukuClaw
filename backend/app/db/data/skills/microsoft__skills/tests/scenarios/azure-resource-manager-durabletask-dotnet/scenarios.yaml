@@ -1,0 +1,349 @@
+# Test scenarios for azure-resource-manager-durabletask-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # ArmClient Setup
+  - name: armclient_setup
+    prompt: |
+      Create an ArmClient setup with DefaultAzureCredential for Azure Resource Manager
+      operations on Durable Task Scheduler resources.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "ArmClient"
+      - "GetSubscriptionResource"
+      - "ResourceIdentifier"
+    forbidden_patterns:
+      - "ClientSecretCredential"
+      - "hardcoded"
+    tags:
+      - authentication
+      - setup
+    mock_response: |
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.DurableTask;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID");
+      var subscription = armClient.GetSubscriptionResource(
+          new ResourceIdentifier($"/subscriptions/{subscriptionId}"));
+
+  # Create Scheduler with Dedicated SKU
+  - name: create_dedicated_scheduler
+    prompt: |
+      Create a Durable Task Scheduler with Dedicated SKU and 2 instances capacity
+      in East US region. Include IP allowlist for network security.
+    expected_patterns:
+      - "DurableTaskSchedulerData"
+      - "DurableTaskSchedulerProperties"
+      - "DurableTaskSchedulerSku"
+      - "DurableTaskSchedulerSkuName.Dedicated"
+      - "Capacity"
+      - "IPAllowlist"
+      - "WaitUntil.Completed"
+      - "CreateOrUpdateAsync"
+    forbidden_patterns:
+      - "Consumption"  # Wrong SKU for dedicated
+    tags:
+      - scheduler
+      - crud
+    mock_response: |
+      using Azure.ResourceManager.DurableTask;
+      using Azure.ResourceManager.DurableTask.Models;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      var schedulerData = new DurableTaskSchedulerData(AzureLocation.EastUS)
+      {
+          Properties = new DurableTaskSchedulerProperties
+          {
+              Sku = new DurableTaskSchedulerSku(DurableTaskSchedulerSkuName.Dedicated)
+              {
+                  Capacity = 2
+              },
+              IPAllowlist = { "10.0.0.0/24", "192.168.1.0/24" }
+          }
+      };
+
+      var schedulerCollection = resourceGroup.Value.GetDurableTaskSchedulers();
+      var operation = await schedulerCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-scheduler",
+          schedulerData);
+
+      DurableTaskSchedulerResource scheduler = operation.Value;
+      Console.WriteLine($"Scheduler created: {scheduler.Data.Name}");
+      Console.WriteLine($"Endpoint: {scheduler.Data.Properties.Endpoint}");
+
+  # Create Scheduler with Consumption SKU
+  - name: create_consumption_scheduler
+    prompt: |
+      Create a serverless Durable Task Scheduler using the Consumption SKU.
+    expected_patterns:
+      - "DurableTaskSchedulerData"
+      - "DurableTaskSchedulerSkuName.Consumption"
+      - "CreateOrUpdateAsync"
+      - "WaitUntil.Completed"
+    forbidden_patterns:
+      - "Capacity"  # Consumption doesn't use capacity
+    tags:
+      - scheduler
+      - serverless
+    mock_response: |
+      using Azure.ResourceManager.DurableTask;
+      using Azure.ResourceManager.DurableTask.Models;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      var schedulerData = new DurableTaskSchedulerData(AzureLocation.EastUS)
+      {
+          Properties = new DurableTaskSchedulerProperties
+          {
+              Sku = new DurableTaskSchedulerSku(DurableTaskSchedulerSkuName.Consumption)
+          }
+      };
+
+      var schedulerCollection = resourceGroup.Value.GetDurableTaskSchedulers();
+      var operation = await schedulerCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-serverless-scheduler",
+          schedulerData);
+
+      DurableTaskSchedulerResource scheduler = operation.Value;
+      Console.WriteLine($"Serverless scheduler created: {scheduler.Data.Name}");
+
+  # Create Task Hub
+  - name: create_task_hub
+    prompt: |
+      Create a Task Hub under an existing Durable Task Scheduler.
+    expected_patterns:
+      - "DurableTaskHubData"
+      - "GetDurableTaskHubs"
+      - "CreateOrUpdateAsync"
+      - "WaitUntil.Completed"
+    forbidden_patterns:
+      - "Microsoft.DurableTask"  # Data plane SDK
+    tags:
+      - taskhub
+      - crud
+    mock_response: |
+      using Azure.ResourceManager.DurableTask;
+      using Azure.ResourceManager.DurableTask.Models;
+
+      // Assume scheduler is already created
+      var scheduler = await schedulerCollection.GetAsync("my-scheduler");
+
+      var taskHubData = new DurableTaskHubData();
+
+      var taskHubCollection = scheduler.Value.GetDurableTaskHubs();
+      var hubOperation = await taskHubCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-taskhub",
+          taskHubData);
+
+      DurableTaskHubResource taskHub = hubOperation.Value;
+      Console.WriteLine($"Task Hub created: {taskHub.Data.Name}");
+
+  # List Schedulers
+  - name: list_schedulers
+    prompt: |
+      List all Durable Task Schedulers in a subscription and display their endpoints.
+    expected_patterns:
+      - "await foreach"
+      - "GetDurableTaskSchedulersAsync"
+      - "scheduler.Data.Properties.Endpoint"
+    forbidden_patterns:
+      - ".ToList()"
+    tags:
+      - list
+      - enumeration
+    mock_response: |
+      using Azure.ResourceManager.DurableTask;
+
+      await foreach (var scheduler in subscription.GetDurableTaskSchedulersAsync())
+      {
+          Console.WriteLine($"Scheduler: {scheduler.Data.Name}");
+          Console.WriteLine($"  Location: {scheduler.Data.Location}");
+          Console.WriteLine($"  SKU: {scheduler.Data.Properties.Sku?.Name}");
+          Console.WriteLine($"  Endpoint: {scheduler.Data.Properties.Endpoint}");
+      }
+
+  # Update Scheduler
+  - name: update_scheduler
+    prompt: |
+      Scale up an existing Durable Task Scheduler from 1 to 3 instances and update the IP allowlist.
+    expected_patterns:
+      - "GetAsync"
+      - "DurableTaskSchedulerData"
+      - "Capacity = 3"
+      - "IPAllowlist"
+      - "CreateOrUpdateAsync"
+    tags:
+      - scheduler
+      - update
+    mock_response: |
+      using Azure.ResourceManager.DurableTask;
+      using Azure.ResourceManager.DurableTask.Models;
+
+      var scheduler = await schedulerCollection.GetAsync("my-scheduler");
+
+      var updateData = new DurableTaskSchedulerData(scheduler.Value.Data.Location)
+      {
+          Properties = new DurableTaskSchedulerProperties
+          {
+              Sku = new DurableTaskSchedulerSku(DurableTaskSchedulerSkuName.Dedicated)
+              {
+                  Capacity = 3  // Scale up from 1 to 3
+              },
+              IPAllowlist = { "10.0.0.0/16" }
+          }
+      };
+
+      var updateOperation = await schedulerCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-scheduler",
+          updateData);
+
+      Console.WriteLine($"Scheduler scaled to {updateOperation.Value.Data.Properties.Sku?.Capacity} instances");
+
+  # Delete Resources in Correct Order
+  - name: delete_resources_ordered
+    prompt: |
+      Delete a Durable Task Scheduler and its task hubs. Ensure task hubs are
+      deleted before the scheduler.
+    expected_patterns:
+      - "DeleteAsync"
+      - "WaitUntil.Completed"
+      - "GetDurableTaskHubs"
+    tags:
+      - delete
+      - cleanup
+    mock_response: |
+      using Azure.ResourceManager.DurableTask;
+
+      var scheduler = await schedulerCollection.GetAsync("my-scheduler");
+
+      // Delete all task hubs first
+      await foreach (var taskHub in scheduler.Value.GetDurableTaskHubs())
+      {
+          await taskHub.DeleteAsync(WaitUntil.Completed);
+          Console.WriteLine($"Task Hub deleted: {taskHub.Data.Name}");
+      }
+
+      // Now delete the scheduler
+      await scheduler.Value.DeleteAsync(WaitUntil.Completed);
+      Console.WriteLine("Scheduler deleted");
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Create a Durable Task Scheduler with proper error handling for ARM operations.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status == 409"
+      - "try"
+      - "catch"
+    forbidden_patterns:
+      - "catch (Exception ex)"  # Too generic
+      - "catch { }"  # Empty catch
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure;
+      using Azure.ResourceManager.DurableTask;
+      using Azure.ResourceManager.DurableTask.Models;
+
+      try
+      {
+          var schedulerData = new DurableTaskSchedulerData(AzureLocation.EastUS)
+          {
+              Properties = new DurableTaskSchedulerProperties
+              {
+                  Sku = new DurableTaskSchedulerSku(DurableTaskSchedulerSkuName.Dedicated)
+                  {
+                      Capacity = 1
+                  }
+              }
+          };
+
+          var operation = await schedulerCollection.CreateOrUpdateAsync(
+              WaitUntil.Completed,
+              "my-scheduler",
+              schedulerData);
+      }
+      catch (RequestFailedException ex) when (ex.Status == 409)
+      {
+          Console.WriteLine("Scheduler already exists");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 404)
+      {
+          Console.WriteLine("Resource group not found");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"ARM Error: {ex.Status} - {ex.ErrorCode}: {ex.Message}");
+      }
+
+  # Get Scheduler by Resource ID
+  - name: get_by_resource_id
+    prompt: |
+      Get a Durable Task Scheduler using its resource ID with CreateResourceIdentifier.
+    expected_patterns:
+      - "CreateResourceIdentifier"
+      - "GetDurableTaskSchedulerResource"
+      - "GetAsync"
+    forbidden_patterns:
+      - "hardcoded"
+      - "/subscriptions/12345"  # Hardcoded subscription
+    tags:
+      - resourceid
+    mock_response: |
+      using Azure.ResourceManager.DurableTask;
+
+      var schedulerResource = armClient.GetDurableTaskSchedulerResource(
+          DurableTaskSchedulerResource.CreateResourceIdentifier(
+              subscriptionId,
+              "my-resource-group",
+              "my-scheduler"));
+      
+      var scheduler = await schedulerResource.GetAsync();
+      Console.WriteLine($"Found scheduler: {scheduler.Value.Data.Name}");
+      Console.WriteLine($"Endpoint: {scheduler.Value.Data.Properties.Endpoint}");
+
+  # Retention Policy
+  - name: configure_retention_policy
+    prompt: |
+      Configure a retention policy on a Durable Task Scheduler.
+    expected_patterns:
+      - "DurableTaskRetentionPolicyData"
+      - "GetDurableTaskRetentionPolicies"
+      - "CreateOrUpdateAsync"
+    tags:
+      - retention
+      - policy
+    mock_response: |
+      using Azure.ResourceManager.DurableTask;
+      using Azure.ResourceManager.DurableTask.Models;
+
+      var scheduler = await schedulerCollection.GetAsync("my-scheduler");
+      
+      var retentionPolicies = scheduler.Value.GetDurableTaskRetentionPolicies();
+
+      var retentionData = new DurableTaskRetentionPolicyData
+      {
+          Properties = new DurableTaskRetentionPolicyProperties()
+      };
+
+      var retentionOperation = await retentionPolicies.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "default",
+          retentionData);
+
+      Console.WriteLine("Retention policy configured");

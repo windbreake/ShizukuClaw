@@ -1,0 +1,324 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-communication-common-java skill evaluation
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: token_credential_static
+    prompt: |
+      Create Java code to set up a CommunicationTokenCredential
+      using a static token from an environment variable.
+    expected_patterns:
+      - "CommunicationTokenCredential"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'CommunicationTokenCredential\("eyJ'
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import com.azure.communication.common.CommunicationTokenCredential;
+
+      public class StaticToken {
+          public static void main(String[] args) {
+              String userToken = System.getenv("AZURE_COMMUNICATION_USER_TOKEN");
+              CommunicationTokenCredential credential = new CommunicationTokenCredential(userToken);
+              
+              System.out.println("Credential created");
+          }
+      }
+
+  - name: token_credential_refresh
+    prompt: |
+      Create Java code that sets up a CommunicationTokenCredential
+      with proactive token refresh using a token refresher callback.
+    expected_patterns:
+      - "CommunicationTokenCredential"
+      - "CommunicationTokenRefreshOptions"
+      - "setRefreshProactively"
+      - "Callable"
+    tags:
+      - authentication
+      - token-refresh
+    mock_response: |
+      import com.azure.communication.common.CommunicationTokenCredential;
+      import com.azure.communication.common.CommunicationTokenRefreshOptions;
+      import java.util.concurrent.Callable;
+
+      public class TokenRefresh {
+          public static void main(String[] args) {
+              String initialToken = System.getenv("AZURE_COMMUNICATION_USER_TOKEN");
+              
+              Callable<String> tokenRefresher = () -> {
+                  return fetchNewTokenFromServer();
+              };
+              
+              CommunicationTokenRefreshOptions refreshOptions = new CommunicationTokenRefreshOptions(tokenRefresher)
+                  .setRefreshProactively(true)
+                  .setInitialToken(initialToken);
+              
+              CommunicationTokenCredential credential = new CommunicationTokenCredential(refreshOptions);
+              
+              System.out.println("Credential with auto-refresh created");
+          }
+          
+          private static String fetchNewTokenFromServer() {
+              // Implementation to fetch new token from your server
+              return "<new-token>";
+          }
+      }
+
+  - name: communication_identifiers
+    prompt: |
+      Create Java code that demonstrates creating different types of
+      communication identifiers: user, phone number, and Teams user.
+    expected_patterns:
+      - "CommunicationUserIdentifier"
+      - "PhoneNumberIdentifier"
+      - "MicrosoftTeamsUserIdentifier"
+      - "getId"
+      - "getPhoneNumber"
+    tags:
+      - identifiers
+    mock_response: |
+      import com.azure.communication.common.CommunicationUserIdentifier;
+      import com.azure.communication.common.PhoneNumberIdentifier;
+      import com.azure.communication.common.MicrosoftTeamsUserIdentifier;
+      import com.azure.communication.common.CommunicationCloudEnvironment;
+
+      public class IdentifierTypes {
+          public static void main(String[] args) {
+              // ACS User
+              CommunicationUserIdentifier user = new CommunicationUserIdentifier("8:acs:resource-id_user-id");
+              System.out.println("User ID: " + user.getId());
+              
+              // Phone Number (E.164 format)
+              PhoneNumberIdentifier phone = new PhoneNumberIdentifier("+14255551234");
+              System.out.println("Phone: " + phone.getPhoneNumber());
+              
+              // Teams User
+              MicrosoftTeamsUserIdentifier teamsUser = new MicrosoftTeamsUserIdentifier("<teams-user-id>")
+                  .setCloudEnvironment(CommunicationCloudEnvironment.PUBLIC);
+              System.out.println("Teams User: " + teamsUser.getUserId());
+          }
+      }
+
+  - name: identifier_type_checking
+    prompt: |
+      Create Java code that demonstrates type checking for different
+      communication identifiers using instanceof.
+    expected_patterns:
+      - "CommunicationIdentifier"
+      - "instanceof"
+      - "CommunicationUserIdentifier"
+      - "PhoneNumberIdentifier"
+      - "MicrosoftTeamsUserIdentifier"
+    tags:
+      - identifiers
+      - type-checking
+    mock_response: |
+      import com.azure.communication.common.CommunicationIdentifier;
+      import com.azure.communication.common.CommunicationUserIdentifier;
+      import com.azure.communication.common.PhoneNumberIdentifier;
+      import com.azure.communication.common.MicrosoftTeamsUserIdentifier;
+      import com.azure.communication.common.UnknownIdentifier;
+
+      public class IdentifierTypeCheck {
+          public static void processIdentifier(CommunicationIdentifier identifier) {
+              if (identifier instanceof CommunicationUserIdentifier) {
+                  CommunicationUserIdentifier user = (CommunicationUserIdentifier) identifier;
+                  System.out.println("ACS User: " + user.getId());
+              } else if (identifier instanceof PhoneNumberIdentifier) {
+                  PhoneNumberIdentifier phone = (PhoneNumberIdentifier) identifier;
+                  System.out.println("Phone: " + phone.getPhoneNumber());
+              } else if (identifier instanceof MicrosoftTeamsUserIdentifier) {
+                  MicrosoftTeamsUserIdentifier teams = (MicrosoftTeamsUserIdentifier) identifier;
+                  System.out.println("Teams User: " + teams.getUserId());
+              } else if (identifier instanceof UnknownIdentifier) {
+                  UnknownIdentifier unknown = (UnknownIdentifier) identifier;
+                  System.out.println("Unknown: " + unknown.getId());
+              }
+          }
+          
+          public static void main(String[] args) {
+              processIdentifier(new CommunicationUserIdentifier("8:acs:test"));
+              processIdentifier(new PhoneNumberIdentifier("+14255551234"));
+          }
+      }
+
+  - name: token_access
+    prompt: |
+      Create Java code that demonstrates how to get the AccessToken
+      from a CommunicationTokenCredential and check its expiration time.
+    expected_patterns:
+      - "CommunicationTokenCredential"
+      - "AccessToken"
+      - "getToken"
+      - "getExpiresAt"
+    tags:
+      - authentication
+      - token-management
+    mock_response: |
+      import com.azure.communication.common.CommunicationTokenCredential;
+      import com.azure.core.credential.AccessToken;
+
+      public class TokenAccess {
+          public static void main(String[] args) {
+              String userToken = System.getenv("AZURE_COMMUNICATION_USER_TOKEN");
+              CommunicationTokenCredential credential = new CommunicationTokenCredential(userToken);
+              
+              // Get current token synchronously
+              AccessToken accessToken = credential.getToken();
+              
+              System.out.println("Token expires at: " + accessToken.getExpiresAt());
+              System.out.println("Token value: " + accessToken.getToken().substring(0, 20) + "...");
+              
+              // Check if token is expired
+              if (accessToken.isExpired()) {
+                  System.out.println("Token has expired!");
+              } else {
+                  System.out.println("Token is still valid");
+              }
+          }
+      }
+
+  - name: dispose_credential
+    prompt: |
+      Create Java code that demonstrates proper disposal of 
+      CommunicationTokenCredential using close() and try-with-resources.
+    expected_patterns:
+      - "CommunicationTokenCredential"
+      - "close\\(\\)|try.*CommunicationTokenCredential"
+    tags:
+      - authentication
+      - resource-management
+    mock_response: |
+      import com.azure.communication.common.CommunicationTokenCredential;
+      import com.azure.communication.common.CommunicationTokenRefreshOptions;
+      import java.util.concurrent.Callable;
+
+      public class DisposeCredential {
+          public static void main(String[] args) {
+              // Method 1: Manual close
+              CommunicationTokenCredential credential1 = new CommunicationTokenCredential(
+                  System.getenv("AZURE_COMMUNICATION_USER_TOKEN")
+              );
+              try {
+                  // Use credential
+                  System.out.println("Using credential...");
+              } finally {
+                  credential1.close();
+                  System.out.println("Credential closed");
+              }
+              
+              // Method 2: try-with-resources (recommended)
+              Callable<String> refresher = () -> fetchToken();
+              CommunicationTokenRefreshOptions options = new CommunicationTokenRefreshOptions(refresher)
+                  .setRefreshProactively(true);
+              
+              try (CommunicationTokenCredential credential2 = new CommunicationTokenCredential(options)) {
+                  // Use credential - automatically closed when block exits
+                  System.out.println("Using credential with auto-close...");
+              }
+              
+              System.out.println("Credential automatically closed");
+          }
+          
+          private static String fetchToken() {
+              return "<new-token>";
+          }
+      }
+
+  - name: cloud_environments
+    prompt: |
+      Create Java code that demonstrates using CommunicationCloudEnvironment
+      to set different cloud environments for Teams user identifiers.
+    expected_patterns:
+      - "CommunicationCloudEnvironment"
+      - "MicrosoftTeamsUserIdentifier"
+      - "setCloudEnvironment"
+      - "PUBLIC|GCCH|DOD"
+    tags:
+      - identifiers
+      - cloud-environments
+    mock_response: |
+      import com.azure.communication.common.MicrosoftTeamsUserIdentifier;
+      import com.azure.communication.common.CommunicationCloudEnvironment;
+
+      public class CloudEnvironments {
+          public static void main(String[] args) {
+              // Available cloud environments
+              CommunicationCloudEnvironment publicCloud = CommunicationCloudEnvironment.PUBLIC;
+              CommunicationCloudEnvironment govCloud = CommunicationCloudEnvironment.GCCH;
+              CommunicationCloudEnvironment dodCloud = CommunicationCloudEnvironment.DOD;
+              
+              System.out.println("Public Cloud: " + publicCloud);
+              System.out.println("Government Cloud: " + govCloud);
+              System.out.println("DoD Cloud: " + dodCloud);
+              
+              // Create Teams user for public cloud
+              MicrosoftTeamsUserIdentifier publicTeamsUser = new MicrosoftTeamsUserIdentifier("<public-user-id>")
+                  .setCloudEnvironment(CommunicationCloudEnvironment.PUBLIC);
+              
+              // Create Teams user for government cloud
+              MicrosoftTeamsUserIdentifier govTeamsUser = new MicrosoftTeamsUserIdentifier("<gov-user-id>")
+                  .setCloudEnvironment(CommunicationCloudEnvironment.GCCH);
+              
+              // Create Teams user for DoD cloud
+              MicrosoftTeamsUserIdentifier dodTeamsUser = new MicrosoftTeamsUserIdentifier("<dod-user-id>")
+                  .setCloudEnvironment(CommunicationCloudEnvironment.DOD);
+              
+              System.out.println("Public Teams User: " + publicTeamsUser.getUserId());
+              System.out.println("Gov Teams User: " + govTeamsUser.getUserId());
+              System.out.println("DoD Teams User: " + dodTeamsUser.getUserId());
+          }
+      }
+
+  - name: unknown_identifier
+    prompt: |
+      Create Java code that demonstrates using UnknownIdentifier
+      for handling generic or unknown identifier types.
+    expected_patterns:
+      - "UnknownIdentifier"
+      - "getId"
+      - "com.azure.communication.common"
+    tags:
+      - identifiers
+    mock_response: |
+      import com.azure.communication.common.UnknownIdentifier;
+      import com.azure.communication.common.CommunicationIdentifier;
+      import com.azure.communication.common.CommunicationUserIdentifier;
+      import com.azure.communication.common.PhoneNumberIdentifier;
+
+      public class UnknownIdentifierExample {
+          public static void main(String[] args) {
+              // Create an UnknownIdentifier for generic/unknown ID types
+              UnknownIdentifier unknown = new UnknownIdentifier("some-raw-id-from-api");
+              
+              System.out.println("Unknown ID: " + unknown.getId());
+              
+              // Use case: parsing identifiers from raw strings
+              String rawId = "unknown:custom-identifier";
+              CommunicationIdentifier identifier = parseIdentifier(rawId);
+              
+              if (identifier instanceof UnknownIdentifier) {
+                  System.out.println("Parsed as UnknownIdentifier: " + ((UnknownIdentifier) identifier).getId());
+              }
+          }
+          
+          // Helper method to parse raw IDs
+          private static CommunicationIdentifier parseIdentifier(String rawId) {
+              if (rawId.startsWith("8:acs:")) {
+                  return new CommunicationUserIdentifier(rawId);
+              } else if (rawId.startsWith("4:")) {
+                  String phone = rawId.substring(2);
+                  return new PhoneNumberIdentifier(phone);
+              } else {
+                  // Fallback to UnknownIdentifier
+                  return new UnknownIdentifier(rawId);
+              }
+          }
+      }

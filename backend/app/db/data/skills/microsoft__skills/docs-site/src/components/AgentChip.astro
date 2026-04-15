@@ -1,0 +1,137 @@
+---
+interface Props {
+  emoji: string;
+  name: string;
+  description: string;
+  skills: string[];
+  file: string;
+}
+
+const { emoji, name, description, skills, file } = Astro.props;
+const githubUrl = `https://github.com/microsoft/skills/blob/main/.github/agents/${file}`;
+---
+
+<a href={githubUrl} class="agent-chip" target="_blank" rel="noopener noreferrer" data-tooltip={description}>
+  <span class="chip-emoji">{emoji}</span>
+  <span class="chip-name">{name.replace(' Agent', '')}</span>
+  <svg class="chip-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M7 17L17 7M17 7H7M17 7V17" />
+  </svg>
+  <div class="chip-tooltip">
+    <div class="tooltip-header">{name}</div>
+    <div class="tooltip-desc">{description}</div>
+    <div class="tooltip-skills">
+      {skills.slice(0, 4).map((skill) => (
+        <span class="tooltip-tag">{skill}</span>
+      ))}
+    </div>
+  </div>
+</a>
+
+<style>
+  .agent-chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    transition: all var(--transition-base);
+    white-space: nowrap;
+  }
+
+  .agent-chip:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--accent);
+    box-shadow: 0 0 16px var(--accent-glow);
+    transform: translateY(-1px);
+  }
+
+  .chip-emoji {
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  .chip-name {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .chip-arrow {
+    color: var(--text-muted);
+    opacity: 0;
+    transition: all var(--transition-fast);
+  }
+
+  .agent-chip:hover .chip-arrow {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  /* Tooltip */
+  .chip-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 280px;
+    padding: var(--space-md);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transition: all var(--transition-fast);
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  .chip-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--border-primary);
+  }
+
+  .agent-chip:hover .chip-tooltip {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .tooltip-header {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-xs);
+  }
+
+  .tooltip-desc {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: var(--space-sm);
+  }
+
+  .tooltip-skills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .tooltip-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 10px;
+    color: var(--text-tertiary);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+  }
+</style>

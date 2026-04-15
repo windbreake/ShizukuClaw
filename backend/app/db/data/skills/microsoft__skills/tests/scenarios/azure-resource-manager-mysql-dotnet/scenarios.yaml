@@ -1,0 +1,414 @@
+# Test scenarios for azure-resource-manager-mysql-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # ArmClient Setup
+  - name: armclient_setup
+    prompt: |
+      Create an ArmClient setup with DefaultAzureCredential for Azure Resource Manager
+      operations on MySQL Flexible Server resources.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "ArmClient"
+      - "GetSubscriptionResource"
+      - "Azure.ResourceManager.MySql.FlexibleServers"
+    forbidden_patterns:
+      - "ClientSecretCredential"
+      - "hardcoded"
+    tags:
+      - authentication
+      - setup
+    mock_response: |
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.MySql;
+      using Azure.ResourceManager.MySql.FlexibleServers;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID");
+      var subscription = armClient.GetSubscriptionResource(
+          new ResourceIdentifier($"/subscriptions/{subscriptionId}"));
+
+  # Create MySQL Flexible Server
+  - name: create_flexible_server
+    prompt: |
+      Create a MySQL Flexible Server with General Purpose SKU, 128GB storage,
+      auto-grow enabled, zone-redundant HA, and 7-day backup retention.
+    expected_patterns:
+      - "MySqlFlexibleServerData"
+      - "MySqlFlexibleServerSku"
+      - "GeneralPurpose"
+      - "AutoGrow"
+      - "HighAvailability"
+      - "ZoneRedundant"
+      - "BackupRetentionDays"
+      - "WaitUntil.Completed"
+      - "GetMySqlFlexibleServers"
+    forbidden_patterns:
+      - "GetMySqlServers"  # Single Server is deprecated
+      - "MySqlServerData"  # Single Server type
+    tags:
+      - server
+      - crud
+    mock_response: |
+      using Azure.ResourceManager.MySql.FlexibleServers;
+      using Azure.ResourceManager.MySql.FlexibleServers.Models;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+      var servers = resourceGroup.Value.GetMySqlFlexibleServers();
+
+      var serverData = new MySqlFlexibleServerData(AzureLocation.EastUS)
+      {
+          Sku = new MySqlFlexibleServerSku("Standard_D2ds_v4", MySqlFlexibleServerSkuTier.GeneralPurpose),
+          AdministratorLogin = "mysqladmin",
+          AdministratorLoginPassword = "YourSecurePassword123!",
+          Version = MySqlFlexibleServerVersion.Ver8_0_21,
+          Storage = new MySqlFlexibleServerStorage
+          {
+              StorageSizeInGB = 128,
+              AutoGrow = MySqlFlexibleServerEnableStatusEnum.Enabled,
+              Iops = 3000
+          },
+          Backup = new MySqlFlexibleServerBackupProperties
+          {
+              BackupRetentionDays = 7,
+              GeoRedundantBackup = MySqlFlexibleServerEnableStatusEnum.Disabled
+          },
+          HighAvailability = new MySqlFlexibleServerHighAvailability
+          {
+              Mode = MySqlFlexibleServerHighAvailabilityMode.ZoneRedundant,
+              StandbyAvailabilityZone = "2"
+          },
+          AvailabilityZone = "1"
+      };
+
+      var operation = await servers.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-mysql-server",
+          serverData);
+
+      MySqlFlexibleServerResource server = operation.Value;
+      Console.WriteLine($"Server created: {server.Data.FullyQualifiedDomainName}");
+
+  # Create Database
+  - name: create_database
+    prompt: |
+      Create a MySQL database with utf8mb4 character set and unicode collation.
+    expected_patterns:
+      - "MySqlFlexibleServerDatabaseData"
+      - "GetMySqlFlexibleServerDatabases"
+      - "Charset"
+      - "utf8mb4"
+      - "Collation"
+      - "CreateOrUpdateAsync"
+    tags:
+      - database
+      - crud
+    mock_response: |
+      using Azure.ResourceManager.MySql.FlexibleServers;
+      using Azure.ResourceManager.MySql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetMySqlFlexibleServerAsync("my-mysql-server");
+
+      var databaseCollection = server.Value.GetMySqlFlexibleServerDatabases();
+
+      var dbData = new MySqlFlexibleServerDatabaseData
+      {
+          Charset = "utf8mb4",
+          Collation = "utf8mb4_unicode_ci"
+      };
+
+      var operation = await databaseCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "myappdb",
+          dbData);
+
+      MySqlFlexibleServerDatabaseResource database = operation.Value;
+      Console.WriteLine($"Database created: {database.Data.Name}");
+
+  # Configure Firewall Rules
+  - name: configure_firewall
+    prompt: |
+      Configure firewall rules to allow access from an internal IP range
+      and enable access from Azure services.
+    expected_patterns:
+      - "MySqlFlexibleServerFirewallRuleData"
+      - "GetMySqlFlexibleServerFirewallRules"
+      - "StartIPAddress"
+      - "EndIPAddress"
+      - "0.0.0.0"
+    tags:
+      - firewall
+      - security
+    mock_response: |
+      using Azure.ResourceManager.MySql.FlexibleServers;
+      using Azure.ResourceManager.MySql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetMySqlFlexibleServerAsync("my-mysql-server");
+      var firewallRules = server.Value.GetMySqlFlexibleServerFirewallRules();
+
+      // Allow specific IP range
+      var ruleData = new MySqlFlexibleServerFirewallRuleData
+      {
+          StartIPAddress = System.Net.IPAddress.Parse("10.0.0.1"),
+          EndIPAddress = System.Net.IPAddress.Parse("10.0.0.255")
+      };
+
+      await firewallRules.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "allow-internal",
+          ruleData);
+
+      // Allow Azure services
+      var azureServicesRule = new MySqlFlexibleServerFirewallRuleData
+      {
+          StartIPAddress = System.Net.IPAddress.Parse("0.0.0.0"),
+          EndIPAddress = System.Net.IPAddress.Parse("0.0.0.0")
+      };
+
+      await firewallRules.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "AllowAllAzureServicesAndResourcesWithinAzureIps",
+          azureServicesRule);
+
+      Console.WriteLine("Firewall rules configured");
+
+  # Update Server Configuration
+  - name: update_configuration
+    prompt: |
+      Update the max_connections server parameter on a MySQL Flexible Server.
+    expected_patterns:
+      - "MySqlFlexibleServerConfigurationData"
+      - "GetMySqlFlexibleServerConfigurations"
+      - "max_connections"
+      - "UserOverride"
+      - "CreateOrUpdateAsync"
+    tags:
+      - configuration
+      - parameter
+    mock_response: |
+      using Azure.ResourceManager.MySql.FlexibleServers;
+      using Azure.ResourceManager.MySql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetMySqlFlexibleServerAsync("my-mysql-server");
+      var configurations = server.Value.GetMySqlFlexibleServerConfigurations();
+
+      var configData = new MySqlFlexibleServerConfigurationData
+      {
+          Value = "500",
+          Source = MySqlFlexibleServerConfigurationSource.UserOverride
+      };
+
+      var operation = await configurations.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "max_connections",
+          configData);
+
+      Console.WriteLine($"max_connections set to {operation.Value.Data.Value}");
+
+  # Configure Entra ID Administrator
+  - name: configure_entra_admin
+    prompt: |
+      Configure an Entra ID (Azure AD) administrator for a MySQL Flexible Server.
+    expected_patterns:
+      - "MySqlFlexibleServerAadAdministratorData"
+      - "GetMySqlFlexibleServerAadAdministrators"
+      - "ActiveDirectory"
+      - "Sid"
+      - "TenantId"
+    tags:
+      - authentication
+      - entra-id
+    mock_response: |
+      using Azure.ResourceManager.MySql.FlexibleServers;
+      using Azure.ResourceManager.MySql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetMySqlFlexibleServerAsync("my-mysql-server");
+      var admins = server.Value.GetMySqlFlexibleServerAadAdministrators();
+
+      var adminData = new MySqlFlexibleServerAadAdministratorData
+      {
+          AdministratorType = MySqlFlexibleServerAdministratorType.ActiveDirectory,
+          Login = "aad-admin@contoso.com",
+          Sid = Guid.Parse("<entra-object-id>"),
+          TenantId = Guid.Parse("<tenant-id>"),
+          IdentityResourceId = new ResourceIdentifier("/subscriptions/.../userAssignedIdentities/mysql-identity")
+      };
+
+      var operation = await admins.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "ActiveDirectory",
+          adminData);
+
+      Console.WriteLine("Entra ID administrator configured");
+
+  # Point-in-Time Restore
+  - name: point_in_time_restore
+    prompt: |
+      Perform a point-in-time restore of a MySQL Flexible Server to 2 hours ago.
+    expected_patterns:
+      - "CreateMode"
+      - "PointInTimeRestore"
+      - "SourceServerResourceId"
+      - "RestorePointInTime"
+      - "AddHours(-2)"
+    tags:
+      - backup
+      - restore
+    mock_response: |
+      using Azure.ResourceManager.MySql.FlexibleServers;
+      using Azure.ResourceManager.MySql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetMySqlFlexibleServerAsync("my-mysql-server");
+      var servers = resourceGroup.Value.GetMySqlFlexibleServers();
+
+      var restoreData = new MySqlFlexibleServerData(AzureLocation.EastUS)
+      {
+          CreateMode = MySqlFlexibleServerCreateMode.PointInTimeRestore,
+          SourceServerResourceId = server.Value.Id,
+          RestorePointInTime = DateTimeOffset.UtcNow.AddHours(-2)
+      };
+
+      var operation = await servers.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-mysql-restored",
+          restoreData);
+
+      Console.WriteLine($"Restored server: {operation.Value.Data.FullyQualifiedDomainName}");
+
+  # Server Operations (Stop/Start)
+  - name: server_operations
+    prompt: |
+      Stop and start a MySQL Flexible Server to save costs during non-business hours.
+    expected_patterns:
+      - "StopAsync"
+      - "StartAsync"
+      - "WaitUntil.Completed"
+    tags:
+      - operations
+      - cost-saving
+    mock_response: |
+      using Azure.ResourceManager.MySql.FlexibleServers;
+
+      var server = await resourceGroup.Value.GetMySqlFlexibleServerAsync("my-mysql-server");
+
+      // Stop server (saves costs when not in use)
+      await server.Value.StopAsync(WaitUntil.Completed);
+      Console.WriteLine("Server stopped");
+
+      // Start server
+      await server.Value.StartAsync(WaitUntil.Completed);
+      Console.WriteLine("Server started");
+
+  # Scale Server
+  - name: scale_server
+    prompt: |
+      Scale up a MySQL Flexible Server to a larger SKU with more storage and IOPS.
+    expected_patterns:
+      - "MySqlFlexibleServerPatch"
+      - "MySqlFlexibleServerSku"
+      - "Storage"
+      - "UpdateAsync"
+    tags:
+      - scale
+      - update
+    mock_response: |
+      using Azure.ResourceManager.MySql.FlexibleServers;
+      using Azure.ResourceManager.MySql.FlexibleServers.Models;
+
+      var server = await resourceGroup.Value.GetMySqlFlexibleServerAsync("my-mysql-server");
+
+      var patch = new MySqlFlexibleServerPatch
+      {
+          Sku = new MySqlFlexibleServerSku("Standard_D4ds_v4", MySqlFlexibleServerSkuTier.GeneralPurpose),
+          Storage = new MySqlFlexibleServerStorage
+          {
+              StorageSizeInGB = 256,
+              Iops = 6000
+          }
+      };
+
+      var operation = await server.Value.UpdateAsync(WaitUntil.Completed, patch);
+      Console.WriteLine($"Server scaled to {operation.Value.Data.Sku.Name}");
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Create a MySQL Flexible Server with proper error handling for ARM operations.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status == 409"
+      - "ex.Status == 400"
+      - "try"
+      - "catch"
+    forbidden_patterns:
+      - "catch (Exception ex)"
+      - "catch { }"
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure;
+      using Azure.ResourceManager.MySql.FlexibleServers;
+      using Azure.ResourceManager.MySql.FlexibleServers.Models;
+
+      try
+      {
+          var serverData = new MySqlFlexibleServerData(AzureLocation.EastUS)
+          {
+              Sku = new MySqlFlexibleServerSku("Standard_D2ds_v4", MySqlFlexibleServerSkuTier.GeneralPurpose),
+              AdministratorLogin = "mysqladmin",
+              AdministratorLoginPassword = "YourSecurePassword123!",
+              Version = MySqlFlexibleServerVersion.Ver8_0_21
+          };
+
+          var operation = await servers.CreateOrUpdateAsync(
+              WaitUntil.Completed,
+              "my-mysql-server",
+              serverData);
+      }
+      catch (RequestFailedException ex) when (ex.Status == 409)
+      {
+          Console.WriteLine("Server already exists");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 400)
+      {
+          Console.WriteLine($"Invalid configuration: {ex.Message}");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"ARM Error: {ex.Status} - {ex.ErrorCode}: {ex.Message}");
+      }
+
+  # List Servers
+  - name: list_servers
+    prompt: |
+      List all MySQL Flexible Servers in a resource group with their properties.
+    expected_patterns:
+      - "await foreach"
+      - "GetMySqlFlexibleServers"
+      - "FullyQualifiedDomainName"
+      - "Version"
+      - "State"
+    tags:
+      - list
+      - enumeration
+    mock_response: |
+      using Azure.ResourceManager.MySql.FlexibleServers;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      await foreach (MySqlFlexibleServerResource server in resourceGroup.Value.GetMySqlFlexibleServers())
+      {
+          Console.WriteLine($"Server: {server.Data.Name}");
+          Console.WriteLine($"  FQDN: {server.Data.FullyQualifiedDomainName}");
+          Console.WriteLine($"  Version: {server.Data.Version}");
+          Console.WriteLine($"  State: {server.Data.State}");
+          Console.WriteLine($"  SKU: {server.Data.Sku.Name} ({server.Data.Sku.Tier})");
+      }

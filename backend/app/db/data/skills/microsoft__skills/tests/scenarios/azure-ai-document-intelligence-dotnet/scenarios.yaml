@@ -1,0 +1,620 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-ai-document-intelligence-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Layout Analysis
+  - name: basic_layout_analysis
+    prompt: |
+      Create a basic Document Intelligence example that analyzes a document
+      from a URL using prebuilt-layout model with DefaultAzureCredential.
+      Extract and display page information.
+    expected_patterns:
+      - "DocumentIntelligenceClient"
+      - "DefaultAzureCredential"
+      - "AnalyzeDocumentAsync"
+      - "prebuilt-layout"
+      - "WaitUntil.Completed"
+    forbidden_patterns:
+      - 'FormRecognizer'
+      - 'StartAnalyzeDocument'
+    tags:
+      - basic
+      - layout
+    mock_response: |
+      using Azure;
+      using Azure.AI.DocumentIntelligence;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_ENDPOINT")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_ENDPOINT not set");
+      
+      var client = new DocumentIntelligenceClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      Uri documentUri = new Uri("https://example.com/document.pdf");
+      
+      Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(
+          WaitUntil.Completed,
+          "prebuilt-layout",
+          documentUri);
+      
+      AnalyzeResult result = operation.Value;
+      
+      foreach (DocumentPage page in result.Pages)
+      {
+          Console.WriteLine($"Page {page.PageNumber} has {page.Lines.Count} lines and {page.Words.Count} words");
+      }
+
+  # Invoice Analysis
+  - name: invoice_analysis
+    prompt: |
+      Create an example that analyzes an invoice document and extracts
+      vendor name, customer name, invoice total, and line items.
+    expected_patterns:
+      - "prebuilt-invoice"
+      - "AnalyzeDocumentAsync"
+      - "TryGetValue"
+      - "FieldType"
+      - "ValueString|ValueCurrency"
+    forbidden_patterns:
+      - 'prebuilt-invoices'
+    tags:
+      - invoice
+      - prebuilt
+    mock_response: |
+      using Azure;
+      using Azure.AI.DocumentIntelligence;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_ENDPOINT")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_ENDPOINT not set");
+      
+      var client = new DocumentIntelligenceClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      Uri invoiceUri = new Uri("https://example.com/invoice.pdf");
+      
+      Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(
+          WaitUntil.Completed,
+          "prebuilt-invoice",
+          invoiceUri);
+      
+      AnalyzeResult result = operation.Value;
+      
+      for (int i = 0; i < result.Documents.Count; i++)
+      {
+          AnalyzedDocument document = result.Documents[i];
+          
+          if (document.Fields.TryGetValue("VendorName", out DocumentField vendorField)
+              && vendorField.FieldType == DocumentFieldType.String)
+          {
+              Console.WriteLine($"Vendor: {vendorField.ValueString} (confidence: {vendorField.Confidence})");
+          }
+          
+          if (document.Fields.TryGetValue("CustomerName", out DocumentField customerField)
+              && customerField.FieldType == DocumentFieldType.String)
+          {
+              Console.WriteLine($"Customer: {customerField.ValueString}");
+          }
+          
+          if (document.Fields.TryGetValue("InvoiceTotal", out DocumentField totalField)
+              && totalField.FieldType == DocumentFieldType.Currency)
+          {
+              CurrencyValue total = totalField.ValueCurrency;
+              Console.WriteLine($"Total: {total.CurrencySymbol}{total.Amount}");
+          }
+          
+          if (document.Fields.TryGetValue("Items", out DocumentField itemsField)
+              && itemsField.FieldType == DocumentFieldType.List)
+          {
+              foreach (DocumentField itemField in itemsField.ValueList)
+              {
+                  if (itemField.FieldType == DocumentFieldType.Dictionary)
+                  {
+                      var item = itemField.ValueDictionary;
+                      
+                      if (item.TryGetValue("Description", out DocumentField descField))
+                      {
+                          Console.WriteLine($"  Item: {descField.ValueString}");
+                      }
+                      
+                      if (item.TryGetValue("Amount", out DocumentField amountField)
+                          && amountField.FieldType == DocumentFieldType.Currency)
+                      {
+                          Console.WriteLine($"  Amount: {amountField.ValueCurrency.Amount}");
+                      }
+                  }
+              }
+          }
+      }
+
+  # Receipt Analysis
+  - name: receipt_analysis
+    prompt: |
+      Create an example that analyzes a receipt document and extracts
+      merchant name, transaction date, and total amount.
+    expected_patterns:
+      - "prebuilt-receipt"
+      - "MerchantName|TransactionDate|Total"
+      - "TryGetValue"
+    forbidden_patterns:
+      - 'prebuilt-receipts'
+    tags:
+      - receipt
+      - prebuilt
+    mock_response: |
+      using Azure;
+      using Azure.AI.DocumentIntelligence;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_ENDPOINT")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_ENDPOINT not set");
+      
+      var client = new DocumentIntelligenceClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      Uri receiptUri = new Uri("https://example.com/receipt.jpg");
+      
+      Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(
+          WaitUntil.Completed,
+          "prebuilt-receipt",
+          receiptUri);
+      
+      AnalyzeResult result = operation.Value;
+      
+      foreach (AnalyzedDocument document in result.Documents)
+      {
+          if (document.Fields.TryGetValue("MerchantName", out DocumentField merchantField))
+          {
+              Console.WriteLine($"Merchant: {merchantField.ValueString}");
+          }
+          
+          if (document.Fields.TryGetValue("TransactionDate", out DocumentField dateField)
+              && dateField.FieldType == DocumentFieldType.Date)
+          {
+              Console.WriteLine($"Date: {dateField.ValueDate:d}");
+          }
+          
+          if (document.Fields.TryGetValue("Total", out DocumentField totalField)
+              && totalField.FieldType == DocumentFieldType.Currency)
+          {
+              Console.WriteLine($"Total: {totalField.ValueCurrency.CurrencySymbol}{totalField.ValueCurrency.Amount}");
+          }
+      }
+
+  # ID Document Analysis
+  - name: id_document_analysis
+    prompt: |
+      Create an example that analyzes an ID document (driver's license or
+      passport) and extracts personal information like name and date of birth.
+    expected_patterns:
+      - "prebuilt-idDocument"
+      - "FirstName|LastName|DateOfBirth"
+      - "TryGetValue"
+    forbidden_patterns:
+      - 'prebuilt-idDocuments'
+    tags:
+      - id-document
+      - prebuilt
+    mock_response: |
+      using Azure;
+      using Azure.AI.DocumentIntelligence;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_ENDPOINT")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_ENDPOINT not set");
+      
+      var client = new DocumentIntelligenceClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      Uri idDocUri = new Uri("https://example.com/drivers-license.jpg");
+      
+      Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(
+          WaitUntil.Completed,
+          "prebuilt-idDocument",
+          idDocUri);
+      
+      AnalyzeResult result = operation.Value;
+      
+      foreach (AnalyzedDocument document in result.Documents)
+      {
+          Console.WriteLine($"Document type: {document.DocumentType}");
+          
+          if (document.Fields.TryGetValue("FirstName", out DocumentField firstNameField))
+          {
+              Console.WriteLine($"First Name: {firstNameField.ValueString}");
+          }
+          
+          if (document.Fields.TryGetValue("LastName", out DocumentField lastNameField))
+          {
+              Console.WriteLine($"Last Name: {lastNameField.ValueString}");
+          }
+          
+          if (document.Fields.TryGetValue("DateOfBirth", out DocumentField dobField)
+              && dobField.FieldType == DocumentFieldType.Date)
+          {
+              Console.WriteLine($"Date of Birth: {dobField.ValueDate:d}");
+          }
+          
+          if (document.Fields.TryGetValue("DocumentNumber", out DocumentField docNumField))
+          {
+              Console.WriteLine($"Document Number: {docNumField.ValueString}");
+          }
+      }
+
+  # Extract Tables
+  - name: extract_tables
+    prompt: |
+      Create an example that extracts tables from a document, displaying
+      row count, column count, and cell contents.
+    expected_patterns:
+      - "prebuilt-layout"
+      - "result.Tables"
+      - "DocumentTable"
+      - "DocumentTableCell"
+      - "RowIndex|ColumnIndex"
+    forbidden_patterns:
+      - 'GetTables\(\)'
+    tags:
+      - tables
+      - layout
+    mock_response: |
+      using Azure;
+      using Azure.AI.DocumentIntelligence;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_ENDPOINT")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_ENDPOINT not set");
+      
+      var client = new DocumentIntelligenceClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      Uri documentUri = new Uri("https://example.com/document-with-tables.pdf");
+      
+      Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(
+          WaitUntil.Completed,
+          "prebuilt-layout",
+          documentUri);
+      
+      AnalyzeResult result = operation.Value;
+      
+      for (int i = 0; i < result.Tables.Count; i++)
+      {
+          DocumentTable table = result.Tables[i];
+          Console.WriteLine($"Table {i}: {table.RowCount} rows x {table.ColumnCount} columns");
+          
+          foreach (DocumentTableCell cell in table.Cells)
+          {
+              Console.WriteLine($"  Cell ({cell.RowIndex}, {cell.ColumnIndex}): '{cell.Content}'");
+              Console.WriteLine($"    Kind: {cell.Kind}");
+          }
+      }
+
+  # Analyze from File Bytes
+  - name: analyze_from_file
+    prompt: |
+      Create an example that reads a local PDF file and analyzes it
+      using Document Intelligence.
+    expected_patterns:
+      - "File.ReadAllBytesAsync"
+      - "BinaryData.FromBytes"
+      - "AnalyzeDocumentAsync"
+    forbidden_patterns:
+      - 'Uri documentUri'
+    tags:
+      - file
+      - binary
+    mock_response: |
+      using Azure;
+      using Azure.AI.DocumentIntelligence;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_ENDPOINT")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_ENDPOINT not set");
+      
+      var client = new DocumentIntelligenceClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      string filePath = "documents/invoice.pdf";
+      byte[] fileBytes = await File.ReadAllBytesAsync(filePath);
+      
+      Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(
+          WaitUntil.Completed,
+          "prebuilt-invoice",
+          BinaryData.FromBytes(fileBytes));
+      
+      AnalyzeResult result = operation.Value;
+      
+      Console.WriteLine($"Analyzed {result.Pages.Count} pages");
+      Console.WriteLine($"Found {result.Documents.Count} documents");
+
+  # Build Custom Model
+  - name: build_custom_model
+    prompt: |
+      Create an example that builds a custom document model using training
+      data from Azure Blob Storage.
+    expected_patterns:
+      - "DocumentIntelligenceAdministrationClient"
+      - "BuildDocumentModelContent"
+      - "BuildDocumentModelAsync"
+      - "AzureBlobContentSource"
+      - "DocumentBuildMode"
+    forbidden_patterns:
+      - 'StartBuildModel'
+    tags:
+      - custom-model
+      - training
+    mock_response: |
+      using Azure;
+      using Azure.AI.DocumentIntelligence;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_ENDPOINT")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_ENDPOINT not set");
+      string trainingDataUrl = Environment.GetEnvironmentVariable("TRAINING_DATA_URL")
+          ?? throw new InvalidOperationException("TRAINING_DATA_URL not set");
+      
+      var adminClient = new DocumentIntelligenceAdministrationClient(
+          new Uri(endpoint),
+          new DefaultAzureCredential());
+      
+      var buildOptions = new BuildDocumentModelContent("custom-invoice-model", DocumentBuildMode.Template)
+      {
+          AzureBlobSource = new AzureBlobContentSource(new Uri(trainingDataUrl))
+      };
+      
+      Operation<DocumentModelDetails> operation = await adminClient.BuildDocumentModelAsync(
+          WaitUntil.Completed,
+          buildOptions);
+      
+      DocumentModelDetails model = operation.Value;
+      
+      Console.WriteLine($"Model ID: {model.ModelId}");
+      Console.WriteLine($"Created: {model.CreatedOn}");
+      Console.WriteLine($"Doc types: {string.Join(", ", model.DocumentTypes?.Keys ?? [])}");
+
+  # List and Delete Models
+  - name: manage_models
+    prompt: |
+      Create an example that lists all custom models and shows how to
+      delete a specific model.
+    expected_patterns:
+      - "DocumentIntelligenceAdministrationClient"
+      - "GetModelsAsync"
+      - "DeleteModelAsync"
+      - "AsyncPageable|await foreach"
+    forbidden_patterns:
+      - 'GetModelInfoAsync'
+    tags:
+      - management
+      - models
+    mock_response: |
+      using Azure;
+      using Azure.AI.DocumentIntelligence;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_ENDPOINT")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_ENDPOINT not set");
+      
+      var adminClient = new DocumentIntelligenceAdministrationClient(
+          new Uri(endpoint),
+          new DefaultAzureCredential());
+      
+      // List all models
+      Console.WriteLine("Available models:");
+      AsyncPageable<DocumentModelDetails> models = adminClient.GetModelsAsync();
+      
+      await foreach (DocumentModelDetails model in models)
+      {
+          Console.WriteLine($"  {model.ModelId} - Created: {model.CreatedOn}");
+      }
+      
+      // Delete a specific model (use with caution)
+      string modelIdToDelete = "old-custom-model";
+      await adminClient.DeleteModelAsync(modelIdToDelete);
+      Console.WriteLine($"Deleted model: {modelIdToDelete}");
+
+  # Document Classification
+  - name: document_classification
+    prompt: |
+      Create an example that builds a document classifier and uses it
+      to classify documents into categories.
+    expected_patterns:
+      - "BuildDocumentClassifierContent"
+      - "BuildClassifierAsync"
+      - "ClassifyDocumentAsync"
+      - "ClassifierDocumentTypeDetails"
+    forbidden_patterns:
+      - 'BuildDocumentModel'
+    tags:
+      - classification
+      - classifier
+    mock_response: |
+      using Azure;
+      using Azure.AI.DocumentIntelligence;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_ENDPOINT")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_ENDPOINT not set");
+      
+      var adminClient = new DocumentIntelligenceAdministrationClient(
+          new Uri(endpoint),
+          new DefaultAzureCredential());
+      
+      var client = new DocumentIntelligenceClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      // Build a classifier
+      var buildOptions = new BuildDocumentClassifierContent("document-classifier")
+      {
+          DocumentTypes =
+          {
+              ["invoice"] = new ClassifierDocumentTypeDetails()
+              {
+                  AzureBlobSource = new AzureBlobContentSource(
+                      new Uri("https://storage.blob.core.windows.net/invoices?sas"))
+              },
+              ["receipt"] = new ClassifierDocumentTypeDetails()
+              {
+                  AzureBlobSource = new AzureBlobContentSource(
+                      new Uri("https://storage.blob.core.windows.net/receipts?sas"))
+              }
+          }
+      };
+      
+      Operation<DocumentClassifierDetails> buildOp = await adminClient.BuildClassifierAsync(
+          WaitUntil.Completed,
+          buildOptions);
+      
+      DocumentClassifierDetails classifier = buildOp.Value;
+      Console.WriteLine($"Classifier ID: {classifier.ClassifierId}");
+      
+      // Use the classifier
+      Uri documentUri = new Uri("https://example.com/unknown-document.pdf");
+      
+      Operation<AnalyzeResult> classifyOp = await client.ClassifyDocumentAsync(
+          WaitUntil.Completed,
+          classifier.ClassifierId,
+          documentUri);
+      
+      AnalyzeResult result = classifyOp.Value;
+      
+      foreach (AnalyzedDocument document in result.Documents)
+      {
+          Console.WriteLine($"Classified as: {document.DocumentType}");
+          Console.WriteLine($"Confidence: {document.Confidence:P}");
+      }
+
+  # API Key Authentication
+  - name: api_key_authentication
+    prompt: |
+      Create an example using API key authentication instead of
+      DefaultAzureCredential for Document Intelligence client.
+    expected_patterns:
+      - "AzureKeyCredential"
+      - "DOCUMENT_INTELLIGENCE_API_KEY"
+      - "DocumentIntelligenceClient"
+    forbidden_patterns:
+      - 'new AzureKeyCredential\("[^"]+"\)'
+    tags:
+      - authentication
+      - api-key
+    mock_response: |
+      using Azure;
+      using Azure.AI.DocumentIntelligence;
+      
+      string endpoint = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_ENDPOINT")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_ENDPOINT not set");
+      string apiKey = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_API_KEY")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_API_KEY not set");
+      
+      var client = new DocumentIntelligenceClient(
+          new Uri(endpoint),
+          new AzureKeyCredential(apiKey));
+      
+      Uri documentUri = new Uri("https://example.com/document.pdf");
+      
+      Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(
+          WaitUntil.Completed,
+          "prebuilt-read",
+          documentUri);
+      
+      AnalyzeResult result = operation.Value;
+      
+      Console.WriteLine($"Content: {result.Content}");
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Show how to handle errors when analyzing documents, including
+      invalid model and service errors.
+    expected_patterns:
+      - "RequestFailedException"
+      - "catch"
+      - "ex.Status"
+    forbidden_patterns:
+      - 'catch \{\s*\}'
+      - 'catch \(Exception\)'
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure;
+      using Azure.AI.DocumentIntelligence;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_ENDPOINT")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_ENDPOINT not set");
+      
+      var client = new DocumentIntelligenceClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      Uri documentUri = new Uri("https://example.com/document.pdf");
+      
+      try
+      {
+          Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(
+              WaitUntil.Completed,
+              "prebuilt-invoice",
+              documentUri);
+          
+          AnalyzeResult result = operation.Value;
+          Console.WriteLine($"Analysis completed with {result.Documents.Count} documents");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 400)
+      {
+          Console.WriteLine($"Invalid request: {ex.Message}");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 404)
+      {
+          Console.WriteLine($"Model not found: {ex.Message}");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"Service error ({ex.Status}): {ex.Message}");
+      }
+
+  # Long Running Operation Polling
+  - name: long_running_operation
+    prompt: |
+      Create an example that starts an analysis operation without waiting,
+      then polls for completion separately.
+    expected_patterns:
+      - "WaitUntil.Started"
+      - "WaitForCompletionAsync"
+      - "operation.Id"
+    forbidden_patterns:
+      - 'WaitUntil.Completed'
+    tags:
+      - long-running
+      - polling
+    mock_response: |
+      using Azure;
+      using Azure.AI.DocumentIntelligence;
+      using Azure.Identity;
+      
+      string endpoint = Environment.GetEnvironmentVariable("DOCUMENT_INTELLIGENCE_ENDPOINT")
+          ?? throw new InvalidOperationException("DOCUMENT_INTELLIGENCE_ENDPOINT not set");
+      
+      var client = new DocumentIntelligenceClient(new Uri(endpoint), new DefaultAzureCredential());
+      
+      Uri documentUri = new Uri("https://example.com/large-document.pdf");
+      
+      // Start operation without waiting
+      Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(
+          WaitUntil.Started,
+          "prebuilt-layout",
+          documentUri);
+      
+      Console.WriteLine($"Operation started with ID: {operation.Id}");
+      
+      // Do other work here while operation is running...
+      Console.WriteLine("Doing other work...");
+      await Task.Delay(1000);
+      
+      // Now wait for completion
+      Console.WriteLine("Waiting for operation to complete...");
+      await operation.WaitForCompletionAsync();
+      
+      if (operation.HasCompleted && operation.HasValue)
+      {
+          AnalyzeResult result = operation.Value;
+          Console.WriteLine($"Analysis completed: {result.Pages.Count} pages processed");
+      }

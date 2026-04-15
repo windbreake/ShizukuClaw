@@ -1,0 +1,460 @@
+# Test scenarios for azure-ai-translation-text-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Translation Setup
+  - name: basic_text_translation
+    prompt: |
+      Create a basic example that translates English text to Spanish and French.
+      Include proper authentication with Entra ID credentials, client initialization,
+      and proper handling of the translation results.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "TextTranslationClient"
+      - 'translate\('
+      - 'to=\[.*es.*fr'
+      - "translation.text"
+    forbidden_patterns:
+      - "hardcoded"
+      - "AzureKeyCredential.*key"
+      - "from="
+    tags:
+      - basic
+      - authentication
+      - translation
+    mock_response: |
+      import os
+      from azure.ai.translation.text import TextTranslationClient
+      from azure.identity import DefaultAzureCredential
+
+      endpoint = os.environ["AZURE_TRANSLATOR_ENDPOINT"]
+      credential = DefaultAzureCredential()
+
+      client = TextTranslationClient(endpoint=endpoint, credential=credential)
+
+      result = client.translate(
+          body=["Hello, world!", "Good morning"],
+          to=["es", "fr"]
+      )
+
+      for item in result:
+          print(f"Detected language: {item.detected_language.language if item.detected_language else 'unknown'}")
+          for translation in item.translations:
+              print(f"{translation.to}: {translation.text}")
+
+  # Language Detection
+  - name: language_detection
+    prompt: |
+      Create an example that detects the language of provided text using the
+      Azure AI Text Translation service. Show both automatic detection via
+      translate and explicit detection via the detect method.
+    expected_patterns:
+      - "TextTranslationClient"
+      - "detected_language"
+      - 'translate\('
+      - '\.language'
+      - '\.score'
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - language-detection
+      - translation
+    mock_response: |
+      import os
+      from azure.ai.translation.text import TextTranslationClient
+      from azure.identity import DefaultAzureCredential
+
+      endpoint = os.environ["AZURE_TRANSLATOR_ENDPOINT"]
+      credential = DefaultAzureCredential()
+
+      client = TextTranslationClient(endpoint=endpoint, credential=credential)
+
+      # Detect via translate
+      result = client.translate(
+          body=["Hola, como estas?", "Bonjour le monde"],
+          to=["en"]
+      )
+
+      for item in result:
+          if item.detected_language:
+              print(f"Detected: {item.detected_language.language}")
+              print(f"Confidence: {item.detected_language.score:.2f}")
+
+  # Transliteration
+  - name: script_transliteration
+    prompt: |
+      Create an example that converts text from one script to another using
+      transliteration. Show converting Japanese text written in Latin characters
+      to Japanese script.
+    expected_patterns:
+      - 'transliterate\('
+      - "language="
+      - "from_script="
+      - "to_script="
+      - "item.text"
+      - "item.script"
+    forbidden_patterns:
+      - "from="
+      - "hardcoded"
+    tags:
+      - transliteration
+      - script-conversion
+    mock_response: |
+      import os
+      from azure.ai.translation.text import TextTranslationClient
+      from azure.identity import DefaultAzureCredential
+
+      endpoint = os.environ["AZURE_TRANSLATOR_ENDPOINT"]
+      credential = DefaultAzureCredential()
+
+      client = TextTranslationClient(endpoint=endpoint, credential=credential)
+
+      result = client.transliterate(
+          body=["konnichiwa", "sayonara"],
+          language="ja",
+          from_script="Latn",
+          to_script="Jpan"
+      )
+
+      for item in result:
+          print(f"Original: {item.text}")
+          print(f"Transliterated: {item.script}")
+
+  # Dictionary Lookup
+  - name: dictionary_lookup
+    prompt: |
+      Create an example that performs dictionary lookups to get alternate translations,
+      parts of speech, and confidence scores for English words being translated to Spanish.
+    expected_patterns:
+      - 'lookup_dictionary_entries\('
+      - "from_parameter="
+      - "to="
+      - '\.normalized_source'
+      - '\.translations'
+      - '\.pos_tag'
+      - '\.confidence'
+    forbidden_patterns:
+      - "from="
+      - "hardcoded"
+    tags:
+      - dictionary
+      - lookup
+    mock_response: |
+      import os
+      from azure.ai.translation.text import TextTranslationClient
+      from azure.identity import DefaultAzureCredential
+
+      endpoint = os.environ["AZURE_TRANSLATOR_ENDPOINT"]
+      credential = DefaultAzureCredential()
+
+      client = TextTranslationClient(endpoint=endpoint, credential=credential)
+
+      result = client.lookup_dictionary_entries(
+          body=["fly", "run", "jump"],
+          from_parameter="en",
+          to="es"
+      )
+
+      for item in result:
+          print(f"Source word: {item.normalized_source}")
+          for translation in item.translations:
+              print(f"  Translation: {translation.normalized_target}")
+              print(f"  Part of speech: {translation.pos_tag}")
+              print(f"  Confidence: {translation.confidence:.2f}")
+
+  # Dictionary Examples
+  - name: dictionary_examples_lookup
+    prompt: |
+      Create an example that retrieves usage examples for word translations using
+      the DictionaryExampleTextItem model. Show examples of English words translated
+      to Spanish with their usage context.
+    expected_patterns:
+      - "DictionaryExampleTextItem"
+      - 'lookup_dictionary_examples\('
+      - "source_prefix"
+      - "source_term"
+      - "source_suffix"
+      - "target_prefix"
+      - "target_term"
+      - "target_suffix"
+    forbidden_patterns:
+      - "hardcoded"
+      - 'dict\('
+    tags:
+      - dictionary
+      - examples
+    mock_response: |
+      import os
+      from azure.ai.translation.text import TextTranslationClient
+      from azure.ai.translation.text.models import DictionaryExampleTextItem
+      from azure.identity import DefaultAzureCredential
+
+      endpoint = os.environ["AZURE_TRANSLATOR_ENDPOINT"]
+      credential = DefaultAzureCredential()
+
+      client = TextTranslationClient(endpoint=endpoint, credential=credential)
+
+      result = client.lookup_dictionary_examples(
+          body=[
+              DictionaryExampleTextItem(text="fly", translation="volar"),
+              DictionaryExampleTextItem(text="book", translation="libro")
+          ],
+          from_parameter="en",
+          to="es"
+      )
+
+      for item in result:
+          for example in item.examples:
+              print(f"Source: {example.source_prefix}{example.source_term}{example.source_suffix}")
+              print(f"Target: {example.target_prefix}{example.target_term}{example.target_suffix}")
+
+  # Batch Translation with Options
+  - name: batch_translation_with_options
+    prompt: |
+      Create an example that translates multiple texts in a single batch request
+      (up to 100 texts) with translation options like HTML text type, profanity
+      handling, and sentence boundary detection.
+    expected_patterns:
+      - 'translate\('
+      - 'body=\[.*,.*,.*\]'
+      - "text_type="
+      - "profanity_action="
+      - "include_alignment="
+      - "include_sentence_length="
+    forbidden_patterns:
+      - "hardcoded"
+      - "loop.*translate"
+    tags:
+      - batch
+      - translation
+      - options
+    mock_response: |
+      import os
+      from azure.ai.translation.text import TextTranslationClient
+      from azure.identity import DefaultAzureCredential
+
+      endpoint = os.environ["AZURE_TRANSLATOR_ENDPOINT"]
+      credential = DefaultAzureCredential()
+
+      client = TextTranslationClient(endpoint=endpoint, credential=credential)
+
+      texts = [
+          "<p>Hello, world!</p>",
+          "<div>Good morning</div>",
+          "Please mark the profanity!"
+      ]
+
+      result = client.translate(
+          body=texts,
+          to=["es"],
+          text_type="html",
+          profanity_action="Marked",
+          profanity_marker="Asterisk",
+          include_alignment=True,
+          include_sentence_length=True
+      )
+
+      for item in result:
+          translation = item.translations[0]
+          print(f"Translated: {translation.text}")
+          if translation.alignment:
+              print(f"Alignment: {translation.alignment.proj}")
+
+  # Sentence Breaking
+  - name: sentence_boundary_detection
+    prompt: |
+      Create an example that identifies sentence boundaries in text using the
+      find_sentence_boundaries method. Show how to process multi-sentence input.
+    expected_patterns:
+      - 'find_sentence_boundaries\('
+      - "language="
+      - "body="
+      - "sent_len"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - sentence-breaking
+      - parsing
+    mock_response: |
+      import os
+      from azure.ai.translation.text import TextTranslationClient
+      from azure.identity import DefaultAzureCredential
+
+      endpoint = os.environ["AZURE_TRANSLATOR_ENDPOINT"]
+      credential = DefaultAzureCredential()
+
+      client = TextTranslationClient(endpoint=endpoint, credential=credential)
+
+      result = client.find_sentence_boundaries(
+          body=["Hello! How are you? I hope you are well. Thank you for asking."],
+          language="en"
+      )
+
+      for item in result:
+          print(f"Sentence lengths: {item.sent_len}")
+
+  # Supported Languages with Caching
+  - name: supported_languages_caching
+    prompt: |
+      Create an example that retrieves the list of supported languages for
+      translation, transliteration, and dictionary services. Show how to cache
+      this information to avoid repeated API calls.
+    expected_patterns:
+      - 'get_supported_languages\('
+      - 'languages\.translation'
+      - 'languages\.transliteration'
+      - 'languages\.dictionary'
+      - 'for.*in.*\.items\(\)'
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - languages
+      - caching
+    mock_response: |
+      import os
+      from azure.ai.translation.text import TextTranslationClient
+      from azure.identity import DefaultAzureCredential
+
+      endpoint = os.environ["AZURE_TRANSLATOR_ENDPOINT"]
+      credential = DefaultAzureCredential()
+
+      client = TextTranslationClient(endpoint=endpoint, credential=credential)
+
+      # Cache supported languages
+      languages = client.get_supported_languages()
+
+      print("Translation languages:")
+      for code, lang in languages.translation.items():
+          print(f"  {code}: {lang.name} ({lang.native_name})")
+
+      print("\nTransliteration languages:")
+      for code, lang in languages.transliteration.items():
+          print(f"  {code}: {lang.name}")
+
+      print("\nDictionary languages:")
+      for code, lang in languages.dictionary.items():
+          print(f"  {code}: {lang.name}")
+
+  # Async Translation
+  - name: async_text_translation
+    prompt: |
+      Create an async example that translates text using the async TextTranslationClient.
+      Show proper async/await patterns, context manager usage, and asynchronous
+      iteration over results.
+    expected_patterns:
+      - "from azure.ai.translation.text.aio import TextTranslationClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with"
+      - "async def"
+      - 'await client\.translate'
+      - "asyncio.run"
+    forbidden_patterns:
+      - "from azure.ai.translation.text import TextTranslationClient"
+      - 'DefaultAzureCredential\(\)'
+      - "hardcoded"
+    tags:
+      - async
+      - advanced
+    mock_response: |
+      import os
+      import asyncio
+      from azure.ai.translation.text.aio import TextTranslationClient
+      from azure.identity.aio import DefaultAzureCredential
+
+      async def main():
+          endpoint = os.environ["AZURE_TRANSLATOR_ENDPOINT"]
+          credential = DefaultAzureCredential()
+
+          async with TextTranslationClient(
+              endpoint=endpoint,
+              credential=credential,
+          ) as client:
+              result = await client.translate(
+                  body=["Hello, world!", "Good morning"],
+                  to=["es", "fr"]
+              )
+
+              for item in result:
+                  for translation in item.translations:
+                      print(f"{translation.to}: {translation.text}")
+
+      asyncio.run(main())
+
+  # API Key with Region Authentication
+  - name: api_key_region_auth
+    prompt: |
+      Create an example using API key authentication with region instead of endpoint.
+      Show how to initialize the client with AzureKeyCredential and region parameters.
+    expected_patterns:
+      - "AzureKeyCredential"
+      - "region="
+      - "AZURE_TRANSLATOR_KEY"
+      - "AZURE_TRANSLATOR_REGION"
+      - "TextTranslationClient"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+      - "endpoint="
+      - "hardcoded"
+    tags:
+      - authentication
+      - api-key
+    mock_response: |
+      import os
+      from azure.ai.translation.text import TextTranslationClient
+      from azure.core.credentials import AzureKeyCredential
+
+      key = os.environ["AZURE_TRANSLATOR_KEY"]
+      region = os.environ["AZURE_TRANSLATOR_REGION"]
+
+      credential = AzureKeyCredential(key)
+      client = TextTranslationClient(credential=credential, region=region)
+
+      result = client.translate(
+          body=["Hello, world!"],
+          to=["es", "fr"]
+      )
+
+      for item in result:
+          for translation in item.translations:
+              print(f"{translation.to}: {translation.text}")
+
+  # Multiple Target Languages
+  - name: multiple_target_languages
+    prompt: |
+      Create an example that translates text to multiple target languages in a single
+      request. Show how to access results for each language and compare translations.
+    expected_patterns:
+      - 'to=\[.*,.*,.*,.*\]'
+      - "for translation in.*translations"
+      - "translation.to"
+      - "translation.text"
+    forbidden_patterns:
+      - "hardcoded"
+      - 'for.*lang in.*\.split'
+    tags:
+      - translation
+      - multi-language
+    mock_response: |
+      import os
+      from azure.ai.translation.text import TextTranslationClient
+      from azure.identity import DefaultAzureCredential
+
+      endpoint = os.environ["AZURE_TRANSLATOR_ENDPOINT"]
+      credential = DefaultAzureCredential()
+
+      client = TextTranslationClient(endpoint=endpoint, credential=credential)
+
+      result = client.translate(
+          body=["Hello, world!"],
+          to=["es", "fr", "de", "ja", "zh-Hans"]
+      )
+
+      for item in result:
+          print(f"Original: {item.detected_language.language if item.detected_language else 'unknown'}")
+          for translation in item.translations:
+              print(f"  {translation.to}: {translation.text}")

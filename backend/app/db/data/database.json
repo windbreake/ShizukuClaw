@@ -1,0 +1,8 @@
+{
+  "engine": "mysql",
+  "port": 3306,
+  "host": "localhost",
+  "user": "root",
+  "password": "ngc339cn",
+  "database": "catgirl_db"
+}

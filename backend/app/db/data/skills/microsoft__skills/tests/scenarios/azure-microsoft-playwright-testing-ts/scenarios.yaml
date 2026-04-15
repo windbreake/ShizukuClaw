@@ -1,0 +1,384 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-microsoft-playwright-testing-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Service Configuration
+  - name: basic_service_config
+    prompt: |
+      Create a playwright.service.config.ts file that configures Playwright
+      to run tests on Azure cloud-hosted browsers with Linux OS using
+      Azure Playwright Workspaces.
+    expected_patterns:
+      - "defineConfig"
+      - "createAzurePlaywrightConfig"
+      - "ServiceOS.LINUX"
+      - "@azure/playwright"
+      - "DefaultAzureCredential"
+      - "@azure/identity"
+      - "credential"
+    forbidden_patterns:
+      - "@azure/microsoft-playwright-testing"
+      - "getServiceConfig"
+      - "hardcoded-token"
+      - "useCloudHostedBrowsers"
+    tags:
+      - basic
+      - configuration
+    mock_response: |
+      import { defineConfig } from "@playwright/test";
+      import { createAzurePlaywrightConfig, ServiceOS } from "@azure/playwright";
+      import { DefaultAzureCredential } from "@azure/identity";
+      import config from "./playwright.config";
+
+      export default defineConfig(
+        config,
+        createAzurePlaywrightConfig(config, {
+          os: ServiceOS.LINUX,
+          credential: new DefaultAzureCredential(),
+        })
+      );
+
+  # Full Configuration Options
+  - name: full_service_config_options
+    prompt: |
+      Create a comprehensive playwright.service.config.ts with all configuration
+      options including connectTimeout, network exposure, runName, and Azure reporter.
+    expected_patterns:
+      - "defineConfig"
+      - "createAzurePlaywrightConfig"
+      - "connectTimeout"
+      - "exposeNetwork"
+      - "credential"
+      - "@azure/playwright/reporter"
+    forbidden_patterns:
+      - "getServiceConfig"
+      - "@azure/microsoft-playwright-testing"
+      - "timeout:"
+      - "useCloudHostedBrowsers"
+      - "enableGitHubSummary"
+      - "enableResultPublish"
+    tags:
+      - advanced
+      - configuration
+    mock_response: |
+      import { defineConfig } from "@playwright/test";
+      import { createAzurePlaywrightConfig, ServiceOS } from "@azure/playwright";
+      import { DefaultAzureCredential } from "@azure/identity";
+      import config from "./playwright.config";
+
+      export default defineConfig(
+        config,
+        createAzurePlaywrightConfig(config, {
+          os: ServiceOS.LINUX,
+          connectTimeout: 30000,
+          exposeNetwork: "<loopback>",
+          runName: "my-test-run",
+          credential: new DefaultAzureCredential(),
+        }),
+        {
+          reporter: [
+            ["html", { open: "never" }],
+            ["@azure/playwright/reporter"],
+          ],
+        }
+      );
+
+  # Custom Credential Configuration
+  - name: custom_credential_config
+    prompt: |
+      Create a playwright.service.config.ts that uses ManagedIdentityCredential
+      for authentication with Azure Playwright Workspaces.
+    expected_patterns:
+      - "defineConfig"
+      - "createAzurePlaywrightConfig"
+      - "ManagedIdentityCredential"
+      - "credential"
+      - "@azure/identity"
+      - "@azure/playwright"
+    forbidden_patterns:
+      - "ACCESS_TOKEN"
+      - "hardcoded"
+      - "getServiceConfig"
+      - "@azure/microsoft-playwright-testing"
+    tags:
+      - authentication
+      - managed-identity
+    mock_response: |
+      import { defineConfig } from "@playwright/test";
+      import { ManagedIdentityCredential } from "@azure/identity";
+      import { createAzurePlaywrightConfig, ServiceOS } from "@azure/playwright";
+      import config from "./playwright.config";
+
+      export default defineConfig(
+        config,
+        createAzurePlaywrightConfig(config, {
+          os: ServiceOS.LINUX,
+          credential: new ManagedIdentityCredential(),
+        })
+      );
+
+  # Manual Browser Connection
+  - name: manual_browser_connection
+    prompt: |
+      Create a Playwright test that manually connects to the Azure cloud browser
+      service using getConnectOptions from the @azure/playwright package.
+    expected_patterns:
+      - "getConnectOptions"
+      - "wsEndpoint"
+      - "connect"
+      - "browser.close"
+      - "BrowserType"
+      - "@azure/playwright"
+    forbidden_patterns:
+      - "hardcoded"
+      - "@azure/microsoft-playwright-testing"
+    tags:
+      - manual
+      - connection
+    mock_response: |
+      import playwright, { test, expect, BrowserType } from "@playwright/test";
+      import { getConnectOptions } from "@azure/playwright";
+
+      test("manual connection", async ({ browserName }) => {
+        const { wsEndpoint, options } = await getConnectOptions();
+        const browser = await (playwright[browserName] as BrowserType).connect(wsEndpoint, options);
+        const context = await browser.newContext();
+        const page = await context.newPage();
+
+        await page.goto("https://example.com");
+        await expect(page).toHaveTitle(/Example/);
+
+        await browser.close();
+      });
+
+  # GitHub Actions Integration
+  - name: github_actions_workflow
+    prompt: |
+      Create a GitHub Actions workflow that runs Playwright tests on
+      Azure Playwright Workspaces with Entra ID authentication.
+    expected_patterns:
+      - "azure/login"
+      - "PLAYWRIGHT_SERVICE_URL"
+      - "id-token: write"
+      - "playwright test"
+      - "playwright.service.config.ts"
+    forbidden_patterns:
+      - "ACCESS_TOKEN"
+    tags:
+      - ci-cd
+      - github-actions
+    mock_response: |
+      name: playwright-ts
+      on: [push, pull_request]
+
+      permissions:
+        id-token: write
+        contents: read
+
+      jobs:
+        test:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                node-version: '20'
+
+            - name: Azure Login
+              uses: azure/login@v2
+              with:
+                client-id: ${{ secrets.AZURE_CLIENT_ID }}
+                tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+                subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+            - run: npm ci
+
+            - name: Install Playwright Browsers
+              run: npx playwright install --with-deps
+
+            - name: Run Tests
+              env:
+                PLAYWRIGHT_SERVICE_URL: ${{ secrets.PLAYWRIGHT_SERVICE_URL }}
+              run: npx playwright test -c playwright.service.config.ts --workers=20
+
+  # Azure Pipelines Integration
+  - name: azure_pipelines_workflow
+    prompt: |
+      Create an Azure Pipelines YAML configuration for running Playwright
+      tests on Azure Playwright Workspaces.
+    expected_patterns:
+      - "AzureCLI"
+      - "PLAYWRIGHT_SERVICE_URL"
+      - "playwright test"
+      - "playwright.service.config.ts"
+    forbidden_patterns:
+      - "ACCESS_TOKEN"
+    tags:
+      - ci-cd
+      - azure-pipelines
+    mock_response: |
+      trigger:
+        - main
+
+      pool:
+        vmImage: 'ubuntu-latest'
+
+      steps:
+        - task: NodeTool@0
+          inputs:
+            versionSpec: '20.x'
+          displayName: 'Install Node.js'
+
+        - script: npm ci
+          displayName: 'Install dependencies'
+
+        - script: npx playwright install --with-deps
+          displayName: 'Install Playwright Browsers'
+
+        - task: AzureCLI@2
+          displayName: Run Playwright Tests
+          env:
+            PLAYWRIGHT_SERVICE_URL: $(PLAYWRIGHT_SERVICE_URL)
+          inputs:
+            azureSubscription: My_Service_Connection
+            scriptType: pscore
+            inlineScript: |
+              npx playwright test -c playwright.service.config.ts --workers=20
+            addSpnToEnvironment: true
+
+  # Windows OS Configuration
+  - name: windows_os_config
+    prompt: |
+      Create a playwright.service.config.ts that runs tests on Windows
+      cloud-hosted browsers using Azure Playwright Workspaces.
+    expected_patterns:
+      - "defineConfig"
+      - "createAzurePlaywrightConfig"
+      - "ServiceOS.WINDOWS"
+      - "@azure/playwright"
+      - "credential"
+    forbidden_patterns:
+      - "ServiceOS.LINUX"
+      - "getServiceConfig"
+      - "@azure/microsoft-playwright-testing"
+    tags:
+      - configuration
+      - windows
+    mock_response: |
+      import { defineConfig } from "@playwright/test";
+      import { createAzurePlaywrightConfig, ServiceOS } from "@azure/playwright";
+      import { DefaultAzureCredential } from "@azure/identity";
+      import config from "./playwright.config";
+
+      export default defineConfig(
+        config,
+        createAzurePlaywrightConfig(config, {
+          os: ServiceOS.WINDOWS,
+          credential: new DefaultAzureCredential(),
+        })
+      );
+
+  # With Azure Reporter
+  - name: azure_reporter_config
+    prompt: |
+      Create a playwright.service.config.ts that uploads test results
+      to Azure portal using the @azure/playwright reporter.
+    expected_patterns:
+      - "defineConfig"
+      - "createAzurePlaywrightConfig"
+      - "@azure/playwright/reporter"
+      - "html"
+      - "credential"
+    forbidden_patterns:
+      - "@azure/microsoft-playwright-testing/reporter"
+      - "getServiceConfig"
+      - "enableGitHubSummary"
+      - "enableResultPublish"
+    tags:
+      - reporting
+      - azure-portal
+    mock_response: |
+      import { defineConfig } from "@playwright/test";
+      import { createAzurePlaywrightConfig, ServiceOS } from "@azure/playwright";
+      import { DefaultAzureCredential } from "@azure/identity";
+      import config from "./playwright.config";
+
+      export default defineConfig(
+        config,
+        createAzurePlaywrightConfig(config, {
+          os: ServiceOS.LINUX,
+          credential: new DefaultAzureCredential(),
+        }),
+        {
+          reporter: [
+            ["html", { open: "never" }],
+            ["@azure/playwright/reporter"],
+          ],
+        }
+      );
+
+  # Migration from old package
+  - name: migration_from_old_package
+    prompt: |
+      Migrate this old playwright.service.config.ts from @azure/microsoft-playwright-testing
+      to the new @azure/playwright package:
+      
+      ```typescript
+      import { getServiceConfig, ServiceOS } from "@azure/microsoft-playwright-testing";
+      import config from "./playwright.config";
+      
+      export default defineConfig(
+        config,
+        getServiceConfig(config, {
+          os: ServiceOS.LINUX,
+          timeout: 30000,
+          useCloudHostedBrowsers: true,
+        }),
+        {
+          reporter: [["@azure/microsoft-playwright-testing/reporter"]],
+        }
+      );
+      ```
+    expected_patterns:
+      - "createAzurePlaywrightConfig"
+      - "@azure/playwright"
+      - "connectTimeout"
+      - "DefaultAzureCredential"
+      - "credential"
+      - "@azure/playwright/reporter"
+    forbidden_patterns:
+      - "getServiceConfig"
+      - "@azure/microsoft-playwright-testing"
+      - "timeout:"
+      - "useCloudHostedBrowsers"
+    tags:
+      - migration
+      - upgrade
+    mock_response: |
+      import { defineConfig } from "@playwright/test";
+      import { createAzurePlaywrightConfig, ServiceOS } from "@azure/playwright";
+      import { DefaultAzureCredential } from "@azure/identity";
+      import config from "./playwright.config";
+
+      export default defineConfig(
+        config,
+        createAzurePlaywrightConfig(config, {
+          os: ServiceOS.LINUX,
+          connectTimeout: 30000,
+          credential: new DefaultAzureCredential(),
+        }),
+        {
+          reporter: [
+            ["html", { open: "never" }],
+            ["@azure/playwright/reporter"],
+          ],
+        }
+      );

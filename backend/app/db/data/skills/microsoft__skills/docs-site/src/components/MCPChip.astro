@@ -1,0 +1,152 @@
+---
+interface Props {
+  emoji: string;
+  name: string;
+  description: string;
+  category: 'documentation' | 'development' | 'utilities';
+  url?: string | null;
+}
+
+const { emoji, name, description, category, url } = Astro.props;
+
+const categoryColors = {
+  documentation: { color: '#60a5fa', bg: 'rgba(59, 130, 246, 0.12)' },
+  development: { color: '#4ade80', bg: 'rgba(34, 197, 94, 0.12)' },
+  utilities: { color: '#c084fc', bg: 'rgba(168, 85, 247, 0.12)' }
+};
+
+const colors = categoryColors[category];
+---
+
+{url ? (
+  <a href={url} class="mcp-chip" target="_blank" rel="noopener noreferrer">
+    <span class="chip-emoji">{emoji}</span>
+    <span class="chip-name">{name}</span>
+    <svg class="chip-external" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+    </svg>
+    <div class="chip-tooltip">
+      <div class="tooltip-header">{name}</div>
+      <div class="tooltip-desc">{description}</div>
+      <span class="tooltip-badge" style={`background: ${colors.bg}; color: ${colors.color};`}>{category}</span>
+    </div>
+  </a>
+) : (
+  <div class="mcp-chip mcp-chip-static">
+    <span class="chip-emoji">{emoji}</span>
+    <span class="chip-name">{name}</span>
+    <div class="chip-tooltip">
+      <div class="tooltip-header">{name}</div>
+      <div class="tooltip-desc">{description}</div>
+      <span class="tooltip-badge" style={`background: ${colors.bg}; color: ${colors.color};`}>{category}</span>
+    </div>
+  </div>
+)}
+
+<style>
+  .mcp-chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    transition: all var(--transition-base);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .mcp-chip:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .mcp-chip-static {
+    cursor: default;
+  }
+
+  .chip-emoji {
+    font-size: 1.125rem;
+    line-height: 1;
+  }
+
+  .chip-name {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .chip-external {
+    color: var(--text-muted);
+    opacity: 0.5;
+    transition: all var(--transition-fast);
+  }
+
+  .mcp-chip:hover .chip-external {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  /* Tooltip */
+  .chip-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 240px;
+    padding: var(--space-md);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transition: all var(--transition-fast);
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  .chip-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--border-primary);
+  }
+
+  .mcp-chip:hover .chip-tooltip {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .tooltip-header {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-xs);
+  }
+
+  .tooltip-desc {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: var(--space-sm);
+  }
+
+  .tooltip-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+</style>

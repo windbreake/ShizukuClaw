@@ -1,0 +1,520 @@
+# Test scenarios for azure-ai-projects-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Project Client Creation
+  - name: basic_project_client
+    prompt: |
+      Create an Azure AI Projects client in C# using DefaultAzureCredential.
+      Show the basic client instantiation pattern.
+    expected_patterns:
+      - "using Azure.AI.Projects"
+      - "using Azure.Identity"
+      - "AIProjectClient"
+      - "DefaultAzureCredential"
+      - "new Uri"
+    forbidden_patterns:
+      - "using Azure.AI.Inference"
+      - "ChatCompletionsClient"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.Identity;
+
+      var endpoint = Environment.GetEnvironmentVariable("PROJECT_ENDPOINT");
+      AIProjectClient projectClient = new AIProjectClient(
+          new Uri(endpoint), 
+          new DefaultAzureCredential());
+
+  # Get Persistent Agents Client
+  - name: get_persistent_agents_client
+    prompt: |
+      Get the PersistentAgentsClient from AIProjectClient to work with 
+      agents in Azure AI Foundry using C#.
+    expected_patterns:
+      - "AIProjectClient"
+      - "GetPersistentAgentsClient"
+      - "PersistentAgentsClient"
+    forbidden_patterns:
+      - "new PersistentAgentsClient"
+    tags:
+      - agents
+      - client-hierarchy
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.AI.Agents.Persistent;
+      using Azure.Identity;
+
+      var endpoint = Environment.GetEnvironmentVariable("PROJECT_ENDPOINT");
+      AIProjectClient projectClient = new AIProjectClient(
+          new Uri(endpoint), 
+          new DefaultAzureCredential());
+
+      PersistentAgentsClient agentsClient = projectClient.GetPersistentAgentsClient();
+
+  # List Connections
+  - name: list_connections
+    prompt: |
+      List all connections in an Azure AI Foundry project using C#.
+      Show both sync and async patterns.
+    expected_patterns:
+      - "Connections.GetConnections"
+      - "AIProjectConnection"
+      - "ConnectionType"
+    tags:
+      - connections
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.Identity;
+
+      var projectClient = new AIProjectClient(
+          new Uri(Environment.GetEnvironmentVariable("PROJECT_ENDPOINT")), 
+          new DefaultAzureCredential());
+
+      // Sync pattern
+      foreach (AIProjectConnection connection in projectClient.Connections.GetConnections())
+      {
+          Console.WriteLine($"{connection.Name}: {connection.ConnectionType}");
+      }
+
+      // Async pattern
+      await foreach (AIProjectConnection connection in projectClient.Connections.GetConnectionsAsync())
+      {
+          Console.WriteLine($"{connection.Name}: {connection.ConnectionType}");
+      }
+
+  # Get Connection with Credentials
+  - name: get_connection_with_credentials
+    prompt: |
+      Get a specific connection from Azure AI Foundry project including 
+      its credentials in C#.
+    expected_patterns:
+      - "GetConnection"
+      - "includeCredentials: true"
+      - "AIProjectConnection"
+    tags:
+      - connections
+      - credentials
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.Identity;
+
+      var projectClient = new AIProjectClient(
+          new Uri(Environment.GetEnvironmentVariable("PROJECT_ENDPOINT")), 
+          new DefaultAzureCredential());
+
+      string connectionName = Environment.GetEnvironmentVariable("CONNECTION_NAME");
+
+      AIProjectConnection connection = projectClient.Connections.GetConnection(
+          connectionName, 
+          includeCredentials: true);
+
+      Console.WriteLine($"Name: {connection.Name}");
+      Console.WriteLine($"Type: {connection.ConnectionType}");
+      Console.WriteLine($"Endpoint: {connection.Endpoint}");
+
+  # List Deployments
+  - name: list_deployments
+    prompt: |
+      List all model deployments in an Azure AI Foundry project in C#.
+      Include filtering by model publisher.
+    expected_patterns:
+      - "Deployments.GetDeployments"
+      - "AIProjectDeployment"
+      - "ModelName"
+    tags:
+      - deployments
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.Identity;
+
+      var projectClient = new AIProjectClient(
+          new Uri(Environment.GetEnvironmentVariable("PROJECT_ENDPOINT")), 
+          new DefaultAzureCredential());
+
+      // List all deployments
+      foreach (AIProjectDeployment deployment in projectClient.Deployments.GetDeployments())
+      {
+          Console.WriteLine($"{deployment.Name}: {deployment.ModelName}");
+      }
+
+      // Filter by publisher
+      foreach (var deployment in projectClient.Deployments.GetDeployments(modelPublisher: "Microsoft"))
+      {
+          Console.WriteLine($"Microsoft model: {deployment.Name}");
+      }
+
+      // Get specific deployment
+      ModelDeployment details = (ModelDeployment)projectClient.Deployments.GetDeployment("gpt-4o-mini");
+      Console.WriteLine($"Endpoint: {details.EndpointUrl}");
+
+  # Upload Dataset
+  - name: upload_dataset
+    prompt: |
+      Upload a file as a dataset to Azure AI Foundry project in C#.
+      Include version specification.
+    expected_patterns:
+      - "Datasets.UploadFile"
+      - "FileDataset"
+      - "name:"
+      - "version:"
+      - "connectionName"
+    tags:
+      - datasets
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.Identity;
+
+      var projectClient = new AIProjectClient(
+          new Uri(Environment.GetEnvironmentVariable("PROJECT_ENDPOINT")), 
+          new DefaultAzureCredential());
+
+      string connectionName = Environment.GetEnvironmentVariable("CONNECTION_NAME");
+
+      FileDataset fileDataset = projectClient.Datasets.UploadFile(
+          name: "my-dataset",
+          version: "1.0",
+          filePath: "data/training.txt",
+          connectionName: connectionName);
+
+      Console.WriteLine($"Dataset ID: {fileDataset.Id}");
+      Console.WriteLine($"Name: {fileDataset.Name}");
+      Console.WriteLine($"Version: {fileDataset.Version}");
+
+  # Upload Folder Dataset
+  - name: upload_folder_dataset
+    prompt: |
+      Upload a folder as a dataset to Azure AI Foundry project in C#,
+      filtering files by pattern.
+    expected_patterns:
+      - "Datasets.UploadFolder"
+      - "FolderDataset"
+      - "filePattern"
+      - "Regex"
+    tags:
+      - datasets
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.Identity;
+      using System.Text.RegularExpressions;
+
+      var projectClient = new AIProjectClient(
+          new Uri(Environment.GetEnvironmentVariable("PROJECT_ENDPOINT")), 
+          new DefaultAzureCredential());
+
+      string connectionName = Environment.GetEnvironmentVariable("CONNECTION_NAME");
+
+      FolderDataset folderDataset = projectClient.Datasets.UploadFolder(
+          name: "training-data",
+          version: "2.0",
+          folderPath: "data/training",
+          connectionName: connectionName,
+          filePattern: new Regex(".*\\.txt"));
+
+      Console.WriteLine($"Dataset ID: {folderDataset.Id}");
+
+  # Create Search Index
+  - name: create_search_index
+    prompt: |
+      Create an Azure AI Search index in an Azure AI Foundry project using C#.
+    expected_patterns:
+      - "AzureAISearchIndex"
+      - "Indexes.CreateOrUpdate"
+      - "AIProjectIndex"
+    tags:
+      - indexes
+      - search
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.Identity;
+
+      var projectClient = new AIProjectClient(
+          new Uri(Environment.GetEnvironmentVariable("PROJECT_ENDPOINT")), 
+          new DefaultAzureCredential());
+
+      string aiSearchConnectionName = Environment.GetEnvironmentVariable("AI_SEARCH_CONNECTION_NAME");
+      string aiSearchIndexName = "my-search-index";
+
+      AzureAISearchIndex searchIndex = new(aiSearchConnectionName, aiSearchIndexName)
+      {
+          Description = "Sample Index for document search"
+      };
+
+      searchIndex = (AzureAISearchIndex)projectClient.Indexes.CreateOrUpdate(
+          name: "my-index",
+          version: "1.0",
+          index: searchIndex);
+
+      Console.WriteLine($"Index ID: {searchIndex.Id}");
+
+      // List all indexes
+      foreach (AIProjectIndex index in projectClient.Indexes.GetIndexes())
+      {
+          Console.WriteLine($"{index.Name}: {index.Version}");
+      }
+
+  # Run Evaluation
+  - name: run_evaluation
+    prompt: |
+      Create and run an evaluation using Azure AI Foundry evaluators in C#.
+      Use the Relevance evaluator.
+    expected_patterns:
+      - "EvaluatorConfiguration"
+      - "EvaluatorIDs"
+      - "Evaluation"
+      - "Evaluations.Create"
+      - "InputDataset"
+    tags:
+      - evaluations
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.Identity;
+
+      var projectClient = new AIProjectClient(
+          new Uri(Environment.GetEnvironmentVariable("PROJECT_ENDPOINT")), 
+          new DefaultAzureCredential());
+
+      // Create evaluator configuration
+      var evaluatorConfig = new EvaluatorConfiguration(id: EvaluatorIDs.Relevance);
+      evaluatorConfig.InitParams.Add("deployment_name", BinaryData.FromObjectAsJson("gpt-4o"));
+
+      // Create evaluation
+      Evaluation evaluation = new Evaluation(
+          data: new InputDataset("<dataset_id>"),
+          evaluators: new Dictionary<string, EvaluatorConfiguration> 
+          { 
+              { "relevance", evaluatorConfig } 
+          }
+      )
+      {
+          DisplayName = "Sample Evaluation"
+      };
+
+      // Run evaluation
+      Evaluation result = await projectClient.Evaluations.CreateAsync(evaluation: evaluation);
+      Console.WriteLine($"Evaluation ID: {result.Name}");
+      Console.WriteLine($"Status: {result.Status}");
+
+      // Get evaluation results
+      Evaluation getResult = await projectClient.Evaluations.GetAsync(result.Name);
+      Console.WriteLine($"Final Status: {getResult.Status}");
+
+  # Full Agent Workflow
+  - name: full_agent_workflow
+    prompt: |
+      Create a complete agent workflow in Azure AI Foundry using C#:
+      create agent, thread, message, run, get response, and cleanup.
+    expected_patterns:
+      - "GetPersistentAgentsClient"
+      - "CreateAgentAsync"
+      - "CreateThreadAsync"
+      - "CreateMessageAsync"
+      - "CreateRunAsync"
+      - "GetRunAsync"
+      - "RunStatus"
+      - "DeleteThreadAsync"
+      - "DeleteAgentAsync"
+    forbidden_patterns:
+      - "new PersistentAgentsClient"
+    tags:
+      - agents
+      - complete-workflow
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.AI.Agents.Persistent;
+      using Azure.Identity;
+
+      var projectClient = new AIProjectClient(
+          new Uri(Environment.GetEnvironmentVariable("PROJECT_ENDPOINT")), 
+          new DefaultAzureCredential());
+
+      PersistentAgentsClient agentsClient = projectClient.GetPersistentAgentsClient();
+
+      // Create agent
+      PersistentAgent agent = await agentsClient.Administration.CreateAgentAsync(
+          model: "gpt-4o-mini",
+          name: "Math Tutor",
+          instructions: "You are a personal math tutor.");
+
+      // Create thread
+      PersistentAgentThread thread = await agentsClient.Threads.CreateThreadAsync();
+
+      // Add message
+      await agentsClient.Messages.CreateMessageAsync(
+          thread.Id, 
+          MessageRole.User, 
+          "Solve 3x + 11 = 14");
+
+      // Create run
+      ThreadRun run = await agentsClient.Runs.CreateRunAsync(thread.Id, agent.Id);
+
+      // Poll for completion
+      do
+      {
+          await Task.Delay(500);
+          run = await agentsClient.Runs.GetRunAsync(thread.Id, run.Id);
+      }
+      while (run.Status == RunStatus.Queued || run.Status == RunStatus.InProgress);
+
+      // Get messages
+      await foreach (var msg in agentsClient.Messages.GetMessagesAsync(thread.Id))
+      {
+          foreach (var content in msg.ContentItems)
+          {
+              if (content is MessageTextContent textContent)
+                  Console.WriteLine(textContent.Text);
+          }
+      }
+
+      // Cleanup
+      await agentsClient.Threads.DeleteThreadAsync(thread.Id);
+      await agentsClient.Administration.DeleteAgentAsync(agent.Id);
+
+  # Versioned Agent with Web Search
+  - name: versioned_agent_web_search
+    prompt: |
+      Create a versioned agent with web search capability using 
+      Azure.AI.Projects.OpenAI in C#.
+    expected_patterns:
+      - "Azure.AI.Projects.OpenAI"
+      - "PromptAgentDefinition"
+      - "CreateWebSearchTool"
+      - "AgentVersion"
+      - "CreateAgentVersionAsync"
+      - "ProjectResponsesClient"
+    tags:
+      - versioned-agents
+      - tools
+      - preview
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.AI.Projects.OpenAI;
+      using Azure.Identity;
+
+      var projectClient = new AIProjectClient(
+          new Uri(Environment.GetEnvironmentVariable("PROJECT_ENDPOINT")), 
+          new DefaultAzureCredential());
+
+      // Create agent definition with web search
+      PromptAgentDefinition agentDefinition = new(model: "gpt-4o-mini")
+      {
+          Instructions = "You are a helpful assistant that can search the web",
+          Tools = {
+              ResponseTool.CreateWebSearchTool(
+                  userLocation: WebSearchToolLocation.CreateApproximateLocation(
+                      country: "US",
+                      city: "Seattle",
+                      region: "Washington"
+                  )
+              ),
+          }
+      };
+
+      // Create versioned agent
+      AgentVersion agentVersion = await projectClient.Agents.CreateAgentVersionAsync(
+          agentName: "myWebSearchAgent",
+          options: new(agentDefinition));
+
+      Console.WriteLine($"Agent: {agentVersion.Name}, Version: {agentVersion.Version}");
+
+      // Get response client
+      ProjectResponsesClient responseClient = projectClient.OpenAI.GetProjectResponsesClientForAgent(agentVersion.Name);
+
+      // Create response
+      ResponseResult response = responseClient.CreateResponse("What's the weather in Seattle today?");
+      Console.WriteLine(response.GetOutputText());
+
+      // Cleanup
+      projectClient.Agents.DeleteAgentVersion(agentName: agentVersion.Name, agentVersion: agentVersion.Version);
+
+  # Azure OpenAI Integration
+  - name: azure_openai_integration
+    prompt: |
+      Get an Azure OpenAI ChatClient through the AIProjectClient to use
+      OpenAI.Chat APIs in C#.
+    expected_patterns:
+      - "GetConnection"
+      - "AzureOpenAIClient"
+      - "ChatClient"
+      - "GetChatClient"
+      - "CompleteChat"
+    tags:
+      - azure-openai
+      - chat
+    mock_response: |
+      using Azure.AI.Projects;
+      using Azure.AI.OpenAI;
+      using Azure.Identity;
+      using OpenAI.Chat;
+
+      var projectClient = new AIProjectClient(
+          new Uri(Environment.GetEnvironmentVariable("PROJECT_ENDPOINT")), 
+          new DefaultAzureCredential());
+
+      ClientConnection connection = projectClient.GetConnection(typeof(AzureOpenAIClient).FullName!);
+
+      if (!connection.TryGetLocatorAsUri(out Uri uri) || uri is null)
+          throw new InvalidOperationException("Invalid URI.");
+
+      uri = new Uri($"https://{uri.Host}");
+
+      AzureOpenAIClient azureOpenAIClient = new AzureOpenAIClient(uri, new DefaultAzureCredential());
+      ChatClient chatClient = azureOpenAIClient.GetChatClient("gpt-4o-mini");
+
+      ChatCompletion result = chatClient.CompleteChat("List all rainbow colors");
+      Console.WriteLine(result.Content[0].Text);
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Implement proper error handling for Azure AI Projects operations
+      in C# using RequestFailedException.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status"
+      - "ex.ErrorCode"
+      - "catch"
+    tags:
+      - error-handling
+      - best-practice
+    mock_response: |
+      using Azure;
+      using Azure.AI.Projects;
+      using Azure.Identity;
+
+      var projectClient = new AIProjectClient(
+          new Uri(Environment.GetEnvironmentVariable("PROJECT_ENDPOINT")), 
+          new DefaultAzureCredential());
+
+      try
+      {
+          var connection = await projectClient.Connections.GetConnectionAsync(
+              "non-existent-connection", 
+              includeCredentials: false);
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"Error: {ex.Status} - {ex.ErrorCode}: {ex.Message}");
+          
+          switch (ex.Status)
+          {
+              case 404:
+                  Console.WriteLine("Connection not found - check the connection name");
+                  break;
+              case 401:
+                  Console.WriteLine("Unauthorized - check credentials");
+                  break;
+              case 403:
+                  Console.WriteLine("Forbidden - check permissions");
+                  break;
+              default:
+                  throw;
+          }
+      }

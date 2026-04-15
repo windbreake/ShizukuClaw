@@ -1,0 +1,495 @@
+# Test scenarios for azure-search-documents-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Client Setup
+  - name: basic_client_setup
+    prompt: |
+      Create a basic Azure AI Search client using SearchClient with proper
+      authentication. Include connecting to an existing search index and
+      executing a simple search query.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "SearchClient"
+      - "from azure.search.documents import SearchClient"
+    forbidden_patterns:
+      - "from openai"
+    tags:
+      - basic
+      - authentication
+      - client-setup
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.search.documents import SearchClient
+      
+      endpoint = os.environ["SEARCH_ENDPOINT"]
+      index_name = os.environ["SEARCH_INDEX_NAME"]
+      
+      client = SearchClient(
+          endpoint=endpoint,
+          index_name=index_name,
+          credential=DefaultAzureCredential(),
+      )
+      
+      results = client.search(search_text="python programming")
+      
+      for result in results:
+          print(f"Score: {result['@search.score']}")
+          print(f"Title: {result['title']}")
+
+  # Vector Search
+  - name: vector_search_basic
+    prompt: |
+      Create a vector search example using Azure AI Search.
+      Generate embeddings for a query and search using VectorizedQuery.
+      Include proper vector configuration and search parameters.
+    expected_patterns:
+      - "VectorizedQuery"
+      - "vector="
+      - "k_nearest_neighbors="
+      - "fields="
+    forbidden_patterns: []
+    tags:
+      - vector-search
+      - search
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.search.documents import SearchClient
+      from azure.search.documents.models import VectorizedQuery
+      
+      endpoint = os.environ["SEARCH_ENDPOINT"]
+      index_name = os.environ["SEARCH_INDEX_NAME"]
+      
+      client = SearchClient(
+          endpoint=endpoint,
+          index_name=index_name,
+          credential=DefaultAzureCredential(),
+      )
+      
+      # Assume you have embeddings from Azure OpenAI or similar
+      query_embedding = [0.1, 0.2, 0.3, 0.4]  # Your vector
+      
+      search_query = VectorizedQuery(
+          vector=query_embedding,
+          k_nearest_neighbors=5,
+          fields="content_vector"
+      )
+      
+      results = client.search(
+          search_text=None,
+          vector_queries=[search_query],
+      )
+      
+      for result in results:
+          print(f"Score: {result['@search.score']}")
+          print(result)
+
+  # Hybrid Search (Keyword + Vector)
+  - name: hybrid_search
+    prompt: |
+      Create a hybrid search that combines keyword search with vector search.
+      Include both text search and vector queries.
+      Demonstrate how to rank results across both modalities.
+    expected_patterns:
+      - "VectorizedQuery"
+      - "search_text="
+      - "vector_queries="
+      - "client.search"
+    forbidden_patterns: []
+    tags:
+      - hybrid-search
+      - search
+      - advanced
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.search.documents import SearchClient
+      from azure.search.documents.models import VectorizedQuery
+      
+      endpoint = os.environ["SEARCH_ENDPOINT"]
+      index_name = os.environ["SEARCH_INDEX_NAME"]
+      
+      client = SearchClient(
+          endpoint=endpoint,
+          index_name=index_name,
+          credential=DefaultAzureCredential(),
+      )
+      
+      query_embedding = [0.1, 0.2, 0.3, 0.4]  # Your vector
+      
+      vector_query = VectorizedQuery(
+          vector=query_embedding,
+          k_nearest_neighbors=5,
+          fields="content_vector"
+      )
+      
+      results = client.search(
+          search_text="machine learning",
+          vector_queries=[vector_query],
+          top=10,
+      )
+      
+      for result in results:
+          print(f"Score: {result['@search.score']}")
+
+  # Semantic Ranking
+  - name: semantic_ranking
+    prompt: |
+      Create a search that uses semantic ranking to rerank results.
+      Include QueryType.SEMANTIC, semantic_configuration_name, and captions.
+      Show how to extract reranked captions from results.
+    expected_patterns:
+      - "QueryType.SEMANTIC"
+      - "query_type="
+      - "semantic_configuration_name="
+    forbidden_patterns:
+      - "semantic_search=True"
+    tags:
+      - semantic-ranking
+      - search
+      - advanced
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.search.documents import SearchClient
+      from azure.search.documents.models import (
+          QueryType,
+          QueryCaptionType,
+      )
+      
+      endpoint = os.environ["SEARCH_ENDPOINT"]
+      index_name = os.environ["SEARCH_INDEX_NAME"]
+      
+      client = SearchClient(
+          endpoint=endpoint,
+          index_name=index_name,
+          credential=DefaultAzureCredential(),
+      )
+      
+      results = client.search(
+          search_text="what is artificial intelligence",
+          query_type=QueryType.SEMANTIC,
+          semantic_configuration_name="default",
+          query_caption=QueryCaptionType.EXTRACTIVE,
+          top=5,
+      )
+      
+      for result in results:
+          print(f"Score: {result['@search.score']}")
+
+  # Index Creation with Vector Configuration
+  - name: index_creation_vector
+    prompt: |
+      Create a new search index with vector search configuration.
+      Define fields with SearchFieldDataType, add HNSW algorithm configuration.
+      Include vector search profiles and semantic configuration.
+    expected_patterns:
+      - "SearchIndex"
+      - "SearchField"
+      - "SearchFieldDataType"
+      - "HnswAlgorithmConfiguration"
+      - "VectorSearch"
+    forbidden_patterns:
+      - "from openai import"
+    tags:
+      - index-creation
+      - advanced
+      - infrastructure
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.search.documents.indexes import SearchIndexClient
+      from azure.search.documents.indexes.models import (
+          SearchIndex,
+          SearchField,
+          SearchFieldDataType,
+          SimpleField,
+          SearchableField,
+          VectorSearch,
+          HnswAlgorithmConfiguration,
+          VectorSearchProfile,
+      )
+      
+      endpoint = os.environ["SEARCH_ENDPOINT"]
+      
+      client = SearchIndexClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+      
+      fields = [
+          SimpleField(name="id", type=SearchFieldDataType.String, key=True),
+          SearchableField(name="title", type=SearchFieldDataType.String),
+          SearchField(
+              name="content_vector",
+              type=SearchFieldDataType.Collection(SearchFieldDataType.Single),
+              searchable=True,
+              vector_search_dimensions=4,
+              vector_search_profile_name="myHnsw",
+          ),
+      ]
+      
+      vector_search_config = VectorSearch(
+          algorithms=[
+              HnswAlgorithmConfiguration(name="myHnsw")
+          ],
+          profiles=[
+              VectorSearchProfile(
+                  name="myHnsw",
+                  algorithm_configuration_name="myHnsw",
+              )
+          ],
+      )
+      
+      index = SearchIndex(
+          name="my-index",
+          fields=fields,
+          vector_search=vector_search_config,
+      )
+      
+      client.create_index(index)
+
+  # Document Upload and Indexing
+  - name: document_upload
+    prompt: |
+      Create code that uploads and indexes documents using upload_documents.
+      Include batch operations and proper document structure.
+      Show how to use merge_or_upload_documents for idempotent operations.
+    expected_patterns:
+      - "upload_documents"
+      - "merge_or_upload_documents"
+    forbidden_patterns:
+      - "insert_or_update"  # Not the correct method name
+    tags:
+      - document-operations
+      - indexing
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.search.documents import SearchClient
+      
+      endpoint = os.environ["SEARCH_ENDPOINT"]
+      index_name = os.environ["SEARCH_INDEX_NAME"]
+      
+      client = SearchClient(
+          endpoint=endpoint,
+          index_name=index_name,
+          credential=DefaultAzureCredential(),
+      )
+      
+      documents = [
+          {
+              "id": "1",
+              "title": "Machine Learning Basics",
+              "content": "Introduction to ML...",
+          },
+          {
+              "id": "2",
+              "title": "Python Programming",
+              "content": "Learn Python...",
+          },
+      ]
+      
+      results = client.upload_documents(documents=documents)
+      
+      for result in results:
+          print(f"Document {result.key}: succeeded={result.succeeded}")
+      
+      # For idempotent operations, use merge_or_upload_documents
+      updated_docs = [
+          {
+              "id": "1",
+              "title": "Updated ML Basics",
+              "content": "Updated introduction...",
+          }
+      ]
+      
+      client.merge_or_upload_documents(updated_docs)
+
+  # Filtered Search with Facets
+  - name: filtered_search_facets
+    prompt: |
+      Create a search with OData filter expressions and faceted search.
+      Include order_by, filter syntax with comparison operators.
+      Show how to request and process facets from results.
+    expected_patterns:
+      - "filter="
+      - "facets="
+      - "order_by="
+    forbidden_patterns:
+      - "sql_where"
+    tags:
+      - search
+      - filtering
+      - facets
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.search.documents import SearchClient
+      
+      endpoint = os.environ["SEARCH_ENDPOINT"]
+      index_name = os.environ["SEARCH_INDEX_NAME"]
+      
+      client = SearchClient(
+          endpoint=endpoint,
+          index_name=index_name,
+          credential=DefaultAzureCredential(),
+      )
+      
+      results = client.search(
+          search_text="python",
+          filter="category eq 'programming' or difficulty lt 5",
+          facets=["category", "difficulty"],
+          order_by=["rating desc"],
+          top=10,
+      )
+      
+      for result in results:
+          print(f"Score: {result['@search.score']}")
+          print(f"Title: {result['title']}")
+      
+      if results.get_facets():
+          facets = results.get_facets()
+          print(f"Category facets: {facets.get('category', [])}")
+
+  # Indexer and Skillset (Data Source)
+  - name: indexer_with_skillset
+    prompt: |
+      Create a search indexer with a skillset for data enrichment.
+      Include SearchIndexer, SearchIndexerDataSourceConnection, and built-in skills.
+      Show configuration for data source (Blob Storage or similar).
+    expected_patterns:
+      - "SearchIndexer"
+      - "SearchIndexerClient"
+      - "SearchIndexerDataSourceConnection"
+    forbidden_patterns:
+      - "DeleteOrphanedResources"
+    tags:
+      - indexer
+      - skillset
+      - infrastructure
+      - advanced
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.search.documents.indexes import SearchIndexerClient
+      from azure.search.documents.indexes.models import (
+          SearchIndexer,
+          SearchIndexerDataSourceConnection,
+          BlobContainerDataSource,
+          IndexingSchedule,
+          InputFieldMappingEntry,
+          OutputFieldMappingEntry,
+      )
+      
+      endpoint = os.environ["SEARCH_ENDPOINT"]
+      storage_connection_string = os.environ["STORAGE_CONNECTION_STRING"]
+      
+      client = SearchIndexerClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+      
+      data_source = SearchIndexerDataSourceConnection(
+          name="my-data-source",
+          type="azureblob",
+          connection_string=storage_connection_string,
+          container=BlobContainerDataSource(name="documents"),
+      )
+      
+      indexer = SearchIndexer(
+          name="my-indexer",
+          data_source_name="my-data-source",
+          target_index_name="my-index",
+          schedule=IndexingSchedule(interval="PT24H"),
+          field_mappings=[
+              InputFieldMappingEntry(source_field_name="metadata_storage_path")
+          ],
+      )
+      
+      client.create_indexer(indexer)
+
+  # Async Client Usage
+  - name: async_client_usage
+    prompt: |
+      Create async versions of search operations using SearchClient from
+      azure.search.documents.aio. Include async context managers and await calls.
+    expected_patterns:
+      - "from azure.search.documents.aio import SearchClient"
+      - "async with"
+      - "await"
+    forbidden_patterns: []
+    tags:
+      - async
+      - advanced
+    mock_response: |
+      import os
+      import asyncio
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.search.documents.aio import SearchClient
+      
+      async def search_async():
+          endpoint = os.environ["SEARCH_ENDPOINT"]
+          index_name = os.environ["SEARCH_INDEX_NAME"]
+          
+          credential = DefaultAzureCredential()
+          
+          async with SearchClient(
+              endpoint=endpoint,
+              index_name=index_name,
+              credential=credential,
+          ) as client:
+              results = await client.search(search_text="python")
+              
+              async for result in results:
+                  print(f"Score: {result['@search.score']}")
+                  print(f"Title: {result['title']}")
+      
+      asyncio.run(search_async())
+
+  # Error Handling with ResourceNotFoundError
+  - name: error_handling
+    prompt: |
+      Create code that handles Azure Search errors properly.
+      Include ResourceNotFoundError for missing indexes and HttpResponseError.
+      Show proper exception handling patterns.
+    expected_patterns:
+      - "try:"
+      - "except"
+      - "ResourceNotFoundError"
+      - "HttpResponseError"
+    forbidden_patterns:
+      - "except Exception:"  # Be specific about exceptions
+    tags:
+      - error-handling
+      - production
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.search.documents import SearchClient
+      from azure.core.exceptions import ResourceNotFoundError, HttpResponseError
+      
+      endpoint = os.environ["SEARCH_ENDPOINT"]
+      index_name = os.environ["SEARCH_INDEX_NAME"]
+      
+      client = SearchClient(
+          endpoint=endpoint,
+          index_name=index_name,
+          credential=DefaultAzureCredential(),
+      )
+      
+      try:
+          results = client.search(search_text="python")
+          for result in results:
+              print(result)
+      except ResourceNotFoundError:
+          print(f"Index '{index_name}' not found")
+      except HttpResponseError as e:
+          print(f"Search error: {e.status_code} - {e.message}")

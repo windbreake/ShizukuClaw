@@ -1,0 +1,539 @@
+# yaml-language-server: $schema=file:///Users/govindm4max/code/oss/agent-skills/tests/scenarios/skill-scenarios.schema.json
+# Test scenarios for azure-appconfiguration-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Client Setup
+  - name: basic_client_setup
+    prompt: |
+      Create a basic Azure App Configuration client using AppConfigurationClient
+      with proper authentication using DefaultAzureCredential. Show setting and
+      getting a configuration value.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "AppConfigurationClient"
+      - 'import { AppConfigurationClient } from "@azure/app-configuration"'
+      - "process.env"
+    forbidden_patterns:
+      - "require("
+      - "new ConfigurationClient"
+    tags:
+      - basic
+      - authentication
+      - client-setup
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { AppConfigurationClient } from "@azure/app-configuration";
+
+      const credential = new DefaultAzureCredential();
+      const endpoint = process.env.APPCONFIG_ENDPOINT!;
+
+      const client = new AppConfigurationClient(endpoint, credential);
+
+      // Set a configuration setting
+      await client.setConfigurationSetting({
+        key: "testkey",
+        value: "testvalue",
+        label: "optional-label",
+      });
+
+      // Get the configuration setting
+      const setting = await client.getConfigurationSetting({
+        key: "testkey",
+        label: "optional-label",
+      });
+
+      console.log("Retrieved value:", setting.value);
+
+  # Connection String Authentication
+  - name: connection_string_auth
+    prompt: |
+      Create an Azure App Configuration client using a connection string.
+      Show how to securely load the connection string from environment variables.
+    expected_patterns:
+      - "AppConfigurationClient"
+      - "connectionString"
+      - "process.env"
+    forbidden_patterns:
+      - "Endpoint=https://.*Secret="
+    tags:
+      - authentication
+      - connection-string
+    mock_response: |
+      import { AppConfigurationClient } from "@azure/app-configuration";
+
+      // Load connection string from environment variable
+      const connectionString = process.env.APPCONFIG_CONNECTION_STRING!;
+
+      if (!connectionString) {
+        throw new Error("APPCONFIG_CONNECTION_STRING environment variable is required");
+      }
+
+      const client = new AppConfigurationClient(connectionString);
+
+      // Now you can use the client
+      const setting = await client.getConfigurationSetting({
+        key: "myapp/database/host",
+      });
+
+      console.log("Database host:", setting.value);
+
+  # Set Configuration with Options
+  - name: set_configuration_with_options
+    prompt: |
+      Set a configuration setting with all available options including
+      label, content type, and tags. Show the difference between
+      setConfigurationSetting and addConfigurationSetting.
+    expected_patterns:
+      - "setConfigurationSetting"
+      - "addConfigurationSetting"
+      - "contentType"
+      - "tags"
+      - "label"
+    forbidden_patterns:
+      - "createSetting"
+    tags:
+      - settings
+      - create
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { AppConfigurationClient } from "@azure/app-configuration";
+
+      const credential = new DefaultAzureCredential();
+      const endpoint = process.env.APPCONFIG_ENDPOINT!;
+      const client = new AppConfigurationClient(endpoint, credential);
+
+      // setConfigurationSetting - creates or updates
+      const setting = await client.setConfigurationSetting({
+        key: "database/connectionString",
+        value: "Server=localhost;Database=mydb",
+        label: "production",
+        contentType: "text/plain",
+        tags: {
+          environment: "prod",
+          application: "myapp",
+        },
+      });
+
+      console.log("Setting created/updated:", setting.key);
+
+      // addConfigurationSetting - creates only (fails if exists)
+      try {
+        const newSetting = await client.addConfigurationSetting({
+          key: "new-setting",
+          value: "new-value",
+          label: "development",
+        });
+        console.log("New setting created:", newSetting.key);
+      } catch (error: any) {
+        if (error.statusCode === 412) {
+          console.log("Setting already exists");
+        } else {
+          throw error;
+        }
+      }
+
+  # List Configuration Settings
+  - name: list_configuration_settings
+    prompt: |
+      List configuration settings with filters. Show both flat iteration
+      and paginated iteration patterns. Include key and label filters.
+    expected_patterns:
+      - "listConfigurationSettings"
+      - "keyFilter"
+      - "labelFilter"
+      - "for await"
+      - "byPage"
+    forbidden_patterns:
+      - "listSettings"
+      - ".then("
+    tags:
+      - settings
+      - list
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { AppConfigurationClient } from "@azure/app-configuration";
+
+      const credential = new DefaultAzureCredential();
+      const endpoint = process.env.APPCONFIG_ENDPOINT!;
+      const client = new AppConfigurationClient(endpoint, credential);
+
+      // List with filters - flat iteration
+      console.log("All settings starting with 'app/':");
+      for await (const setting of client.listConfigurationSettings({
+        keyFilter: "app/*",
+        labelFilter: "production",
+      })) {
+        console.log(`  ${setting.key} = ${setting.value}`);
+      }
+
+      // Paginated iteration
+      console.log("Settings by page:");
+      for await (const page of client.listConfigurationSettings().byPage()) {
+        console.log(`Page with ${page.items.length} items`);
+        for (const setting of page.items) {
+          console.log(`  ${setting.key}`);
+        }
+      }
+
+  # Read-Only Settings
+  - name: readonly_settings
+    prompt: |
+      Demonstrate locking and unlocking configuration settings using setReadOnly.
+      Show how to make a setting read-only and how to remove the lock.
+    expected_patterns:
+      - "setReadOnly"
+      - "true"
+      - "false"
+    forbidden_patterns:
+      - ".lock("
+      - ".unlock("
+    tags:
+      - settings
+      - readonly
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { AppConfigurationClient } from "@azure/app-configuration";
+
+      const credential = new DefaultAzureCredential();
+      const endpoint = process.env.APPCONFIG_ENDPOINT!;
+      const client = new AppConfigurationClient(endpoint, credential);
+
+      // Get a setting
+      const setting = await client.getConfigurationSetting({
+        key: "production/database/host",
+      });
+
+      // Lock the setting (make it read-only)
+      await client.setReadOnly(setting, true);
+      console.log("Setting is now read-only");
+
+      // Try to modify it (this will fail)
+      try {
+        await client.setConfigurationSetting({
+          ...setting,
+          value: "new-host.example.com",
+        });
+      } catch (error: any) {
+        console.log("Cannot modify read-only setting:", error.message);
+      }
+
+      // Unlock the setting
+      await client.setReadOnly(setting, false);
+      console.log("Setting is now writable");
+
+      // Now modification works
+      await client.setConfigurationSetting({
+        ...setting,
+        value: "new-host.example.com",
+      });
+      console.log("Setting updated successfully");
+
+  # Snapshots
+  - name: create_and_use_snapshots
+    prompt: |
+      Create a configuration snapshot, wait for it to complete, and list
+      settings from the snapshot. Show how to archive and recover snapshots.
+    expected_patterns:
+      - "beginCreateSnapshot"
+      - "pollUntilDone"
+      - "listConfigurationSettingsForSnapshot"
+      - "archiveSnapshot"
+      - "recoverSnapshot"
+    forbidden_patterns:
+      - "createSnapshot("
+    tags:
+      - snapshots
+      - advanced
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { AppConfigurationClient } from "@azure/app-configuration";
+
+      const credential = new DefaultAzureCredential();
+      const endpoint = process.env.APPCONFIG_ENDPOINT!;
+      const client = new AppConfigurationClient(endpoint, credential);
+
+      // Create a snapshot using poller
+      const poller = await client.beginCreateSnapshot({
+        name: "release-v1.0",
+        retentionPeriod: 2592000, // 30 days in seconds
+        filters: [
+          { keyFilter: "app/*", labelFilter: "production" },
+        ],
+      });
+
+      const snapshot = await poller.pollUntilDone();
+      console.log("Snapshot created:", snapshot.name, "Status:", snapshot.status);
+
+      // Or use the convenience method
+      // const snapshot = await client.beginCreateSnapshotAndWait({...});
+
+      // Get snapshot info
+      const retrievedSnapshot = await client.getSnapshot("release-v1.0");
+      console.log("Snapshot items:", retrievedSnapshot.itemCount);
+
+      // List settings in the snapshot
+      console.log("Snapshot contents:");
+      for await (const setting of client.listConfigurationSettingsForSnapshot("release-v1.0")) {
+        console.log(`  ${setting.key}: ${setting.value}`);
+      }
+
+      // Archive the snapshot
+      const archived = await client.archiveSnapshot("release-v1.0");
+      console.log("Snapshot archived, status:", archived.status);
+
+      // Recover the snapshot
+      const recovered = await client.recoverSnapshot("release-v1.0");
+      console.log("Snapshot recovered, status:", recovered.status);
+
+  # Feature Flags
+  - name: feature_flags
+    prompt: |
+      Create and manage feature flags in Azure App Configuration.
+      Show the proper content type and value format for feature flags.
+    expected_patterns:
+      - "featureFlagPrefix"
+      - "featureFlagContentType"
+      - "setConfigurationSetting"
+      - "enabled"
+    forbidden_patterns:
+      - "feature-flag-"
+    tags:
+      - feature-flags
+      - advanced
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import {
+        AppConfigurationClient,
+        featureFlagPrefix,
+        featureFlagContentType,
+      } from "@azure/app-configuration";
+
+      const credential = new DefaultAzureCredential();
+      const endpoint = process.env.APPCONFIG_ENDPOINT!;
+      const client = new AppConfigurationClient(endpoint, credential);
+
+      // Create a simple feature flag
+      const simpleFlag = await client.setConfigurationSetting({
+        key: `${featureFlagPrefix}dark-mode`,
+        value: JSON.stringify({
+          id: "dark-mode",
+          enabled: true,
+          conditions: {
+            client_filters: [],
+          },
+        }),
+        contentType: featureFlagContentType,
+      });
+
+      console.log("Feature flag created:", simpleFlag.key);
+
+      // Create a feature flag with targeting filter
+      const targetedFlag = await client.setConfigurationSetting({
+        key: `${featureFlagPrefix}beta-feature`,
+        value: JSON.stringify({
+          id: "beta-feature",
+          enabled: true,
+          conditions: {
+            client_filters: [
+              {
+                name: "Microsoft.Targeting",
+                parameters: {
+                  Audience: {
+                    Users: ["user@example.com"],
+                    Groups: [{ Name: "beta-testers", RolloutPercentage: 100 }],
+                    DefaultRolloutPercentage: 0,
+                  },
+                },
+              },
+            ],
+          },
+        }),
+        contentType: featureFlagContentType,
+        label: "production",
+      });
+
+      console.log("Targeted feature flag created:", targetedFlag.key);
+
+  # Secret References
+  - name: secret_references
+    prompt: |
+      Create Key Vault secret references in Azure App Configuration.
+      Show how to store a reference to a Key Vault secret properly.
+    expected_patterns:
+      - "secretReferenceContentType"
+      - "setConfigurationSetting"
+      - "uri"
+      - "vault.azure.net"
+    forbidden_patterns:
+      - "secretValue"
+    tags:
+      - secrets
+      - key-vault
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import {
+        AppConfigurationClient,
+        secretReferenceContentType,
+      } from "@azure/app-configuration";
+
+      const credential = new DefaultAzureCredential();
+      const endpoint = process.env.APPCONFIG_ENDPOINT!;
+      const client = new AppConfigurationClient(endpoint, credential);
+
+      // Create a Key Vault secret reference
+      const secretRef = await client.setConfigurationSetting({
+        key: "database/password",
+        value: JSON.stringify({
+          uri: "https://myvault.vault.azure.net/secrets/db-password",
+        }),
+        contentType: secretReferenceContentType,
+        label: "production",
+      });
+
+      console.log("Secret reference created:", secretRef.key);
+
+      // To resolve the actual secret, you would use KeyVault SDK
+      // This is just storing the reference, not the actual secret value
+
+  # Optimistic Concurrency
+  - name: optimistic_concurrency
+    prompt: |
+      Demonstrate optimistic concurrency using ETags. Show how to update
+      a setting only if it hasn't been modified by another process.
+    expected_patterns:
+      - "onlyIfUnchanged"
+      - "etag"
+      - "412"
+    forbidden_patterns:
+      - "force"
+    tags:
+      - concurrency
+      - advanced
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { AppConfigurationClient } from "@azure/app-configuration";
+      import { RestError } from "@azure/core-rest-pipeline";
+
+      const credential = new DefaultAzureCredential();
+      const endpoint = process.env.APPCONFIG_ENDPOINT!;
+      const client = new AppConfigurationClient(endpoint, credential);
+
+      // Get the current setting (includes etag)
+      const setting = await client.getConfigurationSetting({
+        key: "shared/config",
+      });
+
+      console.log("Current value:", setting.value);
+      console.log("ETag:", setting.etag);
+
+      // Modify the value
+      setting.value = "updated value";
+
+      // Update only if not changed since we read it
+      try {
+        const updated = await client.setConfigurationSetting(setting, {
+          onlyIfUnchanged: true,
+        });
+        console.log("Setting updated successfully");
+      } catch (error) {
+        if (error instanceof RestError && error.statusCode === 412) {
+          console.log("Conflict: Setting was modified by another process");
+          // Re-read and retry, or merge changes
+        } else {
+          throw error;
+        }
+      }
+
+  # List Revisions
+  - name: list_revisions
+    prompt: |
+      List the revision history of a configuration setting.
+      Show how to see previous values and when they were set.
+    expected_patterns:
+      - "listRevisions"
+      - "keyFilter"
+      - "for await"
+      - "lastModified"
+    forbidden_patterns:
+      - "getHistory"
+    tags:
+      - revisions
+      - history
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { AppConfigurationClient } from "@azure/app-configuration";
+
+      const credential = new DefaultAzureCredential();
+      const endpoint = process.env.APPCONFIG_ENDPOINT!;
+      const client = new AppConfigurationClient(endpoint, credential);
+
+      // List all revisions of a specific key
+      console.log("Revision history for 'app/config':");
+      for await (const revision of client.listRevisions({
+        keyFilter: "app/config",
+      })) {
+        console.log(`  Value: ${revision.value}`);
+        console.log(`  Modified: ${revision.lastModified}`);
+        console.log(`  ETag: ${revision.etag}`);
+        console.log("---");
+      }
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Demonstrate proper error handling when working with Azure App Configuration.
+      Include handling setting not found and other common errors.
+    expected_patterns:
+      - "try"
+      - "catch"
+      - "RestError"
+      - "statusCode"
+      - "404"
+    forbidden_patterns:
+      - "catch {}"
+      - "catch.*pass"
+    tags:
+      - error-handling
+      - production
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { AppConfigurationClient } from "@azure/app-configuration";
+      import { RestError } from "@azure/core-rest-pipeline";
+
+      const credential = new DefaultAzureCredential();
+      const endpoint = process.env.APPCONFIG_ENDPOINT!;
+      const client = new AppConfigurationClient(endpoint, credential);
+
+      try {
+        const setting = await client.getConfigurationSetting({
+          key: "nonexistent-key",
+        });
+        console.log("Setting found:", setting.value);
+      } catch (error) {
+        if (error instanceof RestError) {
+          switch (error.statusCode) {
+            case 404:
+              console.log("Setting not found");
+              break;
+            case 403:
+              console.log("Access denied - check permissions");
+              break;
+            case 412:
+              console.log("Precondition failed - etag mismatch");
+              break;
+            case 429:
+              console.log("Rate limited - retry after delay");
+              break;
+            default:
+              console.log(`Azure error: ${error.statusCode} - ${error.message}`);
+          }
+        } else {
+          throw error;
+        }
+      }

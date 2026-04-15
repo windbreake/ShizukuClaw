@@ -1,0 +1,614 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+# Test scenarios for azure-storage-blob-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: blob_service_client_aad_auth
+    prompt: |
+      Create a BlobServiceClient in TypeScript using DefaultAzureCredential
+      for AAD authentication. Use environment variable for the account name.
+    expected_patterns:
+      - "import { BlobServiceClient } from \"@azure/storage-blob\""
+      - "import { DefaultAzureCredential } from \"@azure/identity\""
+      - "new BlobServiceClient"
+      - "new DefaultAzureCredential()"
+      - "process.env"
+    forbidden_patterns:
+      - "require("
+      - "fromConnectionString"
+      - "StorageSharedKeyCredential"
+    tags:
+      - authentication
+      - aad
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+  - name: create_container
+    prompt: |
+      Create a container in Azure Blob Storage using TypeScript.
+      Use createIfNotExists for idempotent creation.
+    expected_patterns:
+      - "getContainerClient"
+      - "createIfNotExists"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - container
+      - create
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+      const response = await containerClient.createIfNotExists();
+
+      if (response.succeeded) {
+        console.log("Container created successfully");
+      } else {
+        console.log("Container already exists");
+      }
+
+  - name: upload_blob_from_file
+    prompt: |
+      Upload a local file to Azure Blob Storage in TypeScript.
+      Use BlockBlobClient and uploadFile method.
+    expected_patterns:
+      - "getBlockBlobClient"
+      - "uploadFile"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - upload
+      - file
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+      const blockBlobClient = containerClient.getBlockBlobClient("uploaded-document.pdf");
+
+      await blockBlobClient.uploadFile("/path/to/local/document.pdf", {
+        blobHTTPHeaders: {
+          blobContentType: "application/pdf",
+        },
+      });
+
+      console.log("File uploaded successfully");
+
+  - name: upload_blob_from_buffer
+    prompt: |
+      Upload a Buffer to Azure Blob Storage in TypeScript.
+      Use uploadData method which works in both Node.js and browsers.
+    expected_patterns:
+      - "getBlockBlobClient"
+      - "uploadData"
+      - "Buffer"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - upload
+      - buffer
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+      const blockBlobClient = containerClient.getBlockBlobClient("data.txt");
+
+      const content = "Hello, Azure Blob Storage!";
+      const buffer = Buffer.from(content, "utf-8");
+
+      await blockBlobClient.uploadData(buffer, {
+        blobHTTPHeaders: {
+          blobContentType: "text/plain",
+        },
+      });
+
+      console.log("Buffer uploaded successfully");
+
+  - name: upload_blob_stream
+    prompt: |
+      Upload a large file using streams to Azure Blob Storage in TypeScript.
+      Use uploadStream method with progress tracking.
+    expected_patterns:
+      - "uploadStream"
+      - "createReadStream"
+      - "onProgress"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - upload
+      - stream
+    mock_response: |
+      import * as fs from "fs";
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+      const blockBlobClient = containerClient.getBlockBlobClient("large-file.zip");
+
+      const readStream = fs.createReadStream("/path/to/large-file.zip");
+
+      await blockBlobClient.uploadStream(
+        readStream,
+        4 * 1024 * 1024, // 4MB buffer size
+        5,               // 5 concurrent uploads
+        {
+          onProgress: (progress) => {
+            console.log(`Uploaded ${progress.loadedBytes} bytes`);
+          },
+        }
+      );
+
+      console.log("Stream upload completed");
+
+  - name: download_blob_to_buffer
+    prompt: |
+      Download a blob to a Buffer in TypeScript.
+      Use downloadToBuffer method.
+    expected_patterns:
+      - "downloadToBuffer"
+      - "getBlobClient"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - download
+      - buffer
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+      const blobClient = containerClient.getBlobClient("data.txt");
+
+      const buffer = await blobClient.downloadToBuffer();
+      const content = buffer.toString("utf-8");
+      console.log(`Downloaded content: ${content}`);
+
+  - name: download_blob_to_file
+    prompt: |
+      Download a blob directly to a local file in TypeScript.
+      Use downloadToFile method.
+    expected_patterns:
+      - "downloadToFile"
+      - "getBlockBlobClient"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - download
+      - file
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+      const blockBlobClient = containerClient.getBlockBlobClient("document.pdf");
+
+      await blockBlobClient.downloadToFile("/path/to/local/downloaded.pdf");
+      console.log("File downloaded successfully");
+
+  - name: list_blobs
+    prompt: |
+      List blobs in an Azure Blob Storage container in TypeScript.
+      Use async iteration with for-await-of and filter by prefix.
+    expected_patterns:
+      - "listBlobsFlat"
+      - "for await"
+      - "prefix"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - list
+      - blobs
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+
+      // List all blobs
+      console.log("All blobs:");
+      for await (const blob of containerClient.listBlobsFlat()) {
+        console.log(`  ${blob.name} (${blob.properties.contentLength} bytes)`);
+      }
+
+      // List blobs with prefix
+      console.log("\nBlobs in logs/ folder:");
+      for await (const blob of containerClient.listBlobsFlat({ prefix: "logs/" })) {
+        console.log(`  ${blob.name}`);
+      }
+
+  - name: list_blobs_hierarchy
+    prompt: |
+      List blobs by hierarchy (virtual directories) in Azure Blob Storage using TypeScript.
+      Distinguish between prefixes (directories) and blobs.
+    expected_patterns:
+      - "listBlobsByHierarchy"
+      - "kind"
+      - "prefix"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - list
+      - hierarchy
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+
+      console.log("Container structure:");
+      for await (const item of containerClient.listBlobsByHierarchy("/")) {
+        if (item.kind === "prefix") {
+          console.log(`📁 Directory: ${item.name}`);
+        } else {
+          console.log(`📄 Blob: ${item.name} (${item.properties.contentLength} bytes)`);
+        }
+      }
+
+  - name: delete_blob
+    prompt: |
+      Delete a blob from Azure Blob Storage in TypeScript.
+      Use deleteIfExists for idempotent deletion.
+    expected_patterns:
+      - "deleteIfExists"
+      - "getBlobClient"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - delete
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+      const blobClient = containerClient.getBlobClient("old-file.txt");
+
+      const response = await blobClient.deleteIfExists({
+        deleteSnapshots: "include", // Also delete snapshots
+      });
+
+      if (response.succeeded) {
+        console.log("Blob deleted successfully");
+      } else {
+        console.log("Blob did not exist");
+      }
+
+  - name: blob_properties_metadata
+    prompt: |
+      Get blob properties and set custom metadata in Azure Blob Storage using TypeScript.
+    expected_patterns:
+      - "getProperties"
+      - "setMetadata"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - properties
+      - metadata
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+      const blobClient = containerClient.getBlobClient("document.pdf");
+
+      // Get properties
+      const properties = await blobClient.getProperties();
+      console.log("Content-Type:", properties.contentType);
+      console.log("Content-Length:", properties.contentLength);
+      console.log("Last Modified:", properties.lastModified);
+      console.log("ETag:", properties.etag);
+      console.log("Current Metadata:", properties.metadata);
+
+      // Set custom metadata
+      await blobClient.setMetadata({
+        author: "John Doe",
+        department: "Engineering",
+        version: "1.0",
+      });
+
+      console.log("Metadata updated successfully");
+
+  - name: set_http_headers
+    prompt: |
+      Set HTTP headers (content type, cache control, content disposition) on a blob
+      in Azure Blob Storage using TypeScript.
+    expected_patterns:
+      - "setHTTPHeaders"
+      - "blobContentType"
+      - "blobCacheControl"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - headers
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+      const blobClient = containerClient.getBlobClient("report.pdf");
+
+      await blobClient.setHTTPHeaders({
+        blobContentType: "application/pdf",
+        blobCacheControl: "max-age=3600, public",
+        blobContentDisposition: "attachment; filename=\"quarterly-report.pdf\"",
+        blobContentLanguage: "en-US",
+      });
+
+      console.log("HTTP headers set successfully");
+
+  - name: generate_sas_token
+    prompt: |
+      Generate a SAS token for a blob in Azure Blob Storage using TypeScript.
+      Create a read-only SAS that expires in 1 hour.
+    expected_patterns:
+      - "generateBlobSASQueryParameters"
+      - "BlobSASPermissions"
+      - "StorageSharedKeyCredential"
+      - "expiresOn"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - sas
+      - security
+    mock_response: |
+      import {
+        BlobServiceClient,
+        StorageSharedKeyCredential,
+        BlobSASPermissions,
+        generateBlobSASQueryParameters,
+      } from "@azure/storage-blob";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const accountKey = process.env.AZURE_STORAGE_ACCOUNT_KEY!;
+
+      const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
+
+      const sasToken = generateBlobSASQueryParameters(
+        {
+          containerName: "my-container",
+          blobName: "document.pdf",
+          permissions: BlobSASPermissions.parse("r"), // read only
+          startsOn: new Date(),
+          expiresOn: new Date(Date.now() + 3600 * 1000), // 1 hour
+        },
+        sharedKeyCredential
+      ).toString();
+
+      const sasUrl = `https://${accountName}.blob.core.windows.net/my-container/document.pdf?${sasToken}`;
+      console.log("SAS URL:", sasUrl);
+
+  - name: copy_blob
+    prompt: |
+      Copy a blob to a new location within Azure Blob Storage using TypeScript.
+      Use beginCopyFromURL and wait for completion.
+    expected_patterns:
+      - "beginCopyFromURL"
+      - "pollUntilDone"
+      - "url"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - copy
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+      const sourceBlobClient = containerClient.getBlobClient("source/document.pdf");
+      const destBlobClient = containerClient.getBlobClient("backup/document-copy.pdf");
+
+      // Start copy operation
+      const copyPoller = await destBlobClient.beginCopyFromURL(sourceBlobClient.url);
+
+      // Wait for copy to complete
+      const result = await copyPoller.pollUntilDone();
+      console.log(`Copy completed with status: ${result.copyStatus}`);
+
+  - name: error_handling
+    prompt: |
+      Implement proper error handling for Azure Blob Storage operations in TypeScript.
+      Handle common HTTP status codes like 404, 409, and 403.
+    expected_patterns:
+      - "RestError"
+      - "statusCode"
+      - "catch"
+      - "404"
+      - "409"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - error-handling
+    mock_response: |
+      import { BlobServiceClient, RestError } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("my-container");
+
+      try {
+        await containerClient.create();
+        console.log("Container created successfully");
+      } catch (error) {
+        if (error instanceof RestError) {
+          switch (error.statusCode) {
+            case 404:
+              console.error("Storage account or resource not found");
+              break;
+            case 409:
+              console.log("Container already exists - continuing");
+              break;
+            case 403:
+              console.error("Access denied - check permissions");
+              break;
+            case 401:
+              console.error("Unauthorized - check credentials");
+              break;
+            default:
+              console.error(`Storage error ${error.statusCode}: ${error.message}`);
+          }
+        } else {
+          throw error;
+        }
+      }
+
+  - name: append_blob
+    prompt: |
+      Create and append data to an Append Blob in Azure Blob Storage using TypeScript.
+      Use for log files or append-only data.
+    expected_patterns:
+      - "getAppendBlobClient"
+      - "create"
+      - "appendBlock"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - append-blob
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      const containerClient = client.getContainerClient("logs");
+      const appendBlobClient = containerClient.getAppendBlobClient("app.log");
+
+      // Create the append blob (only once)
+      await appendBlobClient.createIfNotExists();
+
+      // Append log entries
+      const logEntry1 = `[${new Date().toISOString()}] INFO: Application started\n`;
+      await appendBlobClient.appendBlock(logEntry1, Buffer.byteLength(logEntry1));
+
+      const logEntry2 = `[${new Date().toISOString()}] INFO: Processing request\n`;
+      await appendBlobClient.appendBlock(logEntry2, Buffer.byteLength(logEntry2));
+
+      console.log("Log entries appended successfully");
+
+  - name: list_containers
+    prompt: |
+      List all containers in an Azure Blob Storage account using TypeScript.
+      Use async iteration and show container properties.
+    expected_patterns:
+      - "listContainers"
+      - "for await"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - list
+      - containers
+    mock_response: |
+      import { BlobServiceClient } from "@azure/storage-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      console.log("Containers in storage account:");
+      for await (const container of client.listContainers()) {
+        console.log(`  ${container.name}`);
+        console.log(`    Last Modified: ${container.properties.lastModified}`);
+        console.log(`    Public Access: ${container.properties.publicAccess ?? "none"}`);
+      }
+
+      // List with prefix filter
+      console.log("\nContainers starting with 'logs-':");
+      for await (const container of client.listContainers({ prefix: "logs-" })) {
+        console.log(`  ${container.name}`);
+      }

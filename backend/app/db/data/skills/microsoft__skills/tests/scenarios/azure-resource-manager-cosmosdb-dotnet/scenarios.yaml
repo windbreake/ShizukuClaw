@@ -1,0 +1,375 @@
+# Test scenarios for azure-resource-manager-cosmosdb-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # ArmClient Setup
+  - name: armclient_setup
+    prompt: |
+      Create an ArmClient setup with DefaultAzureCredential for Azure Resource Manager
+      operations on Cosmos DB accounts. Get the subscription resource.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "ArmClient"
+      - "GetSubscriptionResource"
+      - "ResourceIdentifier"
+    forbidden_patterns:
+      - "ClientSecretCredential"
+      - "hardcoded"
+      - "key="
+    tags:
+      - authentication
+      - setup
+    mock_response: |
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.CosmosDB;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID");
+      var subscription = armClient.GetSubscriptionResource(
+          new ResourceIdentifier($"/subscriptions/{subscriptionId}"));
+
+  # Create Cosmos DB Account
+  - name: create_cosmos_account
+    prompt: |
+      Create a Cosmos DB account with zone redundancy in East US region using
+      the SQL API with Session consistency. Enable automatic failover.
+    expected_patterns:
+      - "CosmosDBAccountCreateOrUpdateContent"
+      - "CosmosDBAccountLocation"
+      - "IsZoneRedundant"
+      - "DefaultConsistencyLevel.Session"
+      - "EnableAutomaticFailover"
+      - "WaitUntil.Completed"
+      - "CreateOrUpdateAsync"
+    forbidden_patterns:
+      - "WaitUntil.Started"  # Should wait for completion
+      - "Microsoft.Azure.Cosmos"  # Data plane SDK
+    tags:
+      - account
+      - crud
+    mock_response: |
+      using Azure.ResourceManager.CosmosDB;
+      using Azure.ResourceManager.CosmosDB.Models;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      var accountData = new CosmosDBAccountCreateOrUpdateContent(
+          location: AzureLocation.EastUS,
+          locations: new[]
+          {
+              new CosmosDBAccountLocation
+              {
+                  LocationName = AzureLocation.EastUS,
+                  FailoverPriority = 0,
+                  IsZoneRedundant = true
+              }
+          })
+      {
+          Kind = CosmosDBAccountKind.GlobalDocumentDB,
+          ConsistencyPolicy = new ConsistencyPolicy(DefaultConsistencyLevel.Session),
+          EnableAutomaticFailover = true
+      };
+
+      var accountCollection = resourceGroup.Value.GetCosmosDBAccounts();
+      var operation = await accountCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-cosmos-account",
+          accountData);
+
+      CosmosDBAccountResource account = operation.Value;
+      Console.WriteLine($"Account created: {account.Data.Name}");
+
+  # Create SQL Database
+  - name: create_sql_database
+    prompt: |
+      Create a SQL database in an existing Cosmos DB account using the ARM SDK.
+    expected_patterns:
+      - "CosmosDBSqlDatabaseCreateOrUpdateContent"
+      - "CosmosDBSqlDatabaseResourceInfo"
+      - "GetCosmosDBSqlDatabases"
+      - "CreateOrUpdateAsync"
+      - "WaitUntil.Completed"
+    forbidden_patterns:
+      - "CosmosClient"  # Data plane SDK
+    tags:
+      - database
+      - crud
+    mock_response: |
+      using Azure.ResourceManager.CosmosDB;
+      using Azure.ResourceManager.CosmosDB.Models;
+
+      var account = await resourceGroup.Value.GetCosmosDBAccountAsync("my-cosmos-account");
+
+      var databaseData = new CosmosDBSqlDatabaseCreateOrUpdateContent(
+          new CosmosDBSqlDatabaseResourceInfo("my-database"));
+
+      var databaseCollection = account.Value.GetCosmosDBSqlDatabases();
+      var dbOperation = await databaseCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-database",
+          databaseData);
+
+      CosmosDBSqlDatabaseResource database = dbOperation.Value;
+      Console.WriteLine($"Database created: {database.Data.Name}");
+
+  # Create SQL Container
+  - name: create_sql_container
+    prompt: |
+      Create a SQL container with a partition key on /tenantId, automatic indexing,
+      and a 24-hour TTL using the Azure Resource Manager SDK.
+    expected_patterns:
+      - "CosmosDBSqlContainerCreateOrUpdateContent"
+      - "CosmosDBSqlContainerResourceInfo"
+      - "PartitionKey"
+      - "CosmosDBPartitionKind.Hash"
+      - "IndexingPolicy"
+      - "DefaultTtl"
+      - "GetCosmosDBSqlContainers"
+    forbidden_patterns:
+      - "ContainerProperties"  # Data plane SDK type
+    tags:
+      - container
+      - crud
+    mock_response: |
+      using Azure.ResourceManager.CosmosDB;
+      using Azure.ResourceManager.CosmosDB.Models;
+
+      var database = await account.Value.GetCosmosDBSqlDatabases().GetAsync("my-database");
+
+      var containerData = new CosmosDBSqlContainerCreateOrUpdateContent(
+          new CosmosDBSqlContainerResourceInfo("my-container")
+          {
+              PartitionKey = new CosmosDBContainerPartitionKey
+              {
+                  Paths = { "/tenantId" },
+                  Kind = CosmosDBPartitionKind.Hash
+              },
+              IndexingPolicy = new CosmosDBIndexingPolicy
+              {
+                  Automatic = true,
+                  IndexingMode = CosmosDBIndexingMode.Consistent
+              },
+              DefaultTtl = 86400  // 24 hours in seconds
+          });
+
+      var containerCollection = database.Value.GetCosmosDBSqlContainers();
+      var containerOperation = await containerCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-container",
+          containerData);
+
+      CosmosDBSqlContainerResource container = containerOperation.Value;
+      Console.WriteLine($"Container created: {container.Data.Name}");
+
+  # Configure Autoscale Throughput
+  - name: configure_autoscale_throughput
+    prompt: |
+      Configure autoscale throughput with a maximum of 4000 RU/s on a Cosmos DB container.
+    expected_patterns:
+      - "ThroughputSettingsUpdateData"
+      - "ThroughputSettingsResourceInfo"
+      - "AutoscaleSettings"
+      - "MaxThroughput"
+      - "CreateOrUpdateCosmosDBSqlContainerThroughputAsync"
+    forbidden_patterns:
+      - "Throughput = 400,"  # Manual throughput
+    tags:
+      - throughput
+      - autoscale
+    mock_response: |
+      using Azure.ResourceManager.CosmosDB;
+      using Azure.ResourceManager.CosmosDB.Models;
+
+      var container = await database.Value.GetCosmosDBSqlContainers().GetAsync("my-container");
+
+      var autoscaleData = new ThroughputSettingsUpdateData(
+          new ThroughputSettingsResourceInfo
+          {
+              AutoscaleSettings = new AutoscaleSettingsResourceInfo
+              {
+                  MaxThroughput = 4000
+              }
+          });
+
+      await container.Value.CreateOrUpdateCosmosDBSqlContainerThroughputAsync(
+          WaitUntil.Completed,
+          autoscaleData);
+
+      Console.WriteLine("Autoscale throughput configured: max 4000 RU/s");
+
+  # Get Connection Information
+  - name: get_connection_info
+    prompt: |
+      Get the connection keys and connection strings from a Cosmos DB account
+      for use in application configuration.
+    expected_patterns:
+      - "GetKeysAsync"
+      - "PrimaryMasterKey"
+      - "GetConnectionStringsAsync"
+    forbidden_patterns:
+      - "LogInformation"
+      - "Console.WriteLine.*Key"  # Don't log keys
+    tags:
+      - connection
+      - keys
+    mock_response: |
+      using Azure.ResourceManager.CosmosDB;
+
+      var account = await resourceGroup.Value.GetCosmosDBAccountAsync("my-cosmos-account");
+
+      // Get keys
+      var keys = await account.Value.GetKeysAsync();
+      var primaryKey = keys.Value.PrimaryMasterKey;
+      var secondaryKey = keys.Value.SecondaryMasterKey;
+
+      // Get connection strings
+      var connectionStrings = await account.Value.GetConnectionStringsAsync();
+      foreach (var cs in connectionStrings.Value.ConnectionStrings)
+      {
+          // Store securely, do not log
+          var description = cs.Description;
+          var connectionString = cs.ConnectionString;
+      }
+
+      // Use keys for CosmosClient initialization (data plane)
+      // var cosmosClient = new CosmosClient(account.Value.Data.DocumentEndpoint, primaryKey);
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Create a Cosmos DB account with proper error handling for ARM operations,
+      catching specific HTTP status codes.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status == 409"
+      - "ex.Status == 404"
+      - "try"
+      - "catch"
+    forbidden_patterns:
+      - "catch (Exception ex)"  # Too generic
+      - "catch { }"  # Empty catch
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure;
+      using Azure.ResourceManager.CosmosDB;
+      using Azure.ResourceManager.CosmosDB.Models;
+
+      try
+      {
+          var accountData = new CosmosDBAccountCreateOrUpdateContent(
+              location: AzureLocation.EastUS,
+              locations: new[]
+              {
+                  new CosmosDBAccountLocation
+                  {
+                      LocationName = AzureLocation.EastUS,
+                      FailoverPriority = 0
+                  }
+              })
+          {
+              Kind = CosmosDBAccountKind.GlobalDocumentDB
+          };
+
+          var operation = await accountCollection.CreateOrUpdateAsync(
+              WaitUntil.Completed,
+              "my-cosmos-account",
+              accountData);
+      }
+      catch (RequestFailedException ex) when (ex.Status == 409)
+      {
+          Console.WriteLine("Account already exists");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 404)
+      {
+          Console.WriteLine("Resource group not found");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"ARM Error: {ex.Status} - {ex.ErrorCode}: {ex.Message}");
+      }
+
+  # List and Enumerate Accounts
+  - name: list_accounts
+    prompt: |
+      List all Cosmos DB accounts in a resource group and display their properties.
+    expected_patterns:
+      - "await foreach"
+      - "GetCosmosDBAccounts"
+      - "account.Data"
+    forbidden_patterns:
+      - ".ToList()"  # Should use async enumeration
+    tags:
+      - list
+      - enumeration
+    mock_response: |
+      using Azure.ResourceManager.CosmosDB;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      await foreach (var account in resourceGroup.Value.GetCosmosDBAccounts())
+      {
+          Console.WriteLine($"Account: {account.Data.Name}");
+          Console.WriteLine($"  Location: {account.Data.Location}");
+          Console.WriteLine($"  Kind: {account.Data.Kind}");
+          Console.WriteLine($"  Document Endpoint: {account.Data.DocumentEndpoint}");
+          Console.WriteLine($"  Consistency: {account.Data.ConsistencyPolicy?.DefaultConsistencyLevel}");
+      }
+
+  # Multi-Region Configuration
+  - name: multi_region_account
+    prompt: |
+      Create a Cosmos DB account with multi-region support: primary in East US
+      and secondary in West US with automatic failover.
+    expected_patterns:
+      - "CosmosDBAccountLocation"
+      - "FailoverPriority = 0"
+      - "FailoverPriority = 1"
+      - "EnableAutomaticFailover"
+      - "EastUS"
+      - "WestUS"
+    tags:
+      - multi-region
+      - high-availability
+    mock_response: |
+      using Azure.ResourceManager.CosmosDB;
+      using Azure.ResourceManager.CosmosDB.Models;
+
+      var accountData = new CosmosDBAccountCreateOrUpdateContent(
+          location: AzureLocation.EastUS,
+          locations: new[]
+          {
+              new CosmosDBAccountLocation
+              {
+                  LocationName = AzureLocation.EastUS,
+                  FailoverPriority = 0,
+                  IsZoneRedundant = true
+              },
+              new CosmosDBAccountLocation
+              {
+                  LocationName = AzureLocation.WestUS,
+                  FailoverPriority = 1,
+                  IsZoneRedundant = false
+              }
+          })
+      {
+          Kind = CosmosDBAccountKind.GlobalDocumentDB,
+          ConsistencyPolicy = new ConsistencyPolicy(DefaultConsistencyLevel.Session),
+          EnableAutomaticFailover = true,
+          EnableMultipleWriteLocations = false
+      };
+
+      var operation = await accountCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-geo-cosmos-account",
+          accountData);
+
+      Console.WriteLine($"Multi-region account created with {operation.Value.Data.Locations.Count} regions");

@@ -1,0 +1,242 @@
+{
+  "sandbox_security_policy": {
+    "version": "1.0",
+    "last_updated": "2026-04-10",
+    "enabled": true,
+    "description": "Comprehensive security policy for code execution sandboxes"
+  },
+
+  "python_execution": {
+    "local_runtime": {
+      "enabled": true,
+      "timeout_seconds": 30,
+      "isolation_method": "subprocess",
+      "restrictions": {
+        "environment_vars": {
+          "PYTHONNOUSERSITE": "1",
+          "description": "Prevent user site packages from being imported"
+        },
+        "working_directory": "workspace_only",
+        "description": "Code runs in isolated workspace directory"
+      },
+      "use_cases": "Development, testing, lightweight scripts"
+    },
+
+    "docker_runtime": {
+      "enabled": true,
+      "timeout_seconds": 45,
+      "isolation_method": "Docker container",
+      "image": "python:3.12-alpine",
+      "restrictions": {
+        "network": "none",
+        "read_only_root": true,
+        "tmpfs_mount": "/tmp:rw,noexec,nosuid,size=64m",
+        "memory_limit_mb": 256,
+        "cpu_limit": "1.0",
+        "pids_limit": 64,
+        "capabilities": "DROP ALL",
+        "security_options": "no-new-privileges",
+        "volumes": "workspace only (rw)"
+      },
+      "features": {
+        "strict_isolation": "Root FS read-only",
+        "no_network_access": true,
+        "process_limit": 64,
+        "tmpfs_noexec": "Prevents executable files in /tmp"
+      },
+      "use_cases": "Production, untrusted code, security-critical tasks"
+    }
+  },
+
+  "javascript_execution": {
+    "amala_sandbox": {
+      "enabled": true,
+      "timeout_seconds": 30,
+      "isolation_method": "amala-sandbox virtual machine",
+      "runtime": "Node.js 20+",
+      "features": {
+        "vm_based_isolation": "Code runs in isolated V8 context",
+        "blocked_apis": [
+          "require()",
+          "process",
+          "eval()",
+          "Function()",
+          "global/globalThis",
+          "setTimeout/setInterval",
+          "__dirname/__filename"
+        ],
+        "allowed_apis": [
+          "console (captured)",
+          "Math",
+          "JSON",
+          "Array/Object/String/Number/Boolean",
+          "Date"
+        ]
+      },
+      "execution_depths": {
+        "max_recursion": 100,
+        "max_call_stack": "VM default (~1000 frames)"
+      },
+      "use_cases": "JavaScript code execution, safe evaluation"
+    },
+
+    "docker_amala": {
+      "enabled": true,
+      "timeout_seconds": 45,
+      "isolation_method": "Docker + amala-sandbox (double layer)",
+      "image": "node:20-alpine",
+      "features": {
+        "vm_isolation": "amala-sandbox virtual machine",
+        "os_isolation": "Docker container",
+        "non_root_user": "uid 1000 (sandbox)",
+        "signal_handling": "dumb-init for proper cleanup"
+      },
+      "restrictions": {
+        "network": "none",
+        "read_only_root": true,
+        "tmpfs_mount": "/tmp:rw,noexec,nosuid,size=64m",
+        "memory_limit_mb": 256,
+        "cpu_limit": "1.0",
+        "pids_limit": 32,
+        "capabilities": "DROP ALL"
+      },
+      "use_cases": "Production JavaScript execution with maximum isolation"
+    }
+  },
+
+  "file_operations": {
+    "sandbox_root": "agent_datas/workspace",
+    "restrictions": {
+      "outside_workspace": "Requires explicit approval",
+      "symlink_resolution": "Prevented - symlinks resolved and must stay inside workspace",
+      "path_traversal": "Blocked - ../ and other traversals rejected"
+    },
+
+    "file_creation_safety": {
+      "makedirs_protection": "Empty dirname checks to prevent crashes",
+      "atomic_writes": "Use temp file then rename",
+      "permissions": "644 for regular files, 755 for directories"
+    },
+
+    "supported_formats": {
+      "text": [".txt", ".md", ".py", ".js", ".json"],
+      "office": [".docx", ".pptx", ".xlsx"],
+      "documents": [".pdf"]
+    },
+
+    "dangerous_operations": [
+      "Direct /etc access (blocked)",
+      "System command execution (subprocess in docker only)",
+      "Network open (docker --network none)",
+      "Persistent file writes outside workspace"
+    ]
+  },
+
+  "resource_limits": {
+    "memory": {
+      "local_python": "System default (no hard limit)",
+      "docker_python": "256 MB hard limit",
+      "docker_js": "256 MB hard limit",
+      "enforcement": "Docker memory cgroups"
+    },
+
+    "cpu": {
+      "local_python": "No limit (system default)",
+      "docker": "1.0 CPU core limit",
+      "enforcement": "Docker cpu cgroups"
+    },
+
+    "execution_time": {
+      "local_python": "30 seconds timeout",
+      "docker_python": "45 seconds timeout",
+      "local_js": "30 seconds timeout",
+      "docker_js": "45 seconds timeout"
+    },
+
+    "processes": {
+      "local": "No limit",
+      "docker_python": "64 processes max",
+      "docker_js": "32 processes max"
+    }
+  },
+
+  "external_file_access": {
+    "policy": "Deny by default",
+    "approval_required": true,
+    "approval_flow": [
+      "1. User requests external file access",
+      "2. Request stored with pending status",
+      "3. Admin reviews and approves/rejects",
+      "4. Code execution blocked until approval",
+      "5. Security warning shown in UI (popup)"
+    ],
+
+    "popup_styling": {
+      "appearance": "Consistent with existing UI dialogs",
+      "information_shown": [
+        "Requested file path",
+        "Access type (read/write)",
+        "Requesting code snippet",
+        "Risk level (red/yellow/green)"
+      ],
+      "actions": [
+        "Approve once",
+        "Approve all from this code",
+        "Reject"
+      ]
+    }
+  },
+
+  "audit_and_logging": {
+    "execution_logs": {
+      "captured_data": [
+        "Code hash",
+        "Execution engine (python/docker/js/docker-js)",
+        "Return code",
+        "Duration",
+        "Timeout status",
+        "Resource usage"
+      ],
+      "retention": "30 days"
+    },
+
+    "security_events": [
+      "Path traversal attempts (blocked)",
+      "External file access requests",
+      "Timeout/resource limit exceeded",
+      "Sandbox initialization failures"
+    ]
+  },
+
+  "threat_model": {
+    "accepts_risk": [
+      "User-provided code (mitigated by sandboxing)",
+      "AI-generated code (mitigated by sandboxing)"
+    ],
+
+    "mitigations": {
+      "code_injection": "Multiple isolation layers (VM, container, namespace)",
+      "privilege_escalation": "Drop all capabilities, run as non-root",
+      "resource_exhaustion": "Memory/CPU/PID limits enforced",
+      "file_system_abuse": "Read-only root, workspace-only writes",
+      "network_exploitation": "Network disabled (--network none)",
+      "signal_attacks": "Signal handling via dumb-init"
+    }
+  },
+
+  "recommendations": {
+    "deployment": [
+      "Run Shizuku bot in Docker container itself",
+      "Use Docker compose for orchestration",
+      "Enable AppArmor or SELinux if available",
+      "Monitor resource usage in production"
+    ],
+
+    "maintenance": [
+      "Keep Python/Node.js base images updated",
+      "Audit sandbox escapes regularly",
+      "Review external file access approvals",
+      "Test timeout/resource limit behavior"
+    ]
+  }
+}

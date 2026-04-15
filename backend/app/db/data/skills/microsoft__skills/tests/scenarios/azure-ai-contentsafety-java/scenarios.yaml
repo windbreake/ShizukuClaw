@@ -1,0 +1,293 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-ai-contentsafety-java skill evaluation
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: client_creation
+    prompt: |
+      Create Java code to set up the Azure AI Content Safety clients using
+      KeyCredential authentication. Create both ContentSafetyClient and BlocklistClient.
+    expected_patterns:
+      - "ContentSafetyClientBuilder"
+      - "BlocklistClientBuilder"
+      - "KeyCredential"
+      - "buildClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'endpoint\("https://'
+      - 'KeyCredential\("'
+    tags:
+      - basic
+      - authentication
+      - client
+    mock_response: |
+      import com.azure.ai.contentsafety.ContentSafetyClient;
+      import com.azure.ai.contentsafety.ContentSafetyClientBuilder;
+      import com.azure.ai.contentsafety.BlocklistClient;
+      import com.azure.ai.contentsafety.BlocklistClientBuilder;
+      import com.azure.core.credential.KeyCredential;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("CONTENT_SAFETY_ENDPOINT");
+              String key = System.getenv("CONTENT_SAFETY_KEY");
+              
+              ContentSafetyClient contentSafetyClient = new ContentSafetyClientBuilder()
+                  .credential(new KeyCredential(key))
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              BlocklistClient blocklistClient = new BlocklistClientBuilder()
+                  .credential(new KeyCredential(key))
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              System.out.println("Clients initialized successfully");
+          }
+      }
+
+  - name: analyze_text_basic
+    prompt: |
+      Create a Java example that analyzes text content for harmful categories
+      using Azure AI Content Safety. Print the severity for each category.
+    expected_patterns:
+      - "AnalyzeTextOptions"
+      - "analyzeText"
+      - "AnalyzeTextResult"
+      - "getCategoriesAnalysis"
+      - "getCategory"
+      - "getSeverity"
+    tags:
+      - text-analysis
+      - basic
+    mock_response: |
+      import com.azure.ai.contentsafety.ContentSafetyClient;
+      import com.azure.ai.contentsafety.ContentSafetyClientBuilder;
+      import com.azure.ai.contentsafety.models.*;
+      import com.azure.core.credential.KeyCredential;
+
+      public class TextAnalysis {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("CONTENT_SAFETY_ENDPOINT");
+              String key = System.getenv("CONTENT_SAFETY_KEY");
+              
+              ContentSafetyClient client = new ContentSafetyClientBuilder()
+                  .credential(new KeyCredential(key))
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              AnalyzeTextResult result = client.analyzeText(
+                  new AnalyzeTextOptions("This is text to analyze for harmful content."));
+              
+              for (TextCategoriesAnalysis category : result.getCategoriesAnalysis()) {
+                  System.out.printf("Category: %s, Severity: %d%n",
+                      category.getCategory(),
+                      category.getSeverity());
+              }
+          }
+      }
+
+  - name: analyze_text_with_categories
+    prompt: |
+      Create a Java example that analyzes text for specific harm categories
+      (hate and violence only) with 8 severity levels output.
+    expected_patterns:
+      - "AnalyzeTextOptions"
+      - "setCategories"
+      - "TextCategory.HATE"
+      - "TextCategory.VIOLENCE"
+      - "setOutputType"
+      - "EIGHT_SEVERITY_LEVELS"
+    tags:
+      - text-analysis
+      - advanced
+    mock_response: |
+      import com.azure.ai.contentsafety.ContentSafetyClient;
+      import com.azure.ai.contentsafety.ContentSafetyClientBuilder;
+      import com.azure.ai.contentsafety.models.*;
+      import com.azure.core.credential.KeyCredential;
+      import java.util.Arrays;
+
+      public class TextAnalysisWithCategories {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("CONTENT_SAFETY_ENDPOINT");
+              String key = System.getenv("CONTENT_SAFETY_KEY");
+              
+              ContentSafetyClient client = new ContentSafetyClientBuilder()
+                  .credential(new KeyCredential(key))
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              AnalyzeTextOptions options = new AnalyzeTextOptions("Text to analyze")
+                  .setCategories(Arrays.asList(
+                      TextCategory.HATE,
+                      TextCategory.VIOLENCE))
+                  .setOutputType(AnalyzeTextOutputType.EIGHT_SEVERITY_LEVELS);
+              
+              AnalyzeTextResult result = client.analyzeText(options);
+              
+              for (TextCategoriesAnalysis category : result.getCategoriesAnalysis()) {
+                  System.out.printf("Category: %s, Severity: %d%n",
+                      category.getCategory(),
+                      category.getSeverity());
+              }
+          }
+      }
+
+  - name: analyze_image
+    prompt: |
+      Create a Java example that analyzes an image for harmful content
+      using Azure AI Content Safety. Load the image from a file.
+    expected_patterns:
+      - "ContentSafetyImageData"
+      - "AnalyzeImageOptions"
+      - "analyzeImage"
+      - "AnalyzeImageResult"
+      - "BinaryData.fromBytes"
+      - "getCategoriesAnalysis"
+    tags:
+      - image-analysis
+    mock_response: |
+      import com.azure.ai.contentsafety.ContentSafetyClient;
+      import com.azure.ai.contentsafety.ContentSafetyClientBuilder;
+      import com.azure.ai.contentsafety.models.*;
+      import com.azure.core.credential.KeyCredential;
+      import com.azure.core.util.BinaryData;
+      import java.nio.file.Files;
+      import java.nio.file.Paths;
+
+      public class ImageAnalysis {
+          public static void main(String[] args) throws Exception {
+              String endpoint = System.getenv("CONTENT_SAFETY_ENDPOINT");
+              String key = System.getenv("CONTENT_SAFETY_KEY");
+              
+              ContentSafetyClient client = new ContentSafetyClientBuilder()
+                  .credential(new KeyCredential(key))
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              byte[] imageBytes = Files.readAllBytes(Paths.get("image.png"));
+              ContentSafetyImageData imageData = new ContentSafetyImageData()
+                  .setContent(BinaryData.fromBytes(imageBytes));
+              
+              AnalyzeImageResult result = client.analyzeImage(
+                  new AnalyzeImageOptions(imageData));
+              
+              for (ImageCategoriesAnalysis category : result.getCategoriesAnalysis()) {
+                  System.out.printf("Category: %s, Severity: %d%n",
+                      category.getCategory(),
+                      category.getSeverity());
+              }
+          }
+      }
+
+  - name: blocklist_management
+    prompt: |
+      Create a Java example that adds items to a blocklist and then
+      analyzes text using that blocklist for content filtering.
+    expected_patterns:
+      - "BlocklistClient"
+      - "TextBlocklistItem"
+      - "AddOrUpdateTextBlocklistItemsOptions"
+      - "addOrUpdateBlocklistItems"
+      - "setBlocklistNames"
+      - "getBlocklistsMatch"
+    tags:
+      - blocklist
+      - advanced
+    mock_response: |
+      import com.azure.ai.contentsafety.ContentSafetyClient;
+      import com.azure.ai.contentsafety.ContentSafetyClientBuilder;
+      import com.azure.ai.contentsafety.BlocklistClient;
+      import com.azure.ai.contentsafety.BlocklistClientBuilder;
+      import com.azure.ai.contentsafety.models.*;
+      import com.azure.core.credential.KeyCredential;
+      import java.util.Arrays;
+      import java.util.List;
+
+      public class BlocklistExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("CONTENT_SAFETY_ENDPOINT");
+              String key = System.getenv("CONTENT_SAFETY_KEY");
+              
+              BlocklistClient blocklistClient = new BlocklistClientBuilder()
+                  .credential(new KeyCredential(key))
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              ContentSafetyClient contentClient = new ContentSafetyClientBuilder()
+                  .credential(new KeyCredential(key))
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              // Add items to blocklist
+              List<TextBlocklistItem> items = Arrays.asList(
+                  new TextBlocklistItem("badword1").setDescription("Offensive term"),
+                  new TextBlocklistItem("badword2").setDescription("Another term")
+              );
+              
+              AddOrUpdateTextBlocklistItemsResult addResult = blocklistClient.addOrUpdateBlocklistItems(
+                  "my-blocklist",
+                  new AddOrUpdateTextBlocklistItemsOptions(items));
+              
+              System.out.println("Added " + addResult.getBlocklistItems().size() + " items");
+              
+              // Analyze text with blocklist
+              AnalyzeTextOptions options = new AnalyzeTextOptions("Text containing badword1")
+                  .setBlocklistNames(Arrays.asList("my-blocklist"))
+                  .setHaltOnBlocklistHit(true);
+              
+              AnalyzeTextResult result = contentClient.analyzeText(options);
+              
+              if (result.getBlocklistsMatch() != null) {
+                  for (TextBlocklistMatch match : result.getBlocklistsMatch()) {
+                      System.out.printf("Matched blocklist: %s, Item: %s%n",
+                          match.getBlocklistName(),
+                          match.getBlocklistItemText());
+                  }
+              }
+          }
+      }
+
+  - name: error_handling
+    prompt: |
+      Create a Java example showing proper error handling for content safety
+      operations with HttpResponseException handling.
+    expected_patterns:
+      - "HttpResponseException"
+      - "try"
+      - "catch"
+      - "getResponse().getStatusCode()"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.ai.contentsafety.ContentSafetyClient;
+      import com.azure.ai.contentsafety.ContentSafetyClientBuilder;
+      import com.azure.ai.contentsafety.models.*;
+      import com.azure.core.credential.KeyCredential;
+      import com.azure.core.exception.HttpResponseException;
+
+      public class ErrorHandling {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("CONTENT_SAFETY_ENDPOINT");
+              String key = System.getenv("CONTENT_SAFETY_KEY");
+              
+              ContentSafetyClient client = new ContentSafetyClientBuilder()
+                  .credential(new KeyCredential(key))
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              try {
+                  AnalyzeTextResult result = client.analyzeText(
+                      new AnalyzeTextOptions("Text to analyze"));
+                  System.out.println("Analysis completed");
+              } catch (HttpResponseException e) {
+                  System.err.println("Status: " + e.getResponse().getStatusCode());
+                  System.err.println("Error: " + e.getMessage());
+              }
+          }
+      }

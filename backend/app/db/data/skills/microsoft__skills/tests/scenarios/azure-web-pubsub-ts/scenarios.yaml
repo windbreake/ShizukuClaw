@@ -1,0 +1,431 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-web-pubsub-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Server-Side Connection String Auth
+  - name: server_connection_string
+    prompt: |
+      Create a TypeScript example that creates a WebPubSubServiceClient
+      using a connection string and broadcasts a message to all connections.
+    expected_patterns:
+      - "WebPubSubServiceClient"
+      - "@azure/web-pubsub"
+      - "WEBPUBSUB_CONNECTION_STRING"
+      - "sendToAll"
+    forbidden_patterns:
+      - "AccessKey=secret"
+      - "hardcoded"
+    tags:
+      - server
+      - authentication
+    mock_response: |
+      import { WebPubSubServiceClient } from "@azure/web-pubsub";
+
+      const client = new WebPubSubServiceClient(
+        process.env.WEBPUBSUB_CONNECTION_STRING!,
+        "chat"
+      );
+
+      async function broadcastMessage() {
+        await client.sendToAll({ message: "Hello everyone!" });
+        console.log("Message broadcast to all connections");
+      }
+
+      broadcastMessage();
+
+  # Server-Side DefaultAzureCredential Auth
+  - name: server_default_credential
+    prompt: |
+      Create a TypeScript example that creates a WebPubSubServiceClient
+      using DefaultAzureCredential for Azure AD authentication.
+    expected_patterns:
+      - "WebPubSubServiceClient"
+      - "DefaultAzureCredential"
+      - "@azure/identity"
+      - "WEBPUBSUB_ENDPOINT"
+    forbidden_patterns:
+      - "AccessKey"
+      - "fromConnectionString"
+    tags:
+      - server
+      - authentication
+      - identity
+    mock_response: |
+      import { WebPubSubServiceClient } from "@azure/web-pubsub";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new WebPubSubServiceClient(
+        process.env.WEBPUBSUB_ENDPOINT!,
+        new DefaultAzureCredential(),
+        "chat"
+      );
+
+      async function broadcastMessage() {
+        await client.sendToAll({ message: "Hello everyone!" });
+        console.log("Message broadcast to all connections");
+      }
+
+      broadcastMessage();
+
+  # Generate Client Access Token
+  - name: generate_client_token
+    prompt: |
+      Create a TypeScript example that generates a client access token
+      with a user ID, roles, and groups for WebSocket connection.
+    expected_patterns:
+      - "getClientAccessToken"
+      - "userId"
+      - "roles"
+      - "groups"
+      - "expirationTimeInMinutes"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - server
+      - tokens
+    mock_response: |
+      import { WebPubSubServiceClient } from "@azure/web-pubsub";
+
+      const client = new WebPubSubServiceClient(
+        process.env.WEBPUBSUB_CONNECTION_STRING!,
+        "chat"
+      );
+
+      async function generateToken() {
+        const token = await client.getClientAccessToken({
+          userId: "user123",
+          roles: [
+            "webpubsub.joinLeaveGroup",
+            "webpubsub.sendToGroup",
+            "webpubsub.sendToGroup.chat-room",
+          ],
+          groups: ["chat-room"],
+          expirationTimeInMinutes: 60,
+        });
+
+        console.log("Token URL:", token.url);
+        return token;
+      }
+
+      generateToken();
+
+  # Group Management
+  - name: group_management
+    prompt: |
+      Create a TypeScript example that manages a group in Web PubSub -
+      adding users, sending messages to the group, and removing users.
+    expected_patterns:
+      - "group"
+      - "addUser"
+      - "sendToAll"
+      - "removeUser"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - server
+      - groups
+    mock_response: |
+      import { WebPubSubServiceClient } from "@azure/web-pubsub";
+
+      const client = new WebPubSubServiceClient(
+        process.env.WEBPUBSUB_CONNECTION_STRING!,
+        "chat"
+      );
+
+      async function manageGroup() {
+        const group = client.group("chat-room");
+
+        // Add user to group
+        await group.addUser("user123");
+        console.log("User added to group");
+
+        // Send message to group
+        await group.sendToAll({ message: "Welcome to the chat room!" });
+        console.log("Message sent to group");
+
+        // Remove user from group
+        await group.removeUser("user123");
+        console.log("User removed from group");
+      }
+
+      manageGroup();
+
+  # Connection Management
+  - name: connection_management
+    prompt: |
+      Create a TypeScript example that checks if users/connections exist
+      and manages permissions for a connection.
+    expected_patterns:
+      - "userExists"
+      - "connectionExists"
+      - "grantPermission"
+      - "revokePermission"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - server
+      - connections
+    mock_response: |
+      import { WebPubSubServiceClient } from "@azure/web-pubsub";
+
+      const client = new WebPubSubServiceClient(
+        process.env.WEBPUBSUB_CONNECTION_STRING!,
+        "chat"
+      );
+
+      async function manageConnections() {
+        // Check existence
+        const userExists = await client.userExists("user123");
+        console.log("User exists:", userExists);
+
+        const connExists = await client.connectionExists("conn-abc");
+        console.log("Connection exists:", connExists);
+
+        if (connExists) {
+          // Grant permission
+          await client.grantPermission("conn-abc", "sendToGroup", { targetName: "chat" });
+          console.log("Permission granted");
+
+          // Revoke permission
+          await client.revokePermission("conn-abc", "sendToGroup", { targetName: "chat" });
+          console.log("Permission revoked");
+        }
+      }
+
+      manageConnections();
+
+  # Client-Side Connection
+  - name: client_connection
+    prompt: |
+      Create a TypeScript example that connects to Web PubSub as a client,
+      registers event handlers, and joins a group.
+    expected_patterns:
+      - "WebPubSubClient"
+      - "@azure/web-pubsub-client"
+      - 'on("connected"'
+      - 'on("group-message"'
+      - "start"
+      - "joinGroup"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - client
+      - connection
+    mock_response: |
+      import { WebPubSubClient } from "@azure/web-pubsub-client";
+
+      const client = new WebPubSubClient({
+        getClientAccessUrl: async () => {
+          const response = await fetch("/negotiate");
+          const { url } = await response.json();
+          return url;
+        },
+      });
+
+      // Register handlers BEFORE starting
+      client.on("connected", (e) => {
+        console.log(`Connected: ${e.connectionId}, User: ${e.userId}`);
+      });
+
+      client.on("group-message", (e) => {
+        console.log(`[${e.message.group}] ${e.message.fromUserId}: ${e.message.data}`);
+      });
+
+      client.on("disconnected", (e) => {
+        console.log(`Disconnected: ${e.message}`);
+      });
+
+      async function connect() {
+        await client.start();
+        await client.joinGroup("chat-room");
+        console.log("Joined chat room");
+      }
+
+      connect();
+
+  # Client-Side Send Messages
+  - name: client_send_messages
+    prompt: |
+      Create a TypeScript example that sends messages to a group
+      with different options like noEcho and fireAndForget.
+    expected_patterns:
+      - "WebPubSubClient"
+      - "sendToGroup"
+      - "noEcho"
+      - "fireAndForget"
+      - "joinGroup"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - client
+      - messages
+    mock_response: |
+      import { WebPubSubClient } from "@azure/web-pubsub-client";
+
+      const client = new WebPubSubClient("<client-access-url>");
+
+      async function sendMessages() {
+        await client.start();
+        await client.joinGroup("chat-room");
+
+        // Send text message
+        await client.sendToGroup("chat-room", "Hello!", "text");
+
+        // Send JSON message
+        await client.sendToGroup("chat-room", { type: "message", content: "Hi" }, "json");
+
+        // Send with options
+        await client.sendToGroup("chat-room", "Quiet message", "text", {
+          noEcho: true,
+          fireAndForget: true,
+        });
+
+        // Send event to server
+        await client.sendEvent("userAction", { action: "typing" }, "json");
+      }
+
+      sendMessages();
+
+  # Express Event Handler
+  - name: express_event_handler
+    prompt: |
+      Create a TypeScript Express application that handles Web PubSub
+      events including connect, user events, and lifecycle callbacks.
+    expected_patterns:
+      - "WebPubSubEventHandler"
+      - "@azure/web-pubsub-express"
+      - "handleConnect"
+      - "handleUserEvent"
+      - "onConnected"
+      - "getMiddleware"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - express
+      - events
+    mock_response: |
+      import express from "express";
+      import { WebPubSubEventHandler } from "@azure/web-pubsub-express";
+
+      const app = express();
+
+      const handler = new WebPubSubEventHandler("chat", {
+        path: "/api/webpubsub/hubs/chat/",
+
+        handleConnect: (req, res) => {
+          if (!req.claims?.sub) {
+            res.fail(401, "Authentication required");
+            return;
+          }
+          res.success({
+            userId: req.claims.sub[0],
+            groups: ["general"],
+            roles: ["webpubsub.sendToGroup"],
+          });
+        },
+
+        handleUserEvent: (req, res) => {
+          console.log(`Event from ${req.context.userId}:`, req.data);
+          res.success(`Received: ${req.data}`, "text");
+        },
+
+        onConnected: (req) => {
+          console.log(`Client connected: ${req.context.connectionId}`);
+        },
+
+        onDisconnected: (req) => {
+          console.log(`Client disconnected: ${req.context.connectionId}`);
+        },
+      });
+
+      app.use(handler.getMiddleware());
+
+      app.listen(8080, () => {
+        console.log("Server running on port 8080");
+      });
+
+  # Negotiate Endpoint
+  - name: negotiate_endpoint
+    prompt: |
+      Create a TypeScript Express endpoint that generates and returns
+      a client access token for WebSocket connection.
+    expected_patterns:
+      - "getClientAccessToken"
+      - '"/negotiate"'
+      - "res.json"
+      - "url"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - express
+      - negotiate
+    mock_response: |
+      import express from "express";
+      import { WebPubSubServiceClient } from "@azure/web-pubsub";
+
+      const app = express();
+
+      const serviceClient = new WebPubSubServiceClient(
+        process.env.WEBPUBSUB_CONNECTION_STRING!,
+        "chat"
+      );
+
+      app.get("/negotiate", async (req, res) => {
+        const userId = req.query.userId as string || "anonymous";
+        
+        const token = await serviceClient.getClientAccessToken({
+          userId,
+          roles: ["webpubsub.joinLeaveGroup", "webpubsub.sendToGroup"],
+          groups: ["general"],
+        });
+
+        res.json({ url: token.url });
+      });
+
+      app.listen(8080, () => {
+        console.log("Server running on port 8080");
+      });
+
+  # Send to Filtered Users
+  - name: send_with_filter
+    prompt: |
+      Create a TypeScript example that broadcasts a message to users
+      matching a specific OData filter expression.
+    expected_patterns:
+      - "sendToAll"
+      - "filter"
+      - "userId"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - server
+      - filter
+    mock_response: |
+      import { WebPubSubServiceClient } from "@azure/web-pubsub";
+
+      const client = new WebPubSubServiceClient(
+        process.env.WEBPUBSUB_CONNECTION_STRING!,
+        "chat"
+      );
+
+      async function sendFilteredMessage() {
+        // Send to all except admin
+        await client.sendToAll({ message: "User announcement" }, {
+          filter: "userId ne 'admin'",
+        });
+
+        // Send only to premium users
+        await client.sendToAll({ message: "Premium content" }, {
+          filter: "userId in ('premium-user1', 'premium-user2')",
+        });
+
+        console.log("Filtered messages sent");
+      }
+
+      sendFilteredMessage();

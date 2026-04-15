@@ -1,0 +1,572 @@
+# yaml-language-server: $schema=file:///Users/govindm4max/code/oss/agent-skills/tests/scenarios/skill-scenarios.schema.json
+# Test scenarios for azure-search-documents-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Client Setup
+  - name: basic_client_setup
+    prompt: |
+      Create a basic Azure AI Search client using SearchClient with proper
+      authentication. Include connecting to an existing search index and
+      executing a simple search query.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "SearchClient"
+      - 'import { SearchClient } from "@azure/search-documents"'
+      - "process.env"
+      - "for await"
+    forbidden_patterns:
+      - "require("
+      - "SearchServiceClient"
+    tags:
+      - basic
+      - authentication
+      - client-setup
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SearchClient } from "@azure/search-documents";
+
+      const endpoint = process.env.AZURE_SEARCH_ENDPOINT!;
+      const indexName = process.env.AZURE_SEARCH_INDEX_NAME!;
+      const credential = new DefaultAzureCredential();
+
+      const client = new SearchClient(endpoint, indexName, credential);
+
+      const results = await client.search("wifi -luxury");
+
+      for await (const result of results.results) {
+        console.log(`Score: ${result.score}`);
+        console.log(`Document:`, result.document);
+      }
+
+  # Vector Search
+  - name: vector_search_basic
+    prompt: |
+      Create a vector search example using Azure AI Search.
+      Search using a pre-computed embedding vector with proper vectorSearchOptions.
+    expected_patterns:
+      - "vectorSearchOptions"
+      - "queries"
+      - "kind.*vector"
+      - "kNearestNeighborsCount"
+      - "fields"
+    forbidden_patterns:
+      - "vectors:"
+      - "value:"
+    tags:
+      - vector-search
+      - search
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SearchClient } from "@azure/search-documents";
+
+      const endpoint = process.env.AZURE_SEARCH_ENDPOINT!;
+      const indexName = process.env.AZURE_SEARCH_INDEX_NAME!;
+      const credential = new DefaultAzureCredential();
+
+      const client = new SearchClient(endpoint, indexName, credential);
+
+      // Assume you have embeddings from Azure OpenAI or similar
+      const queryVector: number[] = [0.1, 0.2, 0.3, 0.4]; // Your vector
+
+      const results = await client.search("*", {
+        vectorSearchOptions: {
+          queries: [
+            {
+              kind: "vector",
+              vector: queryVector,
+              fields: ["contentVector"],
+              kNearestNeighborsCount: 5,
+            },
+          ],
+        },
+        select: ["id", "title", "content"],
+      });
+
+      for await (const result of results.results) {
+        console.log(`Score: ${result.score}`);
+        console.log(`Title: ${result.document.title}`);
+      }
+
+  # Hybrid Search (Keyword + Vector)
+  - name: hybrid_search
+    prompt: |
+      Create a hybrid search that combines keyword search with vector search.
+      Include both text search and vector queries in the same request.
+    expected_patterns:
+      - "vectorSearchOptions"
+      - "search.*text"
+      - "queries"
+      - "kind.*vector"
+    forbidden_patterns:
+      - "vectors:"
+    tags:
+      - hybrid-search
+      - search
+      - advanced
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SearchClient } from "@azure/search-documents";
+
+      const endpoint = process.env.AZURE_SEARCH_ENDPOINT!;
+      const indexName = process.env.AZURE_SEARCH_INDEX_NAME!;
+      const credential = new DefaultAzureCredential();
+
+      const client = new SearchClient(endpoint, indexName, credential);
+
+      const queryVector: number[] = [0.1, 0.2, 0.3, 0.4]; // Your vector
+
+      // Hybrid search: combines keyword and vector results
+      const results = await client.search("machine learning", {
+        vectorSearchOptions: {
+          queries: [
+            {
+              kind: "vector",
+              vector: queryVector,
+              fields: ["contentVector"],
+              kNearestNeighborsCount: 50,
+            },
+          ],
+        },
+        select: ["id", "title", "content"],
+        top: 10,
+      });
+
+      for await (const result of results.results) {
+        console.log(`Score: ${result.score}`);
+        console.log(`Title: ${result.document.title}`);
+      }
+
+  # Semantic Search
+  - name: semantic_search
+    prompt: |
+      Create a search that uses semantic ranking to rerank results.
+      Include queryType semantic, semanticSearchOptions with configuration,
+      captions, and answers.
+    expected_patterns:
+      - 'queryType.*"semantic"'
+      - "semanticSearchOptions"
+      - "configurationName"
+      - "captions"
+      - "rerankerScore"
+    forbidden_patterns:
+      - "semanticConfiguration:"
+    tags:
+      - semantic-ranking
+      - search
+      - advanced
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SearchClient } from "@azure/search-documents";
+
+      const endpoint = process.env.AZURE_SEARCH_ENDPOINT!;
+      const indexName = process.env.AZURE_SEARCH_INDEX_NAME!;
+      const credential = new DefaultAzureCredential();
+
+      const client = new SearchClient(endpoint, indexName, credential);
+
+      const results = await client.search("what is artificial intelligence", {
+        queryType: "semantic",
+        semanticSearchOptions: {
+          configurationName: "semantic-config",
+          captions: { captionType: "extractive" },
+          answers: { answerType: "extractive", count: 3 },
+        },
+        select: ["id", "title", "content"],
+        top: 5,
+      });
+
+      // Check for semantic answers
+      if (results.answers) {
+        console.log("Semantic Answers:");
+        for (const answer of results.answers) {
+          console.log(`  Answer: ${answer.text}`);
+          console.log(`  Score: ${answer.score}`);
+        }
+      }
+
+      // Iterate results with reranker scores
+      for await (const result of results.results) {
+        console.log(`Reranker Score: ${result.rerankerScore}`);
+        console.log(`Title: ${result.document.title}`);
+        if (result.captions) {
+          console.log(`Caption: ${result.captions[0]?.text}`);
+        }
+      }
+
+  # Index Creation with Vector Configuration
+  - name: index_creation_vector
+    prompt: |
+      Create a new search index with vector search configuration.
+      Define fields with proper types, add HNSW algorithm configuration,
+      and include vector search profiles.
+    expected_patterns:
+      - "SearchIndexClient"
+      - "SearchIndex"
+      - "vectorSearch"
+      - "algorithms"
+      - "profiles"
+      - "vectorSearchDimensions"
+      - "vectorSearchProfileName"
+    forbidden_patterns:
+      - "vectorizers"
+    tags:
+      - index-creation
+      - advanced
+      - infrastructure
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SearchIndexClient, SearchIndex } from "@azure/search-documents";
+
+      const endpoint = process.env.AZURE_SEARCH_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+
+      const indexClient = new SearchIndexClient(endpoint, credential);
+
+      const index: SearchIndex = {
+        name: "products-index",
+        fields: [
+          { name: "id", type: "Edm.String", key: true },
+          { name: "title", type: "Edm.String", searchable: true },
+          { name: "description", type: "Edm.String", searchable: true },
+          { name: "category", type: "Edm.String", filterable: true, facetable: true },
+          {
+            name: "contentVector",
+            type: "Collection(Edm.Single)",
+            searchable: true,
+            vectorSearchDimensions: 1536,
+            vectorSearchProfileName: "vector-profile",
+          },
+        ],
+        vectorSearch: {
+          algorithms: [
+            { name: "hnsw-algorithm", kind: "hnsw" },
+          ],
+          profiles: [
+            {
+              name: "vector-profile",
+              algorithmConfigurationName: "hnsw-algorithm",
+            },
+          ],
+        },
+      };
+
+      await indexClient.createOrUpdateIndex(index);
+      console.log("Index created successfully");
+
+  # Document Upload
+  - name: document_upload
+    prompt: |
+      Upload documents to a search index using uploadDocuments.
+      Include batch operations and proper result handling.
+      Show mergeOrUploadDocuments for idempotent operations.
+    expected_patterns:
+      - "uploadDocuments"
+      - "mergeOrUploadDocuments"
+      - "results"
+      - "succeeded"
+    forbidden_patterns:
+      - "indexDocuments"
+    tags:
+      - document-operations
+      - indexing
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SearchClient } from "@azure/search-documents";
+
+      const endpoint = process.env.AZURE_SEARCH_ENDPOINT!;
+      const indexName = process.env.AZURE_SEARCH_INDEX_NAME!;
+      const credential = new DefaultAzureCredential();
+
+      const client = new SearchClient(endpoint, indexName, credential);
+
+      const documents = [
+        {
+          id: "1",
+          title: "Machine Learning Basics",
+          description: "Introduction to ML...",
+          category: "AI",
+        },
+        {
+          id: "2",
+          title: "Python Programming",
+          description: "Learn Python...",
+          category: "Programming",
+        },
+      ];
+
+      // Upload documents
+      const uploadResult = await client.uploadDocuments(documents);
+
+      for (const result of uploadResult.results) {
+        console.log(`Document ${result.key}: ${result.succeeded}`);
+      }
+
+      // For idempotent operations, use mergeOrUploadDocuments
+      const updatedDocs = [
+        {
+          id: "1",
+          title: "Updated ML Basics",
+        },
+      ];
+
+      const mergeResult = await client.mergeOrUploadDocuments(updatedDocs);
+      console.log("Merge/upload completed");
+
+  # Filtered Search with Facets
+  - name: filtered_search_facets
+    prompt: |
+      Create a search with OData filter expressions and faceted search.
+      Include filter syntax with comparison operators and show how to
+      request and process facets from results.
+    expected_patterns:
+      - "filter"
+      - "facets"
+      - "orderBy"
+      - "results.facets"
+    forbidden_patterns:
+      - "sql_where"
+      - "where:"
+    tags:
+      - search
+      - filtering
+      - facets
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SearchClient, odata } from "@azure/search-documents";
+
+      const endpoint = process.env.AZURE_SEARCH_ENDPOINT!;
+      const indexName = process.env.AZURE_SEARCH_INDEX_NAME!;
+      const credential = new DefaultAzureCredential();
+
+      const client = new SearchClient(endpoint, indexName, credential);
+
+      // Using odata helper for safe interpolation
+      const minRating = 4;
+      const category = "Electronics";
+
+      const results = await client.search("wireless", {
+        filter: odata`rating ge ${minRating} and category eq ${category}`,
+        facets: ["category,count:10", "rating,interval:1"],
+        orderBy: ["rating desc"],
+        top: 10,
+      });
+
+      // Process facets
+      if (results.facets) {
+        for (const [facetName, facetResults] of Object.entries(results.facets)) {
+          console.log(`${facetName}:`);
+          for (const facet of facetResults) {
+            console.log(`  ${facet.value}: ${facet.count}`);
+          }
+        }
+      }
+
+      // Process results
+      for await (const result of results.results) {
+        console.log(`Score: ${result.score}`);
+        console.log(`Title: ${result.document.title}`);
+      }
+
+  # Autocomplete and Suggestions
+  - name: autocomplete_suggestions
+    prompt: |
+      Implement autocomplete and suggestions functionality.
+      Show how to define a suggester and use both autocomplete and suggest methods.
+    expected_patterns:
+      - "autocomplete"
+      - "suggest"
+      - "suggester"
+      - "mode"
+    forbidden_patterns:
+      - "typeahead"
+    tags:
+      - autocomplete
+      - suggestions
+      - search
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SearchClient, SearchIndexClient, SearchIndex } from "@azure/search-documents";
+
+      const endpoint = process.env.AZURE_SEARCH_ENDPOINT!;
+      const indexName = process.env.AZURE_SEARCH_INDEX_NAME!;
+      const credential = new DefaultAzureCredential();
+
+      // Define index with suggester
+      const indexClient = new SearchIndexClient(endpoint, credential);
+
+      const index: SearchIndex = {
+        name: indexName,
+        fields: [
+          { name: "id", type: "Edm.String", key: true },
+          { name: "name", type: "Edm.String", searchable: true },
+          { name: "description", type: "Edm.String", searchable: true },
+        ],
+        suggesters: [
+          { name: "sg", sourceFields: ["name", "description"] },
+        ],
+      };
+
+      // Create search client
+      const client = new SearchClient(endpoint, indexName, credential);
+
+      // Autocomplete - complete partial terms
+      const autocomplete = await client.autocomplete("lux", "sg", {
+        mode: "twoTerms",
+        top: 5,
+      });
+
+      console.log("Autocomplete results:");
+      for (const result of autocomplete.results) {
+        console.log(`  ${result.text}`);
+      }
+
+      // Suggestions - return matching documents
+      const suggestions = await client.suggest("lux", "sg", {
+        select: ["name", "description"],
+        top: 5,
+      });
+
+      console.log("Suggestions:");
+      for (const result of suggestions.results) {
+        console.log(`  ${result.document.name}`);
+      }
+
+  # TypeScript Typed Search
+  - name: typed_search
+    prompt: |
+      Create a strongly-typed search client using TypeScript generics.
+      Show how to define a document interface and use type-safe select fields.
+    expected_patterns:
+      - "interface"
+      - "SearchClient<"
+      - "select"
+      - "result.document"
+    forbidden_patterns:
+      - "any"
+    tags:
+      - typescript
+      - typing
+      - search
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SearchClient, SelectFields } from "@azure/search-documents";
+
+      // Define document interface
+      interface Hotel {
+        id: string;
+        name: string;
+        description: string;
+        rating: number;
+        address: {
+          city: string;
+          country: string;
+        };
+      }
+
+      const endpoint = process.env.AZURE_SEARCH_ENDPOINT!;
+      const indexName = process.env.AZURE_SEARCH_INDEX_NAME!;
+      const credential = new DefaultAzureCredential();
+
+      // Type-safe client
+      const client = new SearchClient<Hotel>(endpoint, indexName, credential);
+
+      // Type-safe field selection
+      const fields: SelectFields<Hotel>[] = ["id", "name", "rating"];
+
+      const results = await client.search("luxury", {
+        select: fields, // TypeScript validates field names
+        filter: "rating ge 4",
+      });
+
+      for await (const result of results.results) {
+        // result.document is typed as Hotel
+        console.log(`Hotel: ${result.document.name}`);
+        console.log(`Rating: ${result.document.rating}`);
+      }
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Demonstrate proper error handling when working with Azure AI Search.
+      Include handling index not found and other common errors.
+    expected_patterns:
+      - "try"
+      - "catch"
+      - "RestError"
+      - "statusCode"
+    forbidden_patterns:
+      - "catch {}"
+      - "catch.*pass"
+    tags:
+      - error-handling
+      - production
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SearchClient } from "@azure/search-documents";
+      import { RestError } from "@azure/core-rest-pipeline";
+
+      const endpoint = process.env.AZURE_SEARCH_ENDPOINT!;
+      const indexName = process.env.AZURE_SEARCH_INDEX_NAME!;
+      const credential = new DefaultAzureCredential();
+
+      const client = new SearchClient(endpoint, indexName, credential);
+
+      try {
+        const results = await client.search("query");
+        for await (const result of results.results) {
+          console.log(result.document);
+        }
+      } catch (error) {
+        if (error instanceof RestError) {
+          if (error.statusCode === 404) {
+            console.log("Index not found");
+          } else if (error.statusCode === 403) {
+            console.log("Access denied - check permissions or API key");
+          } else {
+            console.log(`Search error: ${error.statusCode} - ${error.message}`);
+          }
+        } else {
+          throw error;
+        }
+      }
+
+  # Get Document by Key
+  - name: get_document
+    prompt: |
+      Retrieve a specific document from the search index using its key.
+      Show proper error handling for document not found.
+    expected_patterns:
+      - "getDocument"
+    forbidden_patterns:
+      - "search.*id eq"
+    tags:
+      - document-operations
+      - read
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SearchClient } from "@azure/search-documents";
+      import { RestError } from "@azure/core-rest-pipeline";
+
+      const endpoint = process.env.AZURE_SEARCH_ENDPOINT!;
+      const indexName = process.env.AZURE_SEARCH_INDEX_NAME!;
+      const credential = new DefaultAzureCredential();
+
+      const client = new SearchClient(endpoint, indexName, credential);
+
+      try {
+        // Get document by its key field value
+        const document = await client.getDocument("doc-123");
+        console.log("Document:", document);
+      } catch (error) {
+        if (error instanceof RestError && error.statusCode === 404) {
+          console.log("Document not found");
+        } else {
+          throw error;
+        }
+      }

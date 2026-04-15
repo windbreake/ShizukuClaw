@@ -1,0 +1,300 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-appconfiguration-java skill evaluation
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: client_creation_connection_string
+    prompt: |
+      Create Java code to set up the Azure App Configuration client
+      using a connection string from an environment variable.
+    expected_patterns:
+      - "ConfigurationClientBuilder"
+      - "connectionString"
+      - "buildClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'connectionString\("Endpoint='
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import com.azure.data.appconfiguration.ConfigurationClient;
+      import com.azure.data.appconfiguration.ConfigurationClientBuilder;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("AZURE_APPCONFIG_CONNECTION_STRING");
+              
+              ConfigurationClient client = new ConfigurationClientBuilder()
+                  .connectionString(connectionString)
+                  .buildClient();
+              
+              System.out.println("Client initialized successfully");
+          }
+      }
+
+  - name: client_creation_entra_id
+    prompt: |
+      Create Java code to set up the Azure App Configuration client
+      using Entra ID (DefaultAzureCredential) authentication.
+    expected_patterns:
+      - "ConfigurationClientBuilder"
+      - "DefaultAzureCredentialBuilder"
+      - "endpoint"
+      - "credential"
+      - "buildClient"
+    tags:
+      - authentication
+      - entra-id
+    mock_response: |
+      import com.azure.data.appconfiguration.ConfigurationClient;
+      import com.azure.data.appconfiguration.ConfigurationClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ClientSetupEntra {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_APPCONFIG_ENDPOINT");
+              
+              ConfigurationClient client = new ConfigurationClientBuilder()
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .endpoint(endpoint)
+                  .buildClient();
+              
+              System.out.println("Client initialized successfully");
+          }
+      }
+
+  - name: configuration_setting_crud
+    prompt: |
+      Create a Java example that demonstrates CRUD operations for configuration
+      settings: add, get, set (update), and delete a configuration setting.
+    expected_patterns:
+      - "addConfigurationSetting"
+      - "getConfigurationSetting"
+      - "setConfigurationSetting"
+      - "deleteConfigurationSetting"
+      - "ConfigurationSetting"
+    tags:
+      - settings
+      - crud
+    mock_response: |
+      import com.azure.data.appconfiguration.ConfigurationClient;
+      import com.azure.data.appconfiguration.ConfigurationClientBuilder;
+      import com.azure.data.appconfiguration.models.ConfigurationSetting;
+
+      public class SettingsCRUD {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("AZURE_APPCONFIG_CONNECTION_STRING");
+              
+              ConfigurationClient client = new ConfigurationClientBuilder()
+                  .connectionString(connectionString)
+                  .buildClient();
+              
+              // Add (create only if not exists)
+              ConfigurationSetting created = client.addConfigurationSetting(
+                  "app/database/connection", 
+                  "Production", 
+                  "Server=prod.db.com;Database=myapp"
+              );
+              System.out.println("Created: " + created.getKey());
+              
+              // Get
+              ConfigurationSetting retrieved = client.getConfigurationSetting(
+                  "app/database/connection", 
+                  "Production"
+              );
+              System.out.println("Value: " + retrieved.getValue());
+              
+              // Set (create or update)
+              ConfigurationSetting updated = client.setConfigurationSetting(
+                  "app/database/connection", 
+                  "Production", 
+                  "Server=new-prod.db.com;Database=myapp"
+              );
+              System.out.println("Updated: " + updated.getLastModified());
+              
+              // Delete
+              ConfigurationSetting deleted = client.deleteConfigurationSetting(
+                  "app/database/connection", 
+                  "Production"
+              );
+              System.out.println("Deleted: " + deleted.getKey());
+          }
+      }
+
+  - name: list_settings_with_filter
+    prompt: |
+      Create a Java example that lists configuration settings using filters
+      for key pattern and label.
+    expected_patterns:
+      - "SettingSelector"
+      - "setKeyFilter"
+      - "setLabelFilter"
+      - "listConfigurationSettings"
+      - "PagedIterable"
+    tags:
+      - listing
+      - filtering
+    mock_response: |
+      import com.azure.data.appconfiguration.ConfigurationClient;
+      import com.azure.data.appconfiguration.ConfigurationClientBuilder;
+      import com.azure.data.appconfiguration.models.ConfigurationSetting;
+      import com.azure.data.appconfiguration.models.SettingSelector;
+      import com.azure.core.http.rest.PagedIterable;
+
+      public class ListSettings {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("AZURE_APPCONFIG_CONNECTION_STRING");
+              
+              ConfigurationClient client = new ConfigurationClientBuilder()
+                  .connectionString(connectionString)
+                  .buildClient();
+              
+              // List by key pattern
+              SettingSelector selector = new SettingSelector()
+                  .setKeyFilter("app/*")
+                  .setLabelFilter("Production");
+              
+              PagedIterable<ConfigurationSetting> settings = client.listConfigurationSettings(selector);
+              
+              for (ConfigurationSetting setting : settings) {
+                  System.out.println(setting.getKey() + " = " + setting.getValue());
+              }
+          }
+      }
+
+  - name: feature_flag_management
+    prompt: |
+      Create a Java example that creates a feature flag with a percentage
+      filter for gradual rollout.
+    expected_patterns:
+      - "FeatureFlagConfigurationSetting"
+      - "FeatureFlagFilter"
+      - "setDescription"
+      - "setClientFilters"
+      - "addParameter"
+      - "isEnabled"
+    tags:
+      - feature-flags
+      - advanced
+    mock_response: |
+      import com.azure.data.appconfiguration.ConfigurationClient;
+      import com.azure.data.appconfiguration.ConfigurationClientBuilder;
+      import com.azure.data.appconfiguration.models.FeatureFlagConfigurationSetting;
+      import com.azure.data.appconfiguration.models.FeatureFlagFilter;
+      import java.util.Arrays;
+
+      public class FeatureFlags {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("AZURE_APPCONFIG_CONNECTION_STRING");
+              
+              ConfigurationClient client = new ConfigurationClientBuilder()
+                  .connectionString(connectionString)
+                  .buildClient();
+              
+              // Create feature flag with percentage filter
+              FeatureFlagFilter percentageFilter = new FeatureFlagFilter("Microsoft.Percentage")
+                  .addParameter("Value", 50);
+              
+              FeatureFlagConfigurationSetting featureFlag = new FeatureFlagConfigurationSetting("beta-feature", true)
+                  .setDescription("Beta feature rollout")
+                  .setClientFilters(Arrays.asList(percentageFilter));
+              
+              FeatureFlagConfigurationSetting created = (FeatureFlagConfigurationSetting)
+                  client.addConfigurationSetting(featureFlag);
+              
+              System.out.println("Feature: " + created.getFeatureId());
+              System.out.println("Enabled: " + created.isEnabled());
+          }
+      }
+
+  - name: snapshot_creation
+    prompt: |
+      Create a Java example that creates a snapshot of configuration settings
+      matching a specific key pattern.
+    expected_patterns:
+      - "beginCreateSnapshot"
+      - "ConfigurationSnapshot"
+      - "ConfigurationSettingsFilter"
+      - "SyncPoller"
+      - "waitForCompletion"
+      - "getFinalResult"
+    tags:
+      - snapshots
+      - advanced
+    mock_response: |
+      import com.azure.data.appconfiguration.ConfigurationClient;
+      import com.azure.data.appconfiguration.ConfigurationClientBuilder;
+      import com.azure.data.appconfiguration.models.ConfigurationSnapshot;
+      import com.azure.data.appconfiguration.models.ConfigurationSettingsFilter;
+      import com.azure.core.util.Context;
+      import com.azure.core.util.polling.SyncPoller;
+      import com.azure.core.util.polling.PollOperationDetails;
+      import java.time.Duration;
+      import java.util.ArrayList;
+      import java.util.List;
+
+      public class SnapshotCreation {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("AZURE_APPCONFIG_CONNECTION_STRING");
+              
+              ConfigurationClient client = new ConfigurationClientBuilder()
+                  .connectionString(connectionString)
+                  .buildClient();
+              
+              List<ConfigurationSettingsFilter> filters = new ArrayList<>();
+              filters.add(new ConfigurationSettingsFilter("app/*"));
+              
+              SyncPoller<PollOperationDetails, ConfigurationSnapshot> poller = client.beginCreateSnapshot(
+                  "release-v1.0",
+                  new ConfigurationSnapshot(filters),
+                  Context.NONE
+              );
+              poller.setPollInterval(Duration.ofSeconds(10));
+              poller.waitForCompletion();
+              
+              ConfigurationSnapshot snapshot = poller.getFinalResult();
+              System.out.println("Snapshot: " + snapshot.getName());
+              System.out.println("Status: " + snapshot.getStatus());
+          }
+      }
+
+  - name: error_handling
+    prompt: |
+      Create a Java example showing proper error handling for App Configuration
+      operations with HttpResponseException handling.
+    expected_patterns:
+      - "HttpResponseException"
+      - "try"
+      - "catch"
+      - "getResponse().getStatusCode()"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.data.appconfiguration.ConfigurationClient;
+      import com.azure.data.appconfiguration.ConfigurationClientBuilder;
+      import com.azure.core.exception.HttpResponseException;
+
+      public class ErrorHandling {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("AZURE_APPCONFIG_CONNECTION_STRING");
+              
+              ConfigurationClient client = new ConfigurationClientBuilder()
+                  .connectionString(connectionString)
+                  .buildClient();
+              
+              try {
+                  client.getConfigurationSetting("nonexistent", null);
+              } catch (HttpResponseException e) {
+                  if (e.getResponse().getStatusCode() == 404) {
+                      System.err.println("Setting not found");
+                  } else {
+                      System.err.println("Error: " + e.getMessage());
+                  }
+              }
+          }
+      }

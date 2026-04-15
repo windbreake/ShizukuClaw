@@ -1,0 +1,398 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-communication-sms-java skill evaluation
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: client_creation
+    prompt: |
+      Create Java code to set up the Azure Communication SMS client
+      using DefaultAzureCredential authentication.
+    expected_patterns:
+      - "SmsClientBuilder"
+      - "DefaultAzureCredentialBuilder"
+      - "buildClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'connectionString\("endpoint='
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import com.azure.communication.sms.SmsClient;
+      import com.azure.communication.sms.SmsClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              
+              SmsClient smsClient = new SmsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              System.out.println("Client initialized successfully");
+          }
+      }
+
+  - name: send_sms_single
+    prompt: |
+      Create a Java example that sends an SMS message to a single recipient
+      and checks if it was successful.
+    expected_patterns:
+      - "send"
+      - "SmsSendResult"
+      - "getMessageId"
+      - "isSuccessful"
+    tags:
+      - sms
+      - basic
+    mock_response: |
+      import com.azure.communication.sms.SmsClient;
+      import com.azure.communication.sms.SmsClientBuilder;
+      import com.azure.communication.sms.models.SmsSendResult;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class SendSingleSms {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String fromNumber = System.getenv("SMS_FROM_NUMBER");
+              String toNumber = System.getenv("SMS_TO_NUMBER");
+              
+              SmsClient smsClient = new SmsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              SmsSendResult result = smsClient.send(
+                  fromNumber,
+                  toNumber,
+                  "Your verification code is 123456");
+              
+              System.out.println("Message ID: " + result.getMessageId());
+              System.out.println("Success: " + result.isSuccessful());
+              
+              if (!result.isSuccessful()) {
+                  System.out.println("Error: " + result.getErrorMessage());
+              }
+          }
+      }
+
+  - name: send_sms_multiple
+    prompt: |
+      Create a Java example that sends an SMS message to multiple recipients
+      with delivery reports enabled.
+    expected_patterns:
+      - "SmsSendOptions"
+      - "setDeliveryReportEnabled"
+      - "setTag"
+      - "sendWithResponse"
+      - "Arrays.asList"
+    tags:
+      - sms
+      - bulk
+    mock_response: |
+      import com.azure.communication.sms.SmsClient;
+      import com.azure.communication.sms.SmsClientBuilder;
+      import com.azure.communication.sms.models.*;
+      import com.azure.core.util.Context;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.Arrays;
+      import java.util.List;
+
+      public class SendMultipleSms {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String fromNumber = System.getenv("SMS_FROM_NUMBER");
+              
+              SmsClient smsClient = new SmsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              List<String> recipients = Arrays.asList(
+                  "+14255551111",
+                  "+14255552222",
+                  "+14255553333"
+              );
+              
+              SmsSendOptions options = new SmsSendOptions()
+                  .setDeliveryReportEnabled(true)
+                  .setTag("marketing-campaign-001");
+              
+              Iterable<SmsSendResult> results = smsClient.sendWithResponse(
+                  fromNumber,
+                  recipients,
+                  "Flash sale! 50% off today only.",
+                  options,
+                  Context.NONE
+              ).getValue();
+              
+              for (SmsSendResult result : results) {
+                  if (result.isSuccessful()) {
+                      System.out.println("Sent to " + result.getTo() + ": " + result.getMessageId());
+                  } else {
+                      System.out.println("Failed to " + result.getTo() + ": " + result.getErrorMessage());
+                  }
+              }
+          }
+      }
+
+  - name: error_handling
+    prompt: |
+      Create a Java example showing proper error handling for SMS
+      operations including per-recipient error checking.
+    expected_patterns:
+      - "HttpResponseException"
+      - "try"
+      - "catch"
+      - "isSuccessful"
+      - "getHttpStatusCode"
+      - "getErrorMessage"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.communication.sms.SmsClient;
+      import com.azure.communication.sms.SmsClientBuilder;
+      import com.azure.communication.sms.models.SmsSendResult;
+      import com.azure.core.exception.HttpResponseException;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ErrorHandling {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String fromNumber = System.getenv("SMS_FROM_NUMBER");
+              
+              SmsClient smsClient = new SmsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              try {
+                  SmsSendResult result = smsClient.send(
+                      fromNumber,
+                      "+14255551234",
+                      "Test message"
+                  );
+                  
+                  if (!result.isSuccessful()) {
+                      int status = result.getHttpStatusCode();
+                      String error = result.getErrorMessage();
+                      
+                      if (status == 400) {
+                          System.err.println("Invalid phone number: " + result.getTo());
+                      } else if (status == 429) {
+                          System.err.println("Rate limited - retry later");
+                      } else {
+                          System.err.println("Error " + status + ": " + error);
+                      }
+                  }
+              } catch (HttpResponseException e) {
+                  System.err.println("Request failed: " + e.getMessage());
+                  System.err.println("Status: " + e.getResponse().getStatusCode());
+              }
+          }
+      }
+
+  - name: async_sms_client
+    prompt: |
+      Create a Java example using SmsAsyncClient to send SMS messages
+      asynchronously with Reactor subscribe pattern.
+    expected_patterns:
+      - "SmsAsyncClient"
+      - "buildAsyncClient"
+      - "\\.subscribe\\("
+    forbidden_patterns:
+      - "\\.block\\(\\)"
+    tags:
+      - async
+      - sms
+    mock_response: |
+      import com.azure.communication.sms.SmsAsyncClient;
+      import com.azure.communication.sms.SmsClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class AsyncSmsClient {
+          public static void main(String[] args) throws InterruptedException {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String fromNumber = System.getenv("SMS_FROM_NUMBER");
+              String toNumber = System.getenv("SMS_TO_NUMBER");
+              
+              SmsAsyncClient smsAsyncClient = new SmsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildAsyncClient();
+              
+              smsAsyncClient.send(fromNumber, toNumber, "Async SMS message!")
+                  .subscribe(
+                      result -> {
+                          System.out.println("Message sent successfully!");
+                          System.out.println("Message ID: " + result.getMessageId());
+                          System.out.println("To: " + result.getTo());
+                      },
+                      error -> System.err.println("Error sending SMS: " + error.getMessage())
+                  );
+              
+              // Keep main thread alive for async operation
+              Thread.sleep(5000);
+          }
+      }
+
+  - name: connection_string_auth
+    prompt: |
+      Create a Java example that creates an SmsClient using a connection
+      string for authentication instead of DefaultAzureCredential.
+    expected_patterns:
+      - "connectionString"
+      - "SmsClientBuilder"
+      - "buildClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'connectionString\("endpoint='
+      - "DefaultAzureCredential"
+    tags:
+      - authentication
+    mock_response: |
+      import com.azure.communication.sms.SmsClient;
+      import com.azure.communication.sms.SmsClientBuilder;
+      import com.azure.communication.sms.models.SmsSendResult;
+
+      public class ConnectionStringAuth {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("AZURE_COMMUNICATION_CONNECTION_STRING");
+              String fromNumber = System.getenv("SMS_FROM_NUMBER");
+              String toNumber = System.getenv("SMS_TO_NUMBER");
+              
+              SmsClient smsClient = new SmsClientBuilder()
+                  .connectionString(connectionString)
+                  .buildClient();
+              
+              SmsSendResult result = smsClient.send(
+                  fromNumber,
+                  toNumber,
+                  "Hello from connection string auth!"
+              );
+              
+              System.out.println("Message ID: " + result.getMessageId());
+              System.out.println("Success: " + result.isSuccessful());
+          }
+      }
+
+  - name: response_handling
+    prompt: |
+      Create a Java example that uses sendWithResponse to inspect the
+      HTTP response details including status code and headers.
+    expected_patterns:
+      - "sendWithResponse"
+      - "Response<"
+      - "getStatusCode"
+      - "getHeaders"
+      - "getValue"
+    tags:
+      - sms
+      - response
+    mock_response: |
+      import com.azure.communication.sms.SmsClient;
+      import com.azure.communication.sms.SmsClientBuilder;
+      import com.azure.communication.sms.models.SmsSendOptions;
+      import com.azure.communication.sms.models.SmsSendResult;
+      import com.azure.core.http.rest.Response;
+      import com.azure.core.util.Context;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.Arrays;
+
+      public class ResponseHandling {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String fromNumber = System.getenv("SMS_FROM_NUMBER");
+              
+              SmsClient smsClient = new SmsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              SmsSendOptions options = new SmsSendOptions()
+                  .setDeliveryReportEnabled(true)
+                  .setTag("response-test-001");
+              
+              Response<Iterable<SmsSendResult>> response = smsClient.sendWithResponse(
+                  fromNumber,
+                  Arrays.asList("+14255551234"),
+                  "Testing response handling",
+                  options,
+                  Context.NONE
+              );
+              
+              // Inspect HTTP response
+              System.out.println("HTTP Status Code: " + response.getStatusCode());
+              System.out.println("Request ID: " + response.getHeaders().getValue("x-ms-request-id"));
+              
+              // Process results
+              for (SmsSendResult result : response.getValue()) {
+                  System.out.println("Message ID: " + result.getMessageId());
+                  System.out.println("To: " + result.getTo());
+                  System.out.println("Successful: " + result.isSuccessful());
+              }
+          }
+      }
+
+  - name: delivery_report_tag
+    prompt: |
+      Create a Java example that sends an SMS with a custom tag for
+      correlating delivery reports via Event Grid.
+    expected_patterns:
+      - "SmsSendOptions"
+      - "setTag"
+      - "setDeliveryReportEnabled"
+      - "sendWithResponse"
+    tags:
+      - sms
+      - delivery-report
+    mock_response: |
+      import com.azure.communication.sms.SmsClient;
+      import com.azure.communication.sms.SmsClientBuilder;
+      import com.azure.communication.sms.models.SmsSendOptions;
+      import com.azure.communication.sms.models.SmsSendResult;
+      import com.azure.core.util.Context;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.Arrays;
+      import java.util.UUID;
+
+      public class DeliveryReportTag {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String fromNumber = System.getenv("SMS_FROM_NUMBER");
+              String toNumber = System.getenv("SMS_TO_NUMBER");
+              
+              SmsClient smsClient = new SmsClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              // Generate a unique tag for tracking this message
+              String correlationTag = "order-confirmation-" + UUID.randomUUID().toString();
+              
+              SmsSendOptions options = new SmsSendOptions()
+                  .setDeliveryReportEnabled(true)
+                  .setTag(correlationTag);
+              
+              Iterable<SmsSendResult> results = smsClient.sendWithResponse(
+                  fromNumber,
+                  Arrays.asList(toNumber),
+                  "Your order #12345 has been confirmed. Thank you!",
+                  options,
+                  Context.NONE
+              ).getValue();
+              
+              for (SmsSendResult result : results) {
+                  System.out.println("Message ID: " + result.getMessageId());
+                  System.out.println("Correlation Tag: " + correlationTag);
+                  System.out.println("Success: " + result.isSuccessful());
+                  // The tag will be included in Event Grid delivery report events
+              }
+          }
+      }

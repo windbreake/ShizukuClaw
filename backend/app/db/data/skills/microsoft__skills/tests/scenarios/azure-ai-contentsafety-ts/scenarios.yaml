@@ -1,0 +1,579 @@
+# yaml-language-server: $schema=file:///Users/govindm4max/code/oss/agent-skills/tests/scenarios/skill-scenarios.schema.json
+# Test scenarios for azure-ai-contentsafety-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Client Setup
+  - name: basic_client_setup
+    prompt: |
+      Create a basic Azure AI Content Safety client using ContentSafetyClient
+      with proper authentication. Show both DefaultAzureCredential and API key options.
+    expected_patterns:
+      - "ContentSafetyClient"
+      - "DefaultAzureCredential"
+      - "isUnexpected"
+      - 'import ContentSafetyClient from "@azure-rest/ai-content-safety"'
+      - "process.env"
+    forbidden_patterns:
+      - "new ContentSafetyClient"
+      - "require("
+    tags:
+      - basic
+      - authentication
+      - client-setup
+    mock_response: |
+      import ContentSafetyClient, { isUnexpected } from "@azure-rest/ai-content-safety";
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { AzureKeyCredential } from "@azure/core-auth";
+
+      // Option 1: DefaultAzureCredential (recommended for production)
+      const endpoint = process.env.CONTENT_SAFETY_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+      const client = ContentSafetyClient(endpoint, credential);
+
+      // Option 2: API Key
+      const apiKey = process.env.CONTENT_SAFETY_API_KEY!;
+      const clientWithKey = ContentSafetyClient(endpoint, new AzureKeyCredential(apiKey));
+
+      // Test the client
+      const result = await client.path("/text:analyze").post({
+        body: { text: "Hello world" },
+      });
+
+      if (isUnexpected(result)) {
+        throw result;
+      }
+
+      console.log("Client connected successfully");
+
+  # Analyze Text
+  - name: analyze_text_basic
+    prompt: |
+      Analyze text content for harmful content using Azure AI Content Safety.
+      Show how to check all harm categories and process the severity results.
+    expected_patterns:
+      - 'path("/text:analyze")'
+      - "post"
+      - "body"
+      - "isUnexpected"
+      - "categoriesAnalysis"
+      - "severity"
+    forbidden_patterns:
+      - "analyzeText("
+      - ".then("
+    tags:
+      - text-analysis
+      - basic
+    mock_response: |
+      import ContentSafetyClient, { isUnexpected } from "@azure-rest/ai-content-safety";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.CONTENT_SAFETY_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+      const client = ContentSafetyClient(endpoint, credential);
+
+      const textToAnalyze = "This is a sample text to analyze for content safety.";
+
+      const result = await client.path("/text:analyze").post({
+        body: {
+          text: textToAnalyze,
+        },
+      });
+
+      if (isUnexpected(result)) {
+        throw result;
+      }
+
+      console.log("Content Safety Analysis Results:");
+      for (const category of result.body.categoriesAnalysis) {
+        console.log(`  ${category.category}: severity ${category.severity}`);
+      }
+
+  # Analyze Text with Options
+  - name: analyze_text_with_options
+    prompt: |
+      Analyze text with specific categories and output type options.
+      Show how to use EightSeverityLevels for more granular results.
+    expected_patterns:
+      - "categories"
+      - "outputType"
+      - "EightSeverityLevels"
+      - "Hate"
+      - "Violence"
+    forbidden_patterns:
+      - "FourSeverityLevels"
+    tags:
+      - text-analysis
+      - options
+    mock_response: |
+      import ContentSafetyClient, { isUnexpected } from "@azure-rest/ai-content-safety";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.CONTENT_SAFETY_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+      const client = ContentSafetyClient(endpoint, credential);
+
+      const result = await client.path("/text:analyze").post({
+        body: {
+          text: "Sample text content to analyze",
+          categories: ["Hate", "Violence", "Sexual", "SelfHarm"],
+          outputType: "EightSeverityLevels", // Returns 0-7 instead of 0,2,4,6
+        },
+      });
+
+      if (isUnexpected(result)) {
+        throw result;
+      }
+
+      // With EightSeverityLevels, you get more granular severity ratings
+      for (const category of result.body.categoriesAnalysis) {
+        console.log(`${category.category}: ${category.severity}/7`);
+
+        // Example severity interpretation
+        if (category.severity && category.severity >= 4) {
+          console.log(`  ⚠️ High severity detected for ${category.category}`);
+        }
+      }
+
+  # Analyze Image
+  - name: analyze_image
+    prompt: |
+      Analyze an image file for harmful content using Azure AI Content Safety.
+      Show how to read an image file and convert it to base64.
+    expected_patterns:
+      - 'path("/image:analyze")'
+      - "base64"
+      - "content"
+      - "readFileSync"
+      - "isUnexpected"
+    forbidden_patterns:
+      - "analyzeImage("
+    tags:
+      - image-analysis
+      - basic
+    mock_response: |
+      import ContentSafetyClient, { isUnexpected } from "@azure-rest/ai-content-safety";
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { readFileSync } from "node:fs";
+
+      const endpoint = process.env.CONTENT_SAFETY_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+      const client = ContentSafetyClient(endpoint, credential);
+
+      // Read and encode image
+      const imagePath = "./sample-image.png";
+      const imageBuffer = readFileSync(imagePath);
+      const base64Image = imageBuffer.toString("base64");
+
+      const result = await client.path("/image:analyze").post({
+        body: {
+          image: { content: base64Image },
+        },
+      });
+
+      if (isUnexpected(result)) {
+        throw result;
+      }
+
+      console.log("Image Analysis Results:");
+      for (const category of result.body.categoriesAnalysis) {
+        console.log(`  ${category.category}: severity ${category.severity}`);
+      }
+
+  # Create Blocklist
+  - name: create_blocklist
+    prompt: |
+      Create a custom text blocklist in Azure AI Content Safety.
+      Show the proper merge-patch content type for creating blocklists.
+    expected_patterns:
+      - 'path("/text/blocklists/{blocklistName}"'
+      - "patch"
+      - "application/merge-patch+json"
+      - "description"
+      - "isUnexpected"
+    forbidden_patterns:
+      - "createBlocklist"
+      - "put"
+    tags:
+      - blocklist
+      - create
+    mock_response: |
+      import ContentSafetyClient, { isUnexpected } from "@azure-rest/ai-content-safety";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.CONTENT_SAFETY_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+      const client = ContentSafetyClient(endpoint, credential);
+
+      const blocklistName = "MyCustomBlocklist";
+
+      const result = await client
+        .path("/text/blocklists/{blocklistName}", blocklistName)
+        .patch({
+          contentType: "application/merge-patch+json",
+          body: {
+            description: "Custom blocklist for my application",
+          },
+        });
+
+      if (isUnexpected(result)) {
+        throw result;
+      }
+
+      console.log("Blocklist created:", result.body.blocklistName);
+      console.log("Description:", result.body.description);
+
+  # Add Block Items
+  - name: add_block_items
+    prompt: |
+      Add items to a text blocklist using the addOrUpdateBlocklistItems endpoint.
+      Show how to add multiple items with descriptions.
+    expected_patterns:
+      - "addOrUpdateBlocklistItems"
+      - "blocklistItems"
+      - "text"
+      - "description"
+      - "blocklistItemId"
+    forbidden_patterns:
+      - "addItems"
+      - "createItems"
+    tags:
+      - blocklist
+      - items
+    mock_response: |
+      import ContentSafetyClient, { isUnexpected } from "@azure-rest/ai-content-safety";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.CONTENT_SAFETY_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+      const client = ContentSafetyClient(endpoint, credential);
+
+      const blocklistName = "MyCustomBlocklist";
+
+      const result = await client
+        .path("/text/blocklists/{blocklistName}:addOrUpdateBlocklistItems", blocklistName)
+        .post({
+          body: {
+            blocklistItems: [
+              { text: "badword1", description: "Offensive term" },
+              { text: "badword2", description: "Inappropriate content" },
+              { text: "spam-phrase", description: "Known spam pattern" },
+            ],
+          },
+        });
+
+      if (isUnexpected(result)) {
+        throw result;
+      }
+
+      console.log("Block items added:");
+      if (result.body.blocklistItems) {
+        for (const item of result.body.blocklistItems) {
+          console.log(`  ID: ${item.blocklistItemId}`);
+          console.log(`  Text: ${item.text}`);
+          console.log(`  Description: ${item.description}`);
+          console.log("---");
+        }
+      }
+
+  # Analyze Text with Blocklist
+  - name: analyze_text_with_blocklist
+    prompt: |
+      Analyze text content using custom blocklists. Show how to specify
+      blocklist names and check for blocklist matches in the response.
+    expected_patterns:
+      - "blocklistNames"
+      - "blocklistsMatch"
+      - "haltOnBlocklistHit"
+      - "blocklistItemText"
+    forbidden_patterns:
+      - "blocklists:"
+    tags:
+      - text-analysis
+      - blocklist
+    mock_response: |
+      import ContentSafetyClient, { isUnexpected } from "@azure-rest/ai-content-safety";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.CONTENT_SAFETY_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+      const client = ContentSafetyClient(endpoint, credential);
+
+      const result = await client.path("/text:analyze").post({
+        body: {
+          text: "This text might contain badword1 that should be blocked.",
+          blocklistNames: ["MyCustomBlocklist"],
+          haltOnBlocklistHit: false, // Continue analysis even if blocklist hit
+        },
+      });
+
+      if (isUnexpected(result)) {
+        throw result;
+      }
+
+      // Check AI-based category analysis
+      console.log("Category Analysis:");
+      for (const category of result.body.categoriesAnalysis) {
+        console.log(`  ${category.category}: severity ${category.severity}`);
+      }
+
+      // Check blocklist matches
+      if (result.body.blocklistsMatch && result.body.blocklistsMatch.length > 0) {
+        console.log("\nBlocklist Matches Found:");
+        for (const match of result.body.blocklistsMatch) {
+          console.log(`  Blocklist: ${match.blocklistName}`);
+          console.log(`  Item ID: ${match.blocklistItemId}`);
+          console.log(`  Matched Text: ${match.blocklistItemText}`);
+        }
+      } else {
+        console.log("\nNo blocklist matches found");
+      }
+
+  # List Blocklists
+  - name: list_blocklists
+    prompt: |
+      List all text blocklists in the Azure AI Content Safety resource.
+      Show how to iterate through the results.
+    expected_patterns:
+      - 'path("/text/blocklists")'
+      - "get"
+      - "value"
+      - "blocklistName"
+    forbidden_patterns:
+      - "listBlocklists"
+    tags:
+      - blocklist
+      - list
+    mock_response: |
+      import ContentSafetyClient, { isUnexpected } from "@azure-rest/ai-content-safety";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.CONTENT_SAFETY_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+      const client = ContentSafetyClient(endpoint, credential);
+
+      const result = await client.path("/text/blocklists").get();
+
+      if (isUnexpected(result)) {
+        throw result;
+      }
+
+      console.log("Available Blocklists:");
+      if (result.body.value) {
+        for (const blocklist of result.body.value) {
+          console.log(`  Name: ${blocklist.blocklistName}`);
+          console.log(`  Description: ${blocklist.description}`);
+          console.log("---");
+        }
+      }
+
+  # Remove Block Items
+  - name: remove_block_items
+    prompt: |
+      Remove items from a text blocklist using their item IDs.
+      Show the removeBlocklistItems endpoint.
+    expected_patterns:
+      - "removeBlocklistItems"
+      - "blocklistItemIds"
+      - "post"
+    forbidden_patterns:
+      - "deleteItems"
+    tags:
+      - blocklist
+      - delete
+    mock_response: |
+      import ContentSafetyClient, { isUnexpected } from "@azure-rest/ai-content-safety";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.CONTENT_SAFETY_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+      const client = ContentSafetyClient(endpoint, credential);
+
+      const blocklistName = "MyCustomBlocklist";
+      const itemIdsToRemove = ["item-id-1", "item-id-2"];
+
+      const result = await client
+        .path("/text/blocklists/{blocklistName}:removeBlocklistItems", blocklistName)
+        .post({
+          body: {
+            blocklistItemIds: itemIdsToRemove,
+          },
+        });
+
+      if (isUnexpected(result)) {
+        throw result;
+      }
+
+      console.log("Block items removed successfully");
+
+  # Delete Blocklist
+  - name: delete_blocklist
+    prompt: |
+      Delete a text blocklist from Azure AI Content Safety.
+      Show proper error handling for the delete operation.
+    expected_patterns:
+      - 'path("/text/blocklists/{blocklistName}"'
+      - "delete"
+      - "isUnexpected"
+    forbidden_patterns:
+      - "deleteBlocklist"
+    tags:
+      - blocklist
+      - delete
+    mock_response: |
+      import ContentSafetyClient, { isUnexpected } from "@azure-rest/ai-content-safety";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.CONTENT_SAFETY_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+      const client = ContentSafetyClient(endpoint, credential);
+
+      const blocklistName = "MyCustomBlocklist";
+
+      const result = await client
+        .path("/text/blocklists/{blocklistName}", blocklistName)
+        .delete();
+
+      if (isUnexpected(result)) {
+        throw result;
+      }
+
+      console.log(`Blocklist '${blocklistName}' deleted successfully`);
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Demonstrate proper error handling when working with Azure AI Content Safety.
+      Show how to use isUnexpected and handle different error scenarios.
+    expected_patterns:
+      - "isUnexpected"
+      - "throw result"
+      - "result.body"
+    forbidden_patterns:
+      - "catch {}"
+      - "catch.*pass"
+    tags:
+      - error-handling
+      - production
+    mock_response: |
+      import ContentSafetyClient, { isUnexpected } from "@azure-rest/ai-content-safety";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.CONTENT_SAFETY_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+      const client = ContentSafetyClient(endpoint, credential);
+
+      async function analyzeContent(text: string) {
+        const result = await client.path("/text:analyze").post({
+          body: { text },
+        });
+
+        // Always check for unexpected responses
+        if (isUnexpected(result)) {
+          // Access error details from result.body
+          console.error("Analysis failed");
+          console.error("Status:", result.status);
+          console.error("Error:", result.body);
+
+          // You can throw the result or handle specific errors
+          throw result;
+        }
+
+        // Safe to access success response properties
+        return result.body.categoriesAnalysis;
+      }
+
+      try {
+        const analysis = await analyzeContent("Sample text");
+        console.log("Analysis successful:", analysis);
+      } catch (error) {
+        console.error("Error analyzing content:", error);
+      }
+
+  # Content Moderation Workflow
+  - name: content_moderation_workflow
+    prompt: |
+      Create a complete content moderation workflow that checks both AI categories
+      and custom blocklists, then makes a decision on whether content is safe.
+    expected_patterns:
+      - "categoriesAnalysis"
+      - "blocklistsMatch"
+      - "severity"
+      - "isUnexpected"
+    forbidden_patterns:
+      - "moderate("
+    tags:
+      - workflow
+      - moderation
+      - advanced
+    mock_response: |
+      import ContentSafetyClient, { isUnexpected } from "@azure-rest/ai-content-safety";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.CONTENT_SAFETY_ENDPOINT!;
+      const credential = new DefaultAzureCredential();
+      const client = ContentSafetyClient(endpoint, credential);
+
+      interface ModerationResult {
+        isAllowed: boolean;
+        reasons: string[];
+        categories: Record<string, number>;
+      }
+
+      async function moderateContent(text: string): Promise<ModerationResult> {
+        const result = await client.path("/text:analyze").post({
+          body: {
+            text,
+            blocklistNames: ["CompanyBlocklist"],
+            haltOnBlocklistHit: false,
+          },
+        });
+
+        if (isUnexpected(result)) {
+          throw new Error("Content analysis failed");
+        }
+
+        const reasons: string[] = [];
+        const categories: Record<string, number> = {};
+        const SEVERITY_THRESHOLD = 4;
+
+        // Check AI-based categories
+        for (const category of result.body.categoriesAnalysis) {
+          categories[category.category] = category.severity ?? 0;
+
+          if (category.severity && category.severity >= SEVERITY_THRESHOLD) {
+            reasons.push(`High ${category.category} severity: ${category.severity}`);
+          }
+        }
+
+        // Check blocklist matches
+        if (result.body.blocklistsMatch) {
+          for (const match of result.body.blocklistsMatch) {
+            reasons.push(`Blocklist match: ${match.blocklistItemText}`);
+          }
+        }
+
+        return {
+          isAllowed: reasons.length === 0,
+          reasons,
+          categories,
+        };
+      }
+
+      // Usage
+      const userContent = "User submitted content to check";
+      const moderation = await moderateContent(userContent);
+
+      if (moderation.isAllowed) {
+        console.log("✅ Content is safe to publish");
+      } else {
+        console.log("❌ Content blocked:");
+        for (const reason of moderation.reasons) {
+          console.log(`  - ${reason}`);
+        }
+      }

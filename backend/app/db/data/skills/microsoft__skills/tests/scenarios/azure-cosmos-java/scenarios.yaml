@@ -1,0 +1,389 @@
+# Test scenarios for azure-cosmos-java skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Client Builder with DefaultAzureCredential
+  - name: client_builder_default_credential
+    prompt: |
+      Create a CosmosClient using DefaultAzureCredential with:
+      - Endpoint from environment variable
+      - SESSION consistency level
+      - Content response on write enabled
+      - Preferred regions: West US, East US
+    expected_patterns:
+      - "DefaultAzureCredentialBuilder"
+      - "CosmosClientBuilder"
+      - "ConsistencyLevel.SESSION"
+      - "contentResponseOnWriteEnabled(true)"
+      - "preferredRegions"
+      - "System.getenv"
+    forbidden_patterns:
+      - ".key("
+      - "hardcoded"
+      - '"https://.*\\.documents\\.azure\\.com'
+    tags:
+      - authentication
+      - client
+    mock_response: |
+      import com.azure.cosmos.CosmosClient;
+      import com.azure.cosmos.CosmosClientBuilder;
+      import com.azure.cosmos.ConsistencyLevel;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.Arrays;
+
+      CosmosClient cosmosClient = new CosmosClientBuilder()
+          .endpoint(System.getenv("COSMOS_ENDPOINT"))
+          .credential(new DefaultAzureCredentialBuilder().build())
+          .consistencyLevel(ConsistencyLevel.SESSION)
+          .contentResponseOnWriteEnabled(true)
+          .preferredRegions(Arrays.asList("West US", "East US"))
+          .buildClient();
+
+  # Async Client Builder
+  - name: async_client_builder
+    prompt: |
+      Create a CosmosAsyncClient for high-throughput scenarios using
+      DefaultAzureCredential and SESSION consistency.
+    expected_patterns:
+      - "CosmosAsyncClient"
+      - "buildAsyncClient"
+      - "DefaultAzureCredentialBuilder"
+    forbidden_patterns:
+      - "buildClient()"
+      - ".key("
+    tags:
+      - authentication
+      - async
+    mock_response: |
+      import com.azure.cosmos.CosmosAsyncClient;
+      import com.azure.cosmos.CosmosClientBuilder;
+      import com.azure.cosmos.ConsistencyLevel;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      CosmosAsyncClient asyncClient = new CosmosClientBuilder()
+          .endpoint(System.getenv("COSMOS_ENDPOINT"))
+          .credential(new DefaultAzureCredentialBuilder().build())
+          .consistencyLevel(ConsistencyLevel.SESSION)
+          .contentResponseOnWriteEnabled(true)
+          .buildAsyncClient();
+
+  # CRUD with PartitionKey
+  - name: crud_with_partition_key
+    prompt: |
+      Implement CRUD operations for a User entity with:
+      - Create item with partition key
+      - Read item (point read) with partition key
+      - Upsert item
+      - Delete item
+      Show proper error handling for CosmosException.
+    expected_patterns:
+      - "createItem"
+      - "readItem"
+      - "upsertItem"
+      - "deleteItem"
+      - "new PartitionKey"
+      - "CosmosException"
+      - "getStatusCode"
+    forbidden_patterns:
+      - "queryItems.*WHERE.*id"
+      - "partition_key"
+    tags:
+      - crud
+      - partitioning
+    mock_response: |
+      import com.azure.cosmos.CosmosContainer;
+      import com.azure.cosmos.CosmosException;
+      import com.azure.cosmos.models.CosmosItemRequestOptions;
+      import com.azure.cosmos.models.CosmosItemResponse;
+      import com.azure.cosmos.models.PartitionKey;
+
+      CosmosContainer container = cosmosClient
+          .getDatabase("myDatabase")
+          .getContainer("users");
+
+      User user = new User("user-123", "John Doe", "john@example.com");
+
+      // Create
+      try {
+          CosmosItemResponse<User> createResponse = container.createItem(
+              user,
+              new PartitionKey(user.getId()),
+              new CosmosItemRequestOptions()
+          );
+          System.out.printf("Created with charge: %.2f RU%n", createResponse.getRequestCharge());
+      } catch (CosmosException e) {
+          if (e.getStatusCode() == 409) {
+              System.err.println("Item already exists");
+          }
+      }
+
+      // Read (Point Read)
+      try {
+          CosmosItemResponse<User> readResponse = container.readItem(
+              "user-123",
+              new PartitionKey("user-123"),
+              User.class
+          );
+          User readUser = readResponse.getItem();
+          System.out.printf("Read user: %s%n", readUser.getName());
+      } catch (CosmosException e) {
+          if (e.getStatusCode() == 404) {
+              System.err.println("User not found");
+          }
+      }
+
+      // Upsert
+      user.setEmail("john.doe@example.com");
+      CosmosItemResponse<User> upsertResponse = container.upsertItem(user);
+      System.out.printf("Upserted with charge: %.2f RU%n", upsertResponse.getRequestCharge());
+
+      // Delete
+      container.deleteItem(
+          user.getId(),
+          new PartitionKey(user.getId()),
+          new CosmosItemRequestOptions()
+      );
+
+  # Parameterized Query
+  - name: parameterized_query
+    prompt: |
+      Write a parameterized SQL query to find products by status and category
+      using SqlQuerySpec and SqlParameter. Avoid SQL injection.
+    expected_patterns:
+      - "SqlQuerySpec"
+      - "SqlParameter"
+      - "@status"
+      - "@category"
+      - "Arrays.asList"
+    forbidden_patterns:
+      - "String.format"
+      - "\\+ status"
+      - "\\+ category"
+      - "\" \\+ "
+    tags:
+      - queries
+      - security
+    mock_response: |
+      import com.azure.cosmos.models.SqlParameter;
+      import com.azure.cosmos.models.SqlQuerySpec;
+      import com.azure.cosmos.models.CosmosQueryRequestOptions;
+      import com.azure.cosmos.util.CosmosPagedIterable;
+      import java.util.Arrays;
+
+      public List<Product> findByStatusAndCategory(String status, String category) {
+          SqlQuerySpec querySpec = new SqlQuerySpec(
+              "SELECT * FROM c WHERE c.status = @status AND c.category = @category",
+              Arrays.asList(
+                  new SqlParameter("@status", status),
+                  new SqlParameter("@category", category)
+              )
+          );
+
+          CosmosPagedIterable<Product> results = container.queryItems(
+              querySpec,
+              new CosmosQueryRequestOptions(),
+              Product.class
+          );
+
+          List<Product> products = new ArrayList<>();
+          results.forEach(products::add);
+          return products;
+      }
+
+  # Async Operations with Reactor
+  - name: async_reactor_patterns
+    prompt: |
+      Show async CRUD operations using CosmosAsyncContainer with Reactor's
+      Mono and Flux. Chain create, read, update operations.
+    expected_patterns:
+      - "CosmosAsyncContainer"
+      - "flatMap"
+      - "subscribe"
+      - "Mono"
+    forbidden_patterns:
+      - ".block()"
+      - "buildClient()"
+    tags:
+      - async
+      - reactor
+    mock_response: |
+      import com.azure.cosmos.CosmosAsyncContainer;
+      import com.azure.cosmos.models.PartitionKey;
+      import reactor.core.publisher.Mono;
+
+      CosmosAsyncContainer asyncContainer = asyncClient
+          .getDatabase("myDatabase")
+          .getContainer("users");
+
+      User user = new User("user-456", "Jane Doe", "jane@example.com");
+
+      asyncContainer.createItem(user)
+          .flatMap(response -> {
+              System.out.println("Created: " + response.getItem().getId());
+              return asyncContainer.readItem(
+                  response.getItem().getId(),
+                  new PartitionKey(response.getItem().getId()),
+                  User.class
+              );
+          })
+          .flatMap(response -> {
+              User u = response.getItem();
+              u.setEmail("jane.doe@example.com");
+              return asyncContainer.replaceItem(
+                  u,
+                  u.getId(),
+                  new PartitionKey(u.getId())
+              );
+          })
+          .subscribe(
+              response -> System.out.println("Updated: " + response.getItem().getId()),
+              error -> System.err.println("Error: " + error.getMessage())
+          );
+
+  # Paging with Continuation Token
+  - name: paging_continuation_token
+    prompt: |
+      Implement paging through query results using continuation tokens
+      and FeedResponse. Process results page by page.
+    expected_patterns:
+      - "FeedResponse"
+      - "getContinuationToken"
+      - "iterableByPage"
+      - "getRequestCharge"
+    forbidden_patterns:
+      - "forEach.*add"
+      - "new ArrayList"
+    tags:
+      - queries
+      - paging
+    mock_response: |
+      import com.azure.cosmos.models.FeedResponse;
+      import com.azure.cosmos.models.CosmosQueryRequestOptions;
+
+      String continuationToken = null;
+      int pageSize = 100;
+      double totalCharge = 0.0;
+
+      do {
+          CosmosQueryRequestOptions options = new CosmosQueryRequestOptions();
+
+          Iterable<FeedResponse<User>> feedResponses = container
+              .queryItems("SELECT * FROM c", options, User.class)
+              .iterableByPage(continuationToken, pageSize);
+
+          for (FeedResponse<User> page : feedResponses) {
+              System.out.printf("Page with %d items, charge: %.2f%n",
+                  page.getResults().size(),
+                  page.getRequestCharge());
+
+              totalCharge += page.getRequestCharge();
+
+              for (User user : page.getResults()) {
+                  processUser(user);
+              }
+
+              continuationToken = page.getContinuationToken();
+          }
+      } while (continuationToken != null);
+
+      System.out.printf("Total RU consumed: %.2f%n", totalCharge);
+
+  # Error Handling
+  - name: cosmos_error_handling
+    prompt: |
+      Show comprehensive error handling for Cosmos operations including
+      409 Conflict, 429 Rate Limited, and 404 Not Found.
+    expected_patterns:
+      - "CosmosException"
+      - "getStatusCode"
+      - "getRetryAfterDuration"
+      - "getRequestCharge"
+      - "409"
+      - "429"
+      - "404"
+    forbidden_patterns:
+      - "catch (Exception"
+      - "e.printStackTrace"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.cosmos.CosmosException;
+      import com.azure.cosmos.models.CosmosItemRequestOptions;
+      import com.azure.cosmos.models.PartitionKey;
+
+      public void createUserWithRetry(User user) {
+          try {
+              container.createItem(user, new PartitionKey(user.getId()), new CosmosItemRequestOptions());
+          } catch (CosmosException e) {
+              int statusCode = e.getStatusCode();
+              double requestCharge = e.getRequestCharge();
+
+              switch (statusCode) {
+                  case 409:
+                      System.err.printf("Conflict: Item %s already exists (charge: %.2f RU)%n",
+                          user.getId(), requestCharge);
+                      break;
+                  case 429:
+                      System.err.printf("Rate limited. Retry after: %s%n",
+                          e.getRetryAfterDuration());
+                      // Implement retry logic
+                      break;
+                  case 404:
+                      System.err.println("Container or database not found");
+                      break;
+                  default:
+                      System.err.printf("Error %d: %s (charge: %.2f)%n",
+                          statusCode, e.getMessage(), requestCharge);
+              }
+          }
+      }
+
+  # Database and Container Creation
+  - name: database_container_creation
+    prompt: |
+      Create a database and container with partition key and throughput
+      using createIfNotExists pattern.
+    expected_patterns:
+      - "createDatabaseIfNotExists"
+      - "createContainerIfNotExists"
+      - "CosmosContainerProperties"
+      - "ThroughputProperties"
+      - "partitionKey"
+    forbidden_patterns:
+      - "createDatabase("
+      - "createContainer("
+    tags:
+      - setup
+      - infrastructure
+    mock_response: |
+      import com.azure.cosmos.CosmosDatabase;
+      import com.azure.cosmos.models.CosmosDatabaseResponse;
+      import com.azure.cosmos.models.CosmosContainerProperties;
+      import com.azure.cosmos.models.CosmosContainerResponse;
+      import com.azure.cosmos.models.ThroughputProperties;
+
+      // Create database if not exists
+      CosmosDatabaseResponse dbResponse = cosmosClient.createDatabaseIfNotExists("myDatabase");
+      CosmosDatabase database = cosmosClient.getDatabase(dbResponse.getProperties().getId());
+
+      System.out.printf("Database created/retrieved: %s%n", database.getId());
+
+      // Create container with partition key
+      CosmosContainerProperties containerProperties =
+          new CosmosContainerProperties("users", "/userId");
+
+      // Use manual throughput for predictable costs (or autoscale for variable workloads)
+      ThroughputProperties throughput = ThroughputProperties.createManualThroughput(400);
+
+      CosmosContainerResponse containerResponse = database.createContainerIfNotExists(
+          containerProperties,
+          throughput
+      );
+
+      System.out.printf("Container created/retrieved: %s%n",
+          containerResponse.getProperties().getId());

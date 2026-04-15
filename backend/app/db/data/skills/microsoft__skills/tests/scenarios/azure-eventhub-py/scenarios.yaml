@@ -1,0 +1,294 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-eventhub-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: producer_batch_send
+    prompt: |
+      Create a synchronous Event Hub producer that authenticates with
+      DefaultAzureCredential, creates a batch, handles batch size limits,
+      and sends the batch.
+    expected_patterns:
+      - "EventHubProducerClient"
+      - "DefaultAzureCredential"
+      - "create_batch"
+      - "send_batch"
+    forbidden_patterns:
+      - "from_connection_string"
+      - "EventHubProducerClient.from_connection_string"
+    tags:
+      - producer
+      - batch
+      - authentication
+    mock_response: |
+      import os
+      from azure.eventhub import EventHubProducerClient, EventData
+      from azure.identity import DefaultAzureCredential
+      
+      producer = EventHubProducerClient(
+          fully_qualified_namespace=os.environ["EVENT_HUB_FULLY_QUALIFIED_NAMESPACE"],
+          eventhub_name=os.environ["EVENT_HUB_NAME"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      with producer:
+          batch = producer.create_batch()
+          for i in range(5):
+              try:
+                  batch.add(EventData(f"event-{i}"))
+              except ValueError:
+                  producer.send_batch(batch)
+                  batch = producer.create_batch()
+                  batch.add(EventData(f"event-{i}"))
+          producer.send_batch(batch)
+
+  - name: consumer_receive_with_checkpoint
+    prompt: |
+      Create an Event Hub consumer that uses DefaultAzureCredential and
+      receives events from the beginning of the stream while checkpointing
+      each event.
+    expected_patterns:
+      - "EventHubConsumerClient"
+      - "update_checkpoint"
+      - "starting_position"
+    forbidden_patterns:
+      - "from_connection_string"
+    tags:
+      - consumer
+      - checkpoint
+    mock_response: |
+      import os
+      from azure.eventhub import EventHubConsumerClient
+      from azure.identity import DefaultAzureCredential
+      
+      def on_event(partition_context, event):
+          print(event.body_as_str())
+          partition_context.update_checkpoint(event)
+      
+      consumer = EventHubConsumerClient(
+          fully_qualified_namespace=os.environ["EVENT_HUB_FULLY_QUALIFIED_NAMESPACE"],
+          eventhub_name=os.environ["EVENT_HUB_NAME"],
+          consumer_group="$Default",
+          credential=DefaultAzureCredential(),
+      )
+      
+      with consumer:
+          consumer.receive(on_event=on_event, starting_position="-1")
+
+  - name: consumer_with_blob_checkpoint_store
+    prompt: |
+      Create a consumer that uses BlobCheckpointStore for checkpointing
+      and updates the checkpoint after processing each event.
+    expected_patterns:
+      - "BlobCheckpointStore"
+      - "checkpoint_store="
+      - "container_name"
+    forbidden_patterns:
+      - "connection_string"
+    tags:
+      - consumer
+      - checkpoint-store
+    mock_response: |
+      import os
+      from azure.eventhub import EventHubConsumerClient
+      from azure.eventhub.extensions.checkpointstoreblob import BlobCheckpointStore
+      from azure.identity import DefaultAzureCredential
+      
+      checkpoint_store = BlobCheckpointStore(
+          blob_account_url=os.environ["STORAGE_ACCOUNT_URL"],
+          container_name=os.environ["CHECKPOINT_CONTAINER"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      def on_event(partition_context, event):
+          print(event.body_as_str())
+          partition_context.update_checkpoint(event)
+      
+      consumer = EventHubConsumerClient(
+          fully_qualified_namespace=os.environ["EVENT_HUB_FULLY_QUALIFIED_NAMESPACE"],
+          eventhub_name=os.environ["EVENT_HUB_NAME"],
+          consumer_group="$Default",
+          credential=DefaultAzureCredential(),
+          checkpoint_store=checkpoint_store,
+      )
+      
+      with consumer:
+          consumer.receive(on_event=on_event)
+
+  - name: producer_partition_routing
+    prompt: |
+      Send events to a specific partition by ID and by partition key using
+      EventHubProducerClient batches.
+    expected_patterns:
+      - "partition_id"
+      - "partition_key"
+      - "create_batch"
+    forbidden_patterns:
+      - "partition_id=\"0\", partition_key"
+    tags:
+      - producer
+      - partitions
+    mock_response: |
+      import os
+      from azure.eventhub import EventHubProducerClient, EventData
+      from azure.identity import DefaultAzureCredential
+      
+      producer = EventHubProducerClient(
+          fully_qualified_namespace=os.environ["EVENT_HUB_FULLY_QUALIFIED_NAMESPACE"],
+          eventhub_name=os.environ["EVENT_HUB_NAME"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      with producer:
+          batch_by_id = producer.create_batch(partition_id="0")
+          batch_by_id.add(EventData("event-for-partition-0"))
+          producer.send_batch(batch_by_id)
+          
+          batch_by_key = producer.create_batch(partition_key="user-42")
+          batch_by_key.add(EventData("event-for-user-42"))
+          producer.send_batch(batch_by_key)
+
+  - name: eventhub_partition_properties
+    prompt: |
+      Retrieve Event Hub properties and per-partition properties using
+      EventHubProducerClient.
+    expected_patterns:
+      - "get_eventhub_properties"
+      - "get_partition_properties"
+    forbidden_patterns:
+      - "EventHubConsumerClient.get_eventhub_properties"
+    tags:
+      - partitions
+      - properties
+    mock_response: |
+      import os
+      from azure.eventhub import EventHubProducerClient
+      from azure.identity import DefaultAzureCredential
+      
+      producer = EventHubProducerClient(
+          fully_qualified_namespace=os.environ["EVENT_HUB_FULLY_QUALIFIED_NAMESPACE"],
+          eventhub_name=os.environ["EVENT_HUB_NAME"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      with producer:
+          info = producer.get_eventhub_properties()
+          for partition_id in info["partition_ids"]:
+              partition_info = producer.get_partition_properties(partition_id)
+              print(partition_info["last_enqueued_sequence_number"])
+
+  - name: async_producer_send
+    prompt: |
+      Create an async Event Hub producer using azure.eventhub.aio and send
+      a batch with async/await.
+    expected_patterns:
+      - "from azure.eventhub.aio import EventHubProducerClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with EventHubProducerClient"
+      - "await producer.send_batch"
+    forbidden_patterns:
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - async
+      - producer
+    mock_response: |
+      import os
+      import asyncio
+      from azure.eventhub import EventData
+      from azure.eventhub.aio import EventHubProducerClient
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def main():
+          async with EventHubProducerClient(
+              fully_qualified_namespace=os.environ["EVENT_HUB_FULLY_QUALIFIED_NAMESPACE"],
+              eventhub_name=os.environ["EVENT_HUB_NAME"],
+              credential=DefaultAzureCredential(),
+          ) as producer:
+              batch = await producer.create_batch()
+              batch.add(EventData("async-event"))
+              await producer.send_batch(batch)
+      
+      asyncio.run(main())
+
+  - name: async_consumer_with_checkpoint_store
+    prompt: |
+      Create an async consumer with BlobCheckpointStore from the aio module
+      and update checkpoints asynchronously.
+    expected_patterns:
+      - "azure.eventhub.extensions.checkpointstoreblob.aio"
+      - "await partition_context.update_checkpoint"
+      - "await consumer.receive"
+    forbidden_patterns:
+      - "from azure.eventhub.extensions.checkpointstoreblob import BlobCheckpointStore"
+    tags:
+      - async
+      - consumer
+      - checkpoint-store
+    mock_response: |
+      import os
+      import asyncio
+      from azure.eventhub.aio import EventHubConsumerClient
+      from azure.eventhub.extensions.checkpointstoreblob.aio import BlobCheckpointStore
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def on_event(partition_context, event):
+          print(event.body_as_str())
+          await partition_context.update_checkpoint(event)
+      
+      async def main():
+          checkpoint_store = BlobCheckpointStore(
+              blob_account_url=os.environ["STORAGE_ACCOUNT_URL"],
+              container_name=os.environ["CHECKPOINT_CONTAINER"],
+              credential=DefaultAzureCredential(),
+          )
+          
+          async with EventHubConsumerClient(
+              fully_qualified_namespace=os.environ["EVENT_HUB_FULLY_QUALIFIED_NAMESPACE"],
+              eventhub_name=os.environ["EVENT_HUB_NAME"],
+              consumer_group="$Default",
+              credential=DefaultAzureCredential(),
+              checkpoint_store=checkpoint_store,
+          ) as consumer:
+              await consumer.receive(on_event=on_event, starting_position="-1")
+      
+      asyncio.run(main())
+
+  - name: authentication_setup
+    prompt: |
+      Show how to create both EventHubProducerClient and EventHubConsumerClient
+      using DefaultAzureCredential and environment variables.
+    expected_patterns:
+      - "fully_qualified_namespace"
+      - "eventhub_name"
+      - "DefaultAzureCredential"
+    forbidden_patterns:
+      - "connection_string"
+    tags:
+      - authentication
+      - clients
+    mock_response: |
+      import os
+      from azure.eventhub import EventHubProducerClient, EventHubConsumerClient
+      from azure.identity import DefaultAzureCredential
+      
+      credential = DefaultAzureCredential()
+      namespace = os.environ["EVENT_HUB_FULLY_QUALIFIED_NAMESPACE"]
+      eventhub_name = os.environ["EVENT_HUB_NAME"]
+      
+      producer = EventHubProducerClient(
+          fully_qualified_namespace=namespace,
+          eventhub_name=eventhub_name,
+          credential=credential,
+      )
+      
+      consumer = EventHubConsumerClient(
+          fully_qualified_namespace=namespace,
+          eventhub_name=eventhub_name,
+          consumer_group="$Default",
+          credential=credential,
+      )

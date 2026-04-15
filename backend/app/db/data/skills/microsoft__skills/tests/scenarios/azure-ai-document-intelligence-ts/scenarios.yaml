@@ -1,0 +1,569 @@
+# yaml-language-server: $schema=file:///Users/govindm4max/code/oss/agent-skills/tests/scenarios/skill-scenarios.schema.json
+# Test scenarios for azure-ai-document-intelligence-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Client Setup
+  - name: basic_client_setup
+    prompt: |
+      Create a basic Azure Document Intelligence client with proper
+      authentication. Show both DefaultAzureCredential and API key options.
+    expected_patterns:
+      - "DocumentIntelligence"
+      - "DefaultAzureCredential"
+      - 'import DocumentIntelligence from "@azure-rest/ai-document-intelligence"'
+      - "process.env"
+    forbidden_patterns:
+      - "new DocumentIntelligence"
+      - "require("
+      - "ai-form-recognizer"
+    tags:
+      - basic
+      - authentication
+      - client-setup
+    mock_response: |
+      import DocumentIntelligence from "@azure-rest/ai-document-intelligence";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      // Option 1: DefaultAzureCredential (recommended for production)
+      const endpoint = process.env.DOCUMENT_INTELLIGENCE_ENDPOINT!;
+      const client = DocumentIntelligence(endpoint, new DefaultAzureCredential());
+
+      // Option 2: API Key
+      const clientWithKey = DocumentIntelligence(endpoint, {
+        key: process.env.DOCUMENT_INTELLIGENCE_API_KEY!,
+      });
+
+      console.log("Client created successfully");
+
+  # Analyze Document with URL
+  - name: analyze_document_url
+    prompt: |
+      Analyze a document from a URL using the prebuilt-layout model.
+      Use the proper long-running operation pattern with poller.
+    expected_patterns:
+      - 'path("/documentModels/{modelId}:analyze"'
+      - "urlSource"
+      - "getLongRunningPoller"
+      - "pollUntilDone"
+      - "isUnexpected"
+    forbidden_patterns:
+      - "beginAnalyze"
+      - "DocumentAnalysisClient"
+    tags:
+      - document-analysis
+      - basic
+    mock_response: |
+      import DocumentIntelligence, {
+        isUnexpected,
+        getLongRunningPoller,
+        AnalyzeOperationOutput,
+      } from "@azure-rest/ai-document-intelligence";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.DOCUMENT_INTELLIGENCE_ENDPOINT!;
+      const client = DocumentIntelligence(endpoint, new DefaultAzureCredential());
+
+      const documentUrl = "https://raw.githubusercontent.com/Azure/azure-sdk-for-js/main/sdk/formrecognizer/ai-form-recognizer/assets/forms/Invoice_1.pdf";
+
+      const initialResponse = await client
+        .path("/documentModels/{modelId}:analyze", "prebuilt-layout")
+        .post({
+          contentType: "application/json",
+          body: {
+            urlSource: documentUrl,
+          },
+        });
+
+      if (isUnexpected(initialResponse)) {
+        throw initialResponse.body.error;
+      }
+
+      const poller = getLongRunningPoller(client, initialResponse);
+      const result = (await poller.pollUntilDone()).body as AnalyzeOperationOutput;
+
+      console.log("Content:", result.analyzeResult?.content?.substring(0, 200));
+      console.log("Pages:", result.analyzeResult?.pages?.length);
+
+  # Analyze Document with Base64
+  - name: analyze_document_base64
+    prompt: |
+      Analyze a local document file by reading it and encoding as base64.
+      Use the prebuilt-invoice model to extract invoice fields.
+    expected_patterns:
+      - "base64Source"
+      - "readFile"
+      - "encoding.*base64"
+      - "prebuilt-invoice"
+      - "getLongRunningPoller"
+    forbidden_patterns:
+      - "urlSource"
+      - "FormData"
+    tags:
+      - document-analysis
+      - file-upload
+    mock_response: |
+      import DocumentIntelligence, {
+        isUnexpected,
+        getLongRunningPoller,
+        AnalyzeOperationOutput,
+      } from "@azure-rest/ai-document-intelligence";
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { readFile } from "node:fs/promises";
+
+      const endpoint = process.env.DOCUMENT_INTELLIGENCE_ENDPOINT!;
+      const client = DocumentIntelligence(endpoint, new DefaultAzureCredential());
+
+      // Read and encode local file
+      const filePath = "./invoice.pdf";
+      const base64Source = await readFile(filePath, { encoding: "base64" });
+
+      const initialResponse = await client
+        .path("/documentModels/{modelId}:analyze", "prebuilt-invoice")
+        .post({
+          contentType: "application/json",
+          body: {
+            base64Source,
+          },
+        });
+
+      if (isUnexpected(initialResponse)) {
+        throw initialResponse.body.error;
+      }
+
+      const poller = getLongRunningPoller(client, initialResponse);
+      const result = (await poller.pollUntilDone()).body as AnalyzeOperationOutput;
+
+      // Extract invoice fields
+      for (const document of result.analyzeResult?.documents || []) {
+        console.log("Document type:", document.docType);
+        for (const [fieldName, field] of Object.entries(document.fields || {})) {
+          console.log(`${fieldName}: ${field.valueString || field.content}`);
+        }
+      }
+
+  # Markdown Output Format
+  - name: markdown_output
+    prompt: |
+      Analyze a document and get the output in markdown format.
+      Show how to use the outputContentFormat query parameter.
+    expected_patterns:
+      - "outputContentFormat"
+      - "markdown"
+      - "queryParameters"
+      - "prebuilt-layout"
+    forbidden_patterns:
+      - "contentFormat"
+    tags:
+      - document-analysis
+      - markdown
+    mock_response: |
+      import DocumentIntelligence, {
+        isUnexpected,
+        getLongRunningPoller,
+        AnalyzeOperationOutput,
+      } from "@azure-rest/ai-document-intelligence";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.DOCUMENT_INTELLIGENCE_ENDPOINT!;
+      const client = DocumentIntelligence(endpoint, new DefaultAzureCredential());
+
+      const initialResponse = await client
+        .path("/documentModels/{modelId}:analyze", "prebuilt-layout")
+        .post({
+          contentType: "application/json",
+          body: {
+            urlSource: "https://example.com/document.pdf",
+          },
+          queryParameters: {
+            outputContentFormat: "markdown",
+          },
+        });
+
+      if (isUnexpected(initialResponse)) {
+        throw initialResponse.body.error;
+      }
+
+      const poller = getLongRunningPoller(client, initialResponse);
+      const result = (await poller.pollUntilDone()).body as AnalyzeOperationOutput;
+
+      // Content is now in markdown format (good for LLM consumption)
+      console.log("Markdown content:");
+      console.log(result.analyzeResult?.content);
+
+  # Query Fields
+  - name: query_fields
+    prompt: |
+      Use query fields to extract specific field values from a document.
+      Show how to specify custom fields to extract.
+    expected_patterns:
+      - "queryFields"
+      - "features"
+      - "queryParameters"
+    forbidden_patterns:
+      - '"fields":'
+    tags:
+      - document-analysis
+      - query-fields
+      - advanced
+    mock_response: |
+      import DocumentIntelligence, {
+        isUnexpected,
+        getLongRunningPoller,
+        AnalyzeOperationOutput,
+      } from "@azure-rest/ai-document-intelligence";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.DOCUMENT_INTELLIGENCE_ENDPOINT!;
+      const client = DocumentIntelligence(endpoint, new DefaultAzureCredential());
+
+      const initialResponse = await client
+        .path("/documentModels/{modelId}:analyze", "prebuilt-layout")
+        .post({
+          contentType: "application/json",
+          body: {
+            urlSource: "https://example.com/contract.pdf",
+          },
+          queryParameters: {
+            features: ["queryFields"],
+            queryFields: ["ContractDate", "PartyNames", "TotalAmount", "SignatureDate"],
+          },
+        });
+
+      if (isUnexpected(initialResponse)) {
+        throw initialResponse.body.error;
+      }
+
+      const poller = getLongRunningPoller(client, initialResponse);
+      const result = (await poller.pollUntilDone()).body as AnalyzeOperationOutput;
+
+      // Access extracted query fields
+      for (const document of result.analyzeResult?.documents || []) {
+        console.log("Extracted fields:");
+        for (const [fieldName, field] of Object.entries(document.fields || {})) {
+          console.log(`  ${fieldName}: ${field.valueString || field.content}`);
+          console.log(`  Confidence: ${field.confidence}`);
+        }
+      }
+
+  # Get PDF Output
+  - name: get_pdf_output
+    prompt: |
+      Analyze a document and retrieve the generated PDF output.
+      Show how to use the output parameter and stream the PDF.
+    expected_patterns:
+      - "output.*pdf"
+      - "parseResultIdFromResponse"
+      - "asNodeStream"
+      - "streamToUint8Array"
+      - "writeFile"
+    forbidden_patterns:
+      - "getPdf"
+    tags:
+      - document-analysis
+      - pdf-output
+      - advanced
+    mock_response: |
+      import DocumentIntelligence, {
+        isUnexpected,
+        getLongRunningPoller,
+        parseResultIdFromResponse,
+        streamToUint8Array,
+      } from "@azure-rest/ai-document-intelligence";
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { readFile, writeFile } from "node:fs/promises";
+
+      const endpoint = process.env.DOCUMENT_INTELLIGENCE_ENDPOINT!;
+      const client = DocumentIntelligence(endpoint, new DefaultAzureCredential());
+
+      const base64Source = await readFile("./document.pdf", { encoding: "base64" });
+
+      const initialResponse = await client
+        .path("/documentModels/{modelId}:analyze", "prebuilt-read")
+        .post({
+          contentType: "application/json",
+          body: { base64Source },
+          queryParameters: { output: ["pdf"] },
+        });
+
+      if (isUnexpected(initialResponse)) {
+        throw initialResponse.body.error;
+      }
+
+      const poller = getLongRunningPoller(client, initialResponse);
+      await poller.pollUntilDone();
+
+      // Get the generated PDF
+      const resultId = parseResultIdFromResponse(initialResponse);
+      const pdfOutput = await client
+        .path(
+          "/documentModels/{modelId}/analyzeResults/{resultId}/pdf",
+          "prebuilt-read",
+          resultId
+        )
+        .get()
+        .asNodeStream();
+
+      if (pdfOutput.status !== "200" || !pdfOutput.body) {
+        throw new Error("Failed to get PDF output");
+      }
+
+      const pdfData = await streamToUint8Array(pdfOutput.body);
+      await writeFile("./output.pdf", pdfData);
+      console.log("PDF saved to output.pdf");
+
+  # Batch Analysis
+  - name: batch_analysis
+    prompt: |
+      Perform batch analysis on multiple documents in Azure Blob Storage.
+      Show how to start a batch job and get the result ID.
+    expected_patterns:
+      - "analyzeBatch"
+      - "azureBlobSource"
+      - "resultContainerUrl"
+      - "parseResultIdFromResponse"
+    forbidden_patterns:
+      - "for.*documents"
+    tags:
+      - document-analysis
+      - batch
+      - advanced
+    mock_response: |
+      import DocumentIntelligence, {
+        isUnexpected,
+        parseResultIdFromResponse,
+      } from "@azure-rest/ai-document-intelligence";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.DOCUMENT_INTELLIGENCE_ENDPOINT!;
+      const client = DocumentIntelligence(endpoint, new DefaultAzureCredential());
+
+      const initialResponse = await client
+        .path("/documentModels/{modelId}:analyzeBatch", "prebuilt-layout")
+        .post({
+          contentType: "application/json",
+          body: {
+            azureBlobSource: {
+              containerUrl: process.env.SOURCE_CONTAINER_SAS_URL!,
+            },
+            resultContainerUrl: process.env.RESULT_CONTAINER_SAS_URL!,
+            resultPrefix: "analysis-results/",
+          },
+        });
+
+      if (isUnexpected(initialResponse)) {
+        throw initialResponse.body.error;
+      }
+
+      const resultId = parseResultIdFromResponse(initialResponse);
+      console.log("Batch job started, result ID:", resultId);
+
+      // Optionally poll for completion (may take a long time)
+      // const poller = getLongRunningPoller(client, initialResponse);
+      // await poller.pollUntilDone();
+
+  # List Document Models
+  - name: list_document_models
+    prompt: |
+      List all available document models in the Document Intelligence resource.
+      Use pagination to iterate through results.
+    expected_patterns:
+      - 'path("/documentModels")'
+      - "paginate"
+      - "for await"
+      - "modelId"
+    forbidden_patterns:
+      - "listModels"
+    tags:
+      - models
+      - list
+    mock_response: |
+      import DocumentIntelligence, {
+        isUnexpected,
+        paginate,
+      } from "@azure-rest/ai-document-intelligence";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.DOCUMENT_INTELLIGENCE_ENDPOINT!;
+      const client = DocumentIntelligence(endpoint, new DefaultAzureCredential());
+
+      const response = await client.path("/documentModels").get();
+
+      if (isUnexpected(response)) {
+        throw response.body.error;
+      }
+
+      console.log("Available models:");
+      for await (const model of paginate(client, response)) {
+        console.log(`  Model ID: ${model.modelId}`);
+        console.log(`  Description: ${model.description || "N/A"}`);
+        console.log(`  Created: ${model.createdDateTime}`);
+        console.log("---");
+      }
+
+  # Build Document Classifier
+  - name: build_document_classifier
+    prompt: |
+      Build a custom document classifier that can classify documents into
+      different types. Show how to specify training data from blob storage.
+    expected_patterns:
+      - 'path("/documentClassifiers:build")'
+      - "classifierId"
+      - "docTypes"
+      - "azureBlobSource"
+      - "getLongRunningPoller"
+    forbidden_patterns:
+      - "buildClassifier"
+    tags:
+      - classifier
+      - custom-model
+      - advanced
+    mock_response: |
+      import DocumentIntelligence, {
+        isUnexpected,
+        getLongRunningPoller,
+        DocumentClassifierBuildOperationDetailsOutput,
+      } from "@azure-rest/ai-document-intelligence";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.DOCUMENT_INTELLIGENCE_ENDPOINT!;
+      const client = DocumentIntelligence(endpoint, new DefaultAzureCredential());
+
+      const initialResponse = await client.path("/documentClassifiers:build").post({
+        body: {
+          classifierId: "my-document-classifier",
+          description: "Classifies invoices, receipts, and contracts",
+          docTypes: {
+            invoice: {
+              azureBlobSource: {
+                containerUrl: process.env.INVOICE_TRAINING_DATA_SAS_URL!,
+              },
+            },
+            receipt: {
+              azureBlobSource: {
+                containerUrl: process.env.RECEIPT_TRAINING_DATA_SAS_URL!,
+              },
+            },
+            contract: {
+              azureBlobSource: {
+                containerUrl: process.env.CONTRACT_TRAINING_DATA_SAS_URL!,
+              },
+            },
+          },
+        },
+      });
+
+      if (isUnexpected(initialResponse)) {
+        throw initialResponse.body.error;
+      }
+
+      const poller = getLongRunningPoller(client, initialResponse);
+      const result = (await poller.pollUntilDone()).body as DocumentClassifierBuildOperationDetailsOutput;
+
+      console.log("Classifier built successfully");
+      console.log("Classifier ID:", result.result?.classifierId);
+
+  # Get Service Info
+  - name: get_service_info
+    prompt: |
+      Get information about the Document Intelligence resource including
+      custom model limits and usage.
+    expected_patterns:
+      - 'path("/info")'
+      - "customDocumentModels"
+      - "limit"
+    forbidden_patterns:
+      - "getInfo"
+    tags:
+      - info
+      - basic
+    mock_response: |
+      import DocumentIntelligence, { isUnexpected } from "@azure-rest/ai-document-intelligence";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.DOCUMENT_INTELLIGENCE_ENDPOINT!;
+      const client = DocumentIntelligence(endpoint, new DefaultAzureCredential());
+
+      const response = await client.path("/info").get();
+
+      if (isUnexpected(response)) {
+        throw response.body.error;
+      }
+
+      console.log("Document Intelligence Resource Info:");
+      console.log("  Custom Document Models:");
+      console.log("    Count:", response.body.customDocumentModels.count);
+      console.log("    Limit:", response.body.customDocumentModels.limit);
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Demonstrate proper error handling when working with Azure Document Intelligence.
+      Show how to use isUnexpected and handle different error scenarios.
+    expected_patterns:
+      - "isUnexpected"
+      - "throw"
+      - "error"
+      - "try"
+      - "catch"
+    forbidden_patterns:
+      - "catch {}"
+      - "catch.*pass"
+    tags:
+      - error-handling
+      - production
+    mock_response: |
+      import DocumentIntelligence, {
+        isUnexpected,
+        getLongRunningPoller,
+        AnalyzeOperationOutput,
+      } from "@azure-rest/ai-document-intelligence";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.DOCUMENT_INTELLIGENCE_ENDPOINT!;
+      const client = DocumentIntelligence(endpoint, new DefaultAzureCredential());
+
+      async function analyzeDocument(documentUrl: string) {
+        try {
+          const initialResponse = await client
+            .path("/documentModels/{modelId}:analyze", "prebuilt-layout")
+            .post({
+              contentType: "application/json",
+              body: { urlSource: documentUrl },
+            });
+
+          // Always check for unexpected responses
+          if (isUnexpected(initialResponse)) {
+            console.error("Analysis request failed");
+            console.error("Status:", initialResponse.status);
+            console.error("Error:", initialResponse.body.error);
+            throw new Error(`Analysis failed: ${initialResponse.body.error?.message}`);
+          }
+
+          const poller = getLongRunningPoller(client, initialResponse);
+          const result = (await poller.pollUntilDone()).body as AnalyzeOperationOutput;
+
+          if (!result.analyzeResult) {
+            throw new Error("No analysis result returned");
+          }
+
+          return result.analyzeResult;
+        } catch (error) {
+          console.error("Document analysis error:", error);
+          throw error;
+        }
+      }
+
+      // Usage
+      try {
+        const result = await analyzeDocument("https://example.com/document.pdf");
+        console.log("Analysis completed successfully");
+        console.log("Pages analyzed:", result.pages?.length);
+      } catch (error) {
+        console.error("Failed to analyze document:", error);
+      }

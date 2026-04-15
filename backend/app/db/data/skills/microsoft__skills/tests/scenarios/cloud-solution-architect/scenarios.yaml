@@ -1,0 +1,492 @@
+# Test scenarios for cloud-solution-architect skill evaluation
+# Each scenario tests cloud architecture design patterns and best practices
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Architecture Review
+  - name: architecture_review
+    prompt: |
+      Review the architecture for a three-tier e-commerce web application
+      deployed on Azure. The app uses App Service for the frontend, a
+      monolithic API backend, and Azure SQL Database. Identify gaps and
+      recommend improvements using Well-Architected Framework pillars.
+    expected_patterns:
+      - "Reliability"
+      - "Security"
+      - "Cost"
+      - "Operational Excellence"
+      - "Performance Efficiency"
+      - "design principle"
+      - "recommendation"
+    forbidden_patterns:
+      - "api_key"
+      - "password ="
+    tags:
+      - architecture-review
+      - waf
+    mock_response: |
+      ## Architecture Review: E-Commerce Web Application
+
+      ### Current Architecture Assessment
+
+      Your three-tier architecture using App Service, monolithic API, and Azure SQL Database
+      provides a solid starting point, but has gaps across several Well-Architected Framework pillars.
+
+      ### Findings by WAF Pillar
+
+      **Reliability**: The monolithic API is a single point of failure. Add redundancy with
+      availability zones, implement health endpoint monitoring, and consider breaking the
+      monolith into smaller services for fault isolation. Apply the design principle of
+      designing for self-healing with retry and circuit breaker patterns.
+
+      **Security**: Implement managed identity for service-to-service authentication instead
+      of connection strings. Add Azure Front Door with WAF policies. Use private endpoints
+      for SQL Database access.
+
+      **Cost Optimization**: Right-size App Service plans based on actual usage. Use reserved
+      instances for predictable SQL Database workloads. Implement autoscaling to avoid
+      over-provisioning.
+
+      **Operational Excellence**: Add structured logging with Application Insights. Implement
+      distributed tracing across tiers. Create deployment pipelines with infrastructure as code.
+
+      **Performance Efficiency**: Add Azure Cache for Redis to reduce database load. Implement
+      CDN for static content delivery. Use read replicas for reporting queries.
+
+      ### Top Recommendations
+
+      1. Each recommendation targets a specific pillar gap identified above
+      2. Implement health probes and circuit breakers for reliability
+      3. Move to managed identity and private endpoints for security
+      4. Add caching and CDN for performance
+
+  # Design Pattern Selection
+  - name: design_pattern_selection
+    prompt: |
+      I have a microservices architecture where Service A calls Service B,
+      which calls Service C. When Service C is slow or unavailable, the
+      entire chain fails. Which cloud design patterns should I use to
+      handle partial failures in this microservices architecture?
+    expected_patterns:
+      - "Circuit Breaker"
+      - "Retry"
+      - "Bulkhead"
+    forbidden_patterns:
+      - "sk-"
+      - "hardcoded"
+    tags:
+      - design-patterns
+      - resilience
+    mock_response: |
+      ## Handling Partial Failures in Microservices
+
+      When dealing with cascading failures across a service call chain (A → B → C),
+      you should apply multiple resilience patterns in combination.
+
+      ### Recommended Patterns
+
+      **Circuit Breaker**: Wrap calls from Service A to B and from B to C with circuit
+      breakers. When Service C starts failing, the circuit breaker in B opens and returns
+      a fallback response immediately, preventing the failure from cascading to A. This
+      avoids wasting resources on calls that are likely to fail.
+
+      **Retry with Exponential Backoff**: For transient failures, implement retry logic
+      with exponential backoff and jitter. This handles temporary network blips or brief
+      service restarts without triggering the circuit breaker unnecessarily.
+
+      **Bulkhead Isolation**: Isolate the call pools so that slowness in the B→C path
+      does not exhaust all connection resources in Service A. Use separate thread pools
+      or connection pools for each downstream dependency to contain blast radius.
+
+      ### Additional Patterns to Consider
+
+      - **Queue-Based Load Leveling**: If the C dependency is not latency-sensitive,
+        decouple with a message queue to absorb spikes
+      - **Fallback**: Provide degraded functionality when downstream services are
+        unavailable (e.g., serve cached data)
+
+      ### Implementation Guidance
+
+      Apply these patterns at each service boundary. Use Azure Application Insights
+      to monitor circuit breaker state transitions and failure rates across the chain.
+
+  # Technology Choice - Compute
+  - name: technology_choice_compute
+    prompt: |
+      We need to deploy containerized microservices on Azure. Help us
+      choose between AKS, Azure Container Apps, and Azure App Service.
+      We have a small team of 5 developers, moderate traffic, and need
+      to support both HTTP APIs and background workers.
+    expected_patterns:
+      - "AKS"
+      - "Container Apps"
+      - "App Service"
+      - "trade-off"
+      - "Recommendation"
+    forbidden_patterns:
+      - "api_key"
+    tags:
+      - technology-choice
+      - compute
+    mock_response: |
+      ## Compute Technology Choice: Containerized Microservices
+
+      ### Comparison
+
+      | Criteria | AKS | Container Apps | App Service |
+      |----------|-----|----------------|-------------|
+      | Operational overhead | High | Low | Low |
+      | Scaling flexibility | Full control | Event-driven auto | Rule-based auto |
+      | Background workers | Native support | Built-in | WebJobs/Functions |
+      | Team expertise needed | Kubernetes skills | Minimal | Minimal |
+      | Cost at moderate scale | Medium-High | Low-Medium | Medium |
+
+      ### Analysis by Criteria
+
+      **AKS** gives maximum control over orchestration, networking, and scaling. However,
+      it requires significant Kubernetes expertise and ongoing cluster management. The
+      trade-off is operational complexity vs. full flexibility.
+
+      **Azure Container Apps** provides a serverless container platform with built-in
+      support for both HTTP APIs and background workers via Dapr integration. The trade-off
+      is less control vs. significantly reduced operational burden. It handles scaling
+      automatically based on HTTP traffic or queue depth.
+
+      **App Service** supports containers but is optimized for web workloads. Background
+      workers require separate WebJobs or Azure Functions. The trade-off is simplicity
+      vs. limited container orchestration features.
+
+      ### Recommendation
+
+      For a small team of 5 with moderate traffic and both HTTP and worker needs,
+      **Azure Container Apps** is the best fit. It eliminates Kubernetes operational
+      overhead while natively supporting both HTTP ingress and background processing.
+      Your team can focus on application code rather than infrastructure management.
+      Consider AKS only if you outgrow Container Apps' capabilities or need fine-grained
+      networking control.
+
+  # Well-Architected Assessment
+  - name: well_architected_assessment
+    prompt: |
+      Conduct a Well-Architected Framework assessment for our system:
+      a Node.js API on a single VM, PostgreSQL database without backups,
+      no monitoring, manual deployments via SSH, and all traffic through
+      a single public IP with no firewall. Identify gaps across all 5 pillars.
+    expected_patterns:
+      - "Reliability"
+      - "Security"
+      - "Cost Optimization"
+      - "Operational Excellence"
+      - "Performance Efficiency"
+      - "gap"
+      - "Improvement"
+    forbidden_patterns:
+      - "password"
+      - "secret_key"
+    tags:
+      - waf-assessment
+      - review
+    mock_response: |
+      ## Well-Architected Framework Assessment
+
+      ### System Overview
+      Node.js API on single VM, PostgreSQL without backups, no monitoring,
+      manual SSH deployments, single public IP with no firewall.
+
+      ### Assessment by Pillar
+
+      **Reliability** — Critical Gaps Found
+      - Single VM with no redundancy is a single point of failure
+      - No database backups means data loss risk with no recovery path
+      - No health monitoring to detect failures automatically
+      - Improvement: Deploy across availability zones, enable automated backups,
+        add health endpoint monitoring, define RTO/RPO targets
+
+      **Security** — Critical Gaps Found
+      - Public IP with no firewall exposes the system to attack
+      - SSH-based deployments suggest direct server access with credentials
+      - No mention of encryption in transit or at rest
+      - Improvement: Add Azure Firewall or NSG rules, implement managed identity,
+        enforce TLS, use private endpoints for database access
+
+      **Cost Optimization** — Moderate Gaps Found
+      - Single always-on VM may be over-provisioned for actual workload
+      - No autoscaling means paying for peak capacity at all times
+      - Improvement: Right-size the VM, consider PaaS alternatives like App Service,
+        implement autoscaling based on demand metrics
+
+      **Operational Excellence** — Critical Gaps Found
+      - Manual deployments via SSH are error-prone and unauditable
+      - No monitoring means blind operation with no visibility into issues
+      - No infrastructure as code means no repeatable deployments
+      - Improvement: Implement CI/CD pipelines, add Application Insights,
+        adopt infrastructure as code with Bicep or Terraform
+
+      **Performance Efficiency** — Moderate Gaps Found
+      - Single VM limits vertical scaling capacity
+      - No caching layer increases database load
+      - No CDN for static content delivery
+      - Improvement: Add Redis cache, implement horizontal scaling with
+        load balancer, use CDN for static assets
+
+      ### Priority Actions
+      1. Address Security gaps immediately (firewall, access controls)
+      2. Enable database backups for Reliability
+      3. Implement monitoring for Operational Excellence
+
+  # Mission-Critical Design
+  - name: mission_critical_design
+    prompt: |
+      Design a mission-critical payment processing system that requires
+      99.99% availability SLO. The system must handle payment transactions,
+      be resilient to regional outages, and meet financial compliance
+      requirements. What architecture would you recommend?
+    expected_patterns:
+      - "multi-region"
+      - "deployment stamp"
+      - "health model"
+      - "active-active"
+      - "99.99"
+    forbidden_patterns:
+      - "single region"
+      - "api_key"
+    tags:
+      - mission-critical
+      - high-availability
+    mock_response: |
+      ## Mission-Critical Payment Processing Architecture
+
+      ### Design for 99.99% Availability SLO
+
+      A 99.99% SLO allows only ~52 minutes of downtime per year. This requires
+      eliminating all single points of failure and designing for regional resilience.
+
+      ### Architecture Approach
+
+      **Multi-Region Active-Active Deployment**
+
+      Deploy across at least two Azure regions in an active-active configuration
+      where both regions serve live traffic simultaneously. Use Azure Front Door
+      as the global load balancer with health probes to route traffic away from
+      unhealthy regions within seconds.
+
+      **Deployment Stamp Pattern**
+
+      Each region runs an independent deployment stamp containing the full
+      application stack: compute, database, cache, and messaging. Stamps are
+      self-contained and can operate independently during regional failures.
+
+      - Stamp components: AKS cluster, Cosmos DB (multi-region write), Redis Cache,
+        Service Bus, Key Vault
+      - Each stamp handles a subset of traffic during normal operation
+      - During failover, surviving stamps absorb the full load
+
+      **Health Modeling**
+
+      Implement a layered health model that continuously validates system health:
+      - Component health: individual service liveness and readiness probes
+      - Dependency health: database connectivity, downstream API availability
+      - Transaction health: synthetic payment transactions every 30 seconds
+      - Composite health score drives traffic routing decisions
+
+      **Data Layer**
+
+      Use Cosmos DB with multi-region writes for transactional data. Configure
+      strong consistency for payment records. Implement idempotency keys to
+      prevent duplicate transactions during failover scenarios.
+
+      **Compliance**
+
+      Encrypt all data at rest and in transit. Use managed identity for all
+      service-to-service authentication. Implement audit logging for all
+      payment operations.
+
+  # Performance Antipattern Detection
+  - name: performance_antipattern_detection
+    prompt: |
+      Our application is slow. The API makes 15 individual database queries
+      to render a single page, each fetching one record. We also call an
+      external weather API on every request even though the data changes
+      only once per hour. Our logs show high latency. What performance
+      antipatterns are present and how do we fix them?
+    expected_patterns:
+      - "Chatty I/O"
+      - "No Caching"
+      - "antipattern"
+      - "Batch"
+      - "cache"
+    forbidden_patterns:
+      - "api_key"
+    tags:
+      - performance
+      - antipatterns
+    mock_response: |
+      ## Performance Antipattern Analysis
+
+      Your system exhibits two classic performance antipatterns that are causing
+      the high latency you observe.
+
+      ### Identified Antipatterns
+
+      **1. Chatty I/O Antipattern**
+
+      Making 15 individual database queries to render a single page is a textbook
+      Chatty I/O antipattern. Each query incurs network round-trip overhead,
+      connection pool usage, and query planning costs. With 15 sequential calls,
+      the latency accumulates significantly.
+
+      **Fix**: Batch the 15 individual queries into a single query that fetches
+      all needed records at once. Use a JOIN or an IN clause to retrieve multiple
+      records in one round-trip. If using an ORM, enable eager loading to prevent
+      N+1 query patterns. This alone could reduce page load time by 10-14x for
+      the database portion.
+
+      **2. No Caching Antipattern**
+
+      Calling the external weather API on every request when the data only changes
+      hourly is wasteful. Each call adds external network latency and risks hitting
+      rate limits. This is the No Caching antipattern where stale-tolerant data
+      is fetched repeatedly.
+
+      **Fix**: Implement a cache with a 30-60 minute TTL for weather data. Use
+      Azure Cache for Redis or even an in-memory cache for this use case. The
+      first request fetches from the API; subsequent requests serve from cache
+      until TTL expires.
+
+      ### Additional Recommendations
+
+      - Add Application Insights to profile actual query durations
+      - Monitor cache hit ratios to validate the caching improvement
+      - Consider implementing the Cache-Aside pattern for a structured approach
+      - Review other API endpoints for similar antipattern occurrences
+
+  # Scalability Design
+  - name: scalability_design
+    prompt: |
+      Our e-commerce platform currently handles 1,000 requests per second.
+      We expect 10x traffic growth over the next year. How should we design
+      the system to scale from 1K to 10K requests per second without
+      a complete rewrite?
+    expected_patterns:
+      - "horizontal scaling"
+      - "partitioning"
+      - "caching"
+      - "async"
+    forbidden_patterns:
+      - "api_key"
+    tags:
+      - scalability
+      - design
+    mock_response: |
+      ## Scaling from 1K to 10K Requests Per Second
+
+      ### Scaling Strategy
+
+      To achieve 10x traffic growth without a rewrite, apply these four strategies
+      incrementally. Each one multiplies your effective throughput.
+
+      **1. Horizontal Scaling**
+
+      Scale out your compute tier horizontally rather than vertically. Deploy
+      stateless API instances behind Azure Load Balancer or Front Door. Use
+      autoscaling rules based on CPU and request count metrics. Ensure your
+      application stores no local state — move sessions and temp data to Redis.
+      Horizontal scaling is the foundation that enables all other strategies.
+
+      **2. Caching Layer**
+
+      Add Azure Cache for Redis to serve frequently accessed data without
+      hitting the database. Cache product catalogs, user sessions, and
+      configuration data. At 10K RPS, even a modest 60% cache hit rate
+      reduces database load by 6,000 queries per second. Use the Cache-Aside
+      pattern with appropriate TTLs per data type.
+
+      **3. Data Partitioning**
+
+      Partition your database to distribute load across multiple instances.
+      Shard order data by customer region or date range. Use Cosmos DB with
+      partition keys for naturally partitioned data like product catalogs.
+      Partitioning prevents any single database node from becoming a bottleneck.
+
+      **4. Async Processing**
+
+      Move non-critical work off the request path. Use Azure Service Bus
+      queues for order confirmation emails, inventory updates, and analytics
+      events. This async processing reduces API response times and smooths
+      traffic spikes. The queue absorbs bursts while workers process at a
+      steady rate.
+
+      ### Implementation Priority
+
+      Start with caching (highest ROI, lowest effort), then horizontal scaling,
+      then async processing, and finally partitioning as you approach the 10K target.
+
+  # Event-Driven Architecture
+  - name: event_driven_architecture
+    prompt: |
+      We want to redesign our monolithic order processing system into an
+      event-driven architecture on Azure. Currently, placing an order
+      triggers synchronous calls to inventory, payment, shipping, and
+      notification services. How should we design this?
+    expected_patterns:
+      - "event"
+      - "pub/sub"
+      - "decoupling"
+      - "Event Hubs"
+      - "Service Bus"
+    forbidden_patterns:
+      - "api_key"
+    tags:
+      - event-driven
+      - architecture
+    mock_response: |
+      ## Event-Driven Order Processing Architecture
+
+      ### Why Event-Driven
+
+      Your current synchronous chain (order → inventory → payment → shipping →
+      notification) creates tight coupling and cascading failures. Moving to an
+      event-driven architecture provides decoupling between services, allowing
+      each to operate and scale independently.
+
+      ### Architecture Design
+
+      **Event Flow**
+
+      1. Order Service publishes an `OrderPlaced` event to Azure Service Bus topic
+      2. Each downstream service subscribes to relevant events via pub/sub subscriptions:
+         - Inventory Service subscribes to `OrderPlaced`, reserves stock, publishes `StockReserved`
+         - Payment Service subscribes to `StockReserved`, processes payment, publishes `PaymentCompleted`
+         - Shipping Service subscribes to `PaymentCompleted`, creates shipment
+         - Notification Service subscribes to all events, sends customer updates
+
+      **Azure Service Selection**
+
+      | Component | Azure Service | Why |
+      |-----------|---------------|-----|
+      | Command bus | **Service Bus** Topics | Guaranteed delivery, ordering, dead-letter support |
+      | Real-time events | **Event Hubs** | High-throughput streaming for analytics and audit trail |
+      | System events | **Event Grid** | Azure resource events, webhook integrations |
+      | Event consumers | **Azure Functions** | Serverless, auto-scaling, per-event billing |
+
+      **Key Design Decisions**
+
+      - Use Service Bus for business-critical transactional events requiring guaranteed
+        delivery and ordering. Its pub/sub model with topic subscriptions fits the
+        order processing workflow.
+      - Use Event Hubs for high-volume analytical events and audit logging where
+        throughput matters more than per-message guarantees.
+      - Implement idempotent event handlers — events may be delivered more than once.
+      - Use the Saga pattern to coordinate the multi-step order workflow with
+        compensating transactions for rollback on failure.
+
+      ### Benefits of This Approach
+
+      Services are fully decoupled — adding a new loyalty points service only requires
+      creating a new subscription. Each service scales independently based on its
+      own load patterns. Failures are isolated; if shipping is down, orders and
+      payments continue processing.

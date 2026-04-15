@@ -1,0 +1,11 @@
+[
+  {
+    "id": "continual-learning",
+    "name": "Continual Learning",
+    "emoji": "🧠",
+    "description": "Learn, reflect, and persist knowledge across sessions. Captures tool outcomes, detects failure patterns, and surfaces accumulated learnings so each session starts smarter than the last.",
+    "featured": true,
+    "tags": ["learning", "memory", "reflection", "productivity"],
+    "path": "hooks/continual-learning"
+  }
+]

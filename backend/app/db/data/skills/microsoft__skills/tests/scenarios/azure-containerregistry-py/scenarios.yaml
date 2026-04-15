@@ -1,0 +1,431 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-containerregistry-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Repository Listing with Authentication
+  - name: basic_repository_listing
+    prompt: |
+      Create a basic example that lists all repositories in an Azure Container Registry
+      using DefaultAzureCredential and a context manager for resource cleanup.
+      Include the registry endpoint from environment variables.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "ContainerRegistryClient"
+      - "with.*as.*client"
+      - "list_repositories"
+      - "os.environ"
+    forbidden_patterns:
+      - "password"
+      - "api_key"
+      - "hardcoded.*endpoint"
+    tags:
+      - basic
+      - authentication
+      - repositories
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.containerregistry import ContainerRegistryClient
+
+      endpoint = os.environ["REGISTRY_ENDPOINT"]
+      client = ContainerRegistryClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+
+      with client:
+          repos = client.list_repositories()
+          for repo in repos:
+              print(f"Repository: {repo.name}")
+
+  # Repository Properties Management
+  - name: repository_properties_management
+    prompt: |
+      Write code to get repository properties, update the writeEnabled property to lock
+      a production repository from being modified, and then display the updated properties.
+      Use context manager for resource cleanup.
+    expected_patterns:
+      - "ContainerRegistryClient"
+      - "get_repository_properties"
+      - "update_repository_properties"
+      - "RepositoryProperties"
+      - "writeEnabled"
+    forbidden_patterns:
+      - "async def"
+      - "AsyncContainerRegistryClient"
+    tags:
+      - repositories
+      - properties
+      - production
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.containerregistry import ContainerRegistryClient
+
+      endpoint = os.environ["REGISTRY_ENDPOINT"]
+      client = ContainerRegistryClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+
+      repo_name = "production-app"
+
+      with client:
+          # Get current properties
+          props = client.get_repository_properties(repo_name)
+          print(f"Repository: {props.name}, Write Enabled: {props.write_enabled}")
+
+          # Lock repository by disabling writes
+          props.write_enabled = False
+          updated = client.update_repository_properties(repo_name, props)
+          print(f"Updated Write Enabled: {updated.write_enabled}")
+
+  # Tag Listing with Ordering
+  - name: tag_listing_with_ordering
+    prompt: |
+      Create code to list all tags in a repository ordered by update time in descending order.
+      Use the order_by parameter and iterate through results.
+    expected_patterns:
+      - "ContainerRegistryClient"
+      - "list_tags"
+      - "order_by"
+      - "TagOrder"
+      - "LAST_UPDATE_TIME_DESCENDING"
+    forbidden_patterns:
+      - "reversed\\(list"
+      - "sort\\("
+    tags:
+      - tags
+      - advanced
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.containerregistry import ContainerRegistryClient, TagOrder
+
+      endpoint = os.environ["REGISTRY_ENDPOINT"]
+      repo_name = "myapp"
+
+      client = ContainerRegistryClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+
+      with client:
+          # List tags ordered by most recent update first
+          tags = client.list_tags(
+              repo_name,
+              order_by=TagOrder.LAST_UPDATE_TIME_DESCENDING
+          )
+          for tag in tags:
+              print(f"Tag: {tag.name}, Updated: {tag.last_update_time}")
+
+  # Safe Manifest Deletion - Check Tags First
+  - name: safe_manifest_deletion
+    prompt: |
+      Write code to safely delete an old untagged manifest from a repository.
+      First check if the manifest has any tags by calling list_tags, then delete it
+      by digest only if it has no tags. Print appropriate status messages.
+    expected_patterns:
+      - "ContainerRegistryClient"
+      - "list_tags"
+      - "delete_manifest"
+      - "digest"
+      - "if"
+    forbidden_patterns:
+      - "delete_tag"
+    tags:
+      - manifests
+      - advanced
+      - safety
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.containerregistry import ContainerRegistryClient
+
+      endpoint = os.environ["REGISTRY_ENDPOINT"]
+      repo_name = "old-images"
+      manifest_digest = "sha256:abc123..."
+
+      client = ContainerRegistryClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+
+      with client:
+          # Check if manifest has any tags
+          tags = client.list_tags(repo_name)
+          manifest_tags = [tag for tag in tags if tag.digest == manifest_digest]
+
+          if not manifest_tags:
+              # Safe to delete - no tags reference this manifest
+              client.delete_manifest(repo_name, manifest_digest)
+              print(f"Deleted untagged manifest: {manifest_digest}")
+          else:
+              print(f"Cannot delete - manifest has {len(manifest_tags)} tag(s)")
+
+  # Manifest Properties Locking
+  - name: manifest_properties_locking
+    prompt: |
+      Write code to get a manifest's properties and lock it for production by setting
+      both readEnabled to true and deleteEnabled to false. Update and display the result.
+    expected_patterns:
+      - "ContainerRegistryClient"
+      - "get_manifest_properties"
+      - "update_manifest_properties"
+      - "deleteEnabled"
+      - "readEnabled"
+    forbidden_patterns:
+      - "delete_manifest"
+    tags:
+      - manifests
+      - properties
+      - production
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.containerregistry import ContainerRegistryClient
+
+      endpoint = os.environ["REGISTRY_ENDPOINT"]
+      repo_name = "production"
+      manifest_digest = "sha256:prod123..."
+
+      client = ContainerRegistryClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+
+      with client:
+          # Get manifest properties
+          props = client.get_manifest_properties(repo_name, manifest_digest)
+          print(f"Manifest: {props.digest}, Deletable: {props.delete_enabled}")
+
+          # Lock for production
+          props.read_enabled = True
+          props.delete_enabled = False
+          updated = client.update_manifest_properties(repo_name, manifest_digest, props)
+          print(f"Locked - Delete Enabled: {updated.delete_enabled}")
+
+  # Async Repository Listing
+  - name: async_repository_listing
+    prompt: |
+      Create an async example that uses AsyncContainerRegistryClient to list repositories.
+      Use async with for context manager and async iteration with async for.
+    expected_patterns:
+      - "AsyncContainerRegistryClient"
+      - "async with"
+      - "async for"
+      - "await"
+      - "list_repositories"
+    forbidden_patterns:
+      - "ContainerRegistryClient(?!Async)"
+    tags:
+      - async
+      - repositories
+    mock_response: |
+      import os
+      import asyncio
+      from azure.identity import DefaultAzureCredential
+      from azure.containerregistry.aio import AsyncContainerRegistryClient
+
+      async def list_repos():
+          endpoint = os.environ["REGISTRY_ENDPOINT"]
+          credential = DefaultAzureCredential()
+
+          async with AsyncContainerRegistryClient(
+              endpoint=endpoint,
+              credential=credential,
+          ) as client:
+              async for repo in client.list_repositories():
+                  print(f"Repository: {repo.name}")
+
+      asyncio.run(list_repos())
+
+  # Blob Download with Streaming
+  - name: blob_download_streaming
+    prompt: |
+      Write code to download a blob from the registry by digest and stream its contents
+      to a file in chunks. Use the download_blob method and iterate through chunks.
+    expected_patterns:
+      - "ContainerRegistryClient"
+      - "download_blob"
+      - "digest"
+      - "chunk"
+      - "open.*wb"
+    forbidden_patterns:
+      - '\\.read\\(\\)'
+      - "full_content"
+    tags:
+      - artifacts
+      - advanced
+      - streaming
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.containerregistry import ContainerRegistryClient
+
+      endpoint = os.environ["REGISTRY_ENDPOINT"]
+      repo_name = "myapp"
+      blob_digest = "sha256:blob123..."
+
+      client = ContainerRegistryClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+
+      with client:
+          # Download blob with streaming
+          download_result = client.download_blob(repo_name, blob_digest)
+
+          with open("blob_output.bin", "wb") as f:
+              for chunk in download_result.chunks():
+                  f.write(chunk)
+
+          print(f"Downloaded {download_result.size} bytes")
+
+  # Manifest Download and Inspection
+  - name: manifest_download
+    prompt: |
+      Write code to download a manifest by tag, parse its content, and display
+      the mediaType and config digest. Use get_manifest method.
+    expected_patterns:
+      - "ContainerRegistryClient"
+      - "get_manifest"
+      - "manifest_media_type"
+      - "config_digest"
+    forbidden_patterns:
+      - "download_blob"
+    tags:
+      - manifests
+      - artifacts
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.containerregistry import ContainerRegistryClient
+
+      endpoint = os.environ["REGISTRY_ENDPOINT"]
+      repo_name = "myapp"
+      tag = "v1.0"
+
+      client = ContainerRegistryClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+
+      with client:
+          # Download and inspect manifest
+          manifest = client.get_manifest(repo_name, tag)
+          print(f"Manifest Media Type: {manifest.media_type}")
+          print(f"Config Digest: {manifest.config.digest}")
+          print(f"Layers: {len(manifest.layers)}")
+
+  # Anonymous Public Registry Access
+  - name: anonymous_public_registry_access
+    prompt: |
+      Write code to access a public Azure Container Registry without credentials.
+      Create a client with None as credential to access public registries.
+    expected_patterns:
+      - "ContainerRegistryClient"
+      - "credential=None"
+      - "list_repositories"
+      - "endpoint"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+      - "password"
+    tags:
+      - public
+      - authentication
+    mock_response: |
+      import os
+      from azure.containerregistry import ContainerRegistryClient
+
+      # Access public registry without credentials
+      public_endpoint = "https://mcr.microsoft.com"
+
+      client = ContainerRegistryClient(
+          endpoint=public_endpoint,
+          credential=None,
+      )
+
+      with client:
+          repos = client.list_repositories()
+          for repo in repos:
+              print(f"Public Repository: {repo.name}")
+
+  # Error Handling for Missing Resources
+  - name: error_handling_missing_resources
+    prompt: |
+      Write code that attempts to get repository properties for a repository that
+      doesn't exist. Catch ResourceNotFoundError and print an appropriate error message.
+    expected_patterns:
+      - "ContainerRegistryClient"
+      - "get_repository_properties"
+      - "except"
+      - "ResourceNotFoundError"
+      - "404"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - error-handling
+      - advanced
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.containerregistry import ContainerRegistryClient
+      from azure.core.exceptions import ResourceNotFoundError
+
+      endpoint = os.environ["REGISTRY_ENDPOINT"]
+      client = ContainerRegistryClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+
+      with client:
+          try:
+              props = client.get_repository_properties("nonexistent-repo")
+          except ResourceNotFoundError as e:
+              print(f"Repository not found: {e.status_code}")
+
+  # List Manifests with Ordering
+  - name: list_manifests_ordered
+    prompt: |
+      Write code to list all manifests in a repository ordered by last update time
+      in descending order. Use list_manifests with order_by parameter and iterate results.
+    expected_patterns:
+      - "ContainerRegistryClient"
+      - "list_manifests"
+      - "order_by"
+      - "ManifestOrder"
+      - "LAST_UPDATE_TIME_DESCENDING"
+    forbidden_patterns:
+      - "reversed"
+      - "sort"
+    tags:
+      - manifests
+      - advanced
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.containerregistry import ContainerRegistryClient, ManifestOrder
+
+      endpoint = os.environ["REGISTRY_ENDPOINT"]
+      repo_name = "myapp"
+
+      client = ContainerRegistryClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+
+      with client:
+          # List manifests ordered by most recent update
+          manifests = client.list_manifests(
+              repo_name,
+              order_by=ManifestOrder.LAST_UPDATE_TIME_DESCENDING
+          )
+          for manifest in manifests:
+              print(f"Digest: {manifest.digest}, Updated: {manifest.last_update_time}")

@@ -1,0 +1,38 @@
+<Window x:Class="PixelArtGenerator.Controls.BatchProcessingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:PixelArtGenerator.Controls"
+        mc:Ignorable="d"
+        Title="批量处理" Height="450" Width="800"
+        WindowStartupLocation="CenterOwner">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10">
+            <Button x:Name="AddFilesButton" Content="添加文件" Width="100" Margin="0,0,10,0" Click="AddFilesButton_Click"/>
+            <Button x:Name="RemoveSelectedButton" Content="移除选中" Width="100" Margin="0,0,10,0" Click="RemoveSelectedButton_Click"/>
+            <Button x:Name="ClearAllButton" Content="清空列表" Width="100" Click="ClearAllButton_Click"/>
+        </StackPanel>
+        
+        <DataGrid Grid.Row="1" x:Name="FileListDataGrid" Margin="10" AutoGenerateColumns="False" 
+                  CanUserAddRows="False" SelectionMode="Extended">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="文件名" Binding="{Binding FileName}" Width="200"/>
+                <DataGridTextColumn Header="路径" Binding="{Binding FilePath}" Width="*"/>
+                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="100"/>
+                <DataGridTextColumn Header="输出文件" Binding="{Binding OutputPath}" Width="200"/>
+            </DataGrid.Columns>
+        </DataGrid>
+        
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="10">
+            <Button x:Name="StartProcessButton" Content="开始处理" Width="100" Margin="0,0,10,0" Click="StartProcessButton_Click"/>
+            <Button x:Name="CancelButton" Content="取消" Width="100" Click="CancelButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

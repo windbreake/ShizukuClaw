@@ -1,0 +1,270 @@
+# yaml-language-server: $schema=/Users/govindm4max/code/oss/agent-skills/tests/scenarios/skill-scenarios.schema.json
+# Test scenarios for azure-monitor-opentelemetry-exporter-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Trace exporter basic setup
+  - name: trace_exporter_basic
+    prompt: |
+      Create a minimal trace exporter example using AzureMonitorTraceExporter.
+      Use BatchSpanProcessor, TracerProvider, and emit a span.
+    expected_patterns:
+      - "AzureMonitorTraceExporter"
+      - "BatchSpanProcessor"
+      - "trace.set_tracer_provider"
+      - "start_as_current_span"
+    forbidden_patterns:
+      - "configure_azure_monitor"
+      - "instrumentation_key"
+    tags:
+      - trace
+      - basic
+    mock_response: |
+      import os
+      from opentelemetry import trace
+      from opentelemetry.sdk.trace import TracerProvider
+      from opentelemetry.sdk.trace.export import BatchSpanProcessor
+      from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
+      
+      exporter = AzureMonitorTraceExporter(
+          connection_string=os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"],
+      )
+      
+      trace.set_tracer_provider(TracerProvider())
+      trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(exporter))
+      
+      tracer = trace.get_tracer(__name__)
+      with tracer.start_as_current_span("startup"):
+          print("span emitted")
+
+  # Metric exporter with periodic reader
+  - name: metric_exporter_basic
+    prompt: |
+      Show how to configure AzureMonitorMetricExporter with a
+      PeriodicExportingMetricReader and record a counter metric.
+    expected_patterns:
+      - "AzureMonitorMetricExporter"
+      - "PeriodicExportingMetricReader"
+      - "MeterProvider"
+      - "create_counter"
+    forbidden_patterns:
+      - "configure_azure_monitor"
+    tags:
+      - metrics
+      - basic
+    mock_response: |
+      import os
+      from opentelemetry import metrics
+      from opentelemetry.sdk.metrics import MeterProvider
+      from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+      from azure.monitor.opentelemetry.exporter import AzureMonitorMetricExporter
+      
+      exporter = AzureMonitorMetricExporter(
+          connection_string=os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"],
+      )
+      
+      reader = PeriodicExportingMetricReader(exporter, export_interval_millis=60000)
+      metrics.set_meter_provider(MeterProvider(metric_readers=[reader]))
+      
+      meter = metrics.get_meter(__name__)
+      counter = meter.create_counter("requests_total")
+      counter.add(1, {"route": "/health"})
+
+  # Log exporter with logger provider
+  - name: log_exporter_basic
+    prompt: |
+      Configure AzureMonitorLogExporter with LoggerProvider and
+      LoggingHandler. Use a named logger and emit a log message.
+    expected_patterns:
+      - "AzureMonitorLogExporter"
+      - "LoggerProvider"
+      - "BatchLogRecordProcessor"
+      - "LoggingHandler"
+    forbidden_patterns:
+      - "logging.getLogger().addHandler"
+    tags:
+      - logs
+      - basic
+    mock_response: |
+      import os
+      import logging
+      from opentelemetry._logs import set_logger_provider
+      from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+      from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+      from azure.monitor.opentelemetry.exporter import AzureMonitorLogExporter
+      
+      exporter = AzureMonitorLogExporter(
+          connection_string=os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"],
+      )
+      
+      logger_provider = LoggerProvider()
+      logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
+      set_logger_provider(logger_provider)
+      
+      handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
+      logger = logging.getLogger("app")
+      logger.setLevel(logging.INFO)
+      logger.addHandler(handler)
+      
+      logger.info("log exported")
+
+  # Trace exporter with AAD credential
+  - name: trace_exporter_aad
+    prompt: |
+      Create AzureMonitorTraceExporter using DefaultAzureCredential
+      and a connection string. Include a tracer provider setup.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "AzureMonitorTraceExporter"
+      - "credential=DefaultAzureCredential()"
+    forbidden_patterns:
+      - "instrumentation_key"
+    tags:
+      - trace
+      - auth
+    mock_response: |
+      import os
+      from opentelemetry import trace
+      from opentelemetry.sdk.trace import TracerProvider
+      from opentelemetry.sdk.trace.export import BatchSpanProcessor
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
+      
+      exporter = AzureMonitorTraceExporter(
+          credential=DefaultAzureCredential(),
+          connection_string=os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"],
+      )
+      
+      trace.set_tracer_provider(TracerProvider())
+      trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(exporter))
+
+  # Exporter uses connection string from environment
+  - name: env_connection_string
+    prompt: |
+      Instantiate AzureMonitorTraceExporter without passing a connection
+      string so it uses APPLICATIONINSIGHTS_CONNECTION_STRING from env.
+    expected_patterns:
+      - "APPLICATIONINSIGHTS_CONNECTION_STRING"
+      - "AzureMonitorTraceExporter()"
+      - "os.environ"
+    forbidden_patterns:
+      - "connection_string="
+    tags:
+      - trace
+      - env
+    mock_response: |
+      import os
+      from opentelemetry import trace
+      from opentelemetry.sdk.trace import TracerProvider
+      from opentelemetry.sdk.trace.export import BatchSpanProcessor
+      from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
+      
+      connection_string = os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"]
+      exporter = AzureMonitorTraceExporter()
+      
+      trace.set_tracer_provider(TracerProvider())
+      trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(exporter))
+
+  # TracerProvider with ApplicationInsightsSampler
+  - name: sampler_setup
+    prompt: |
+      Configure ApplicationInsightsSampler with TracerProvider and
+      set a sampling ratio of 0.1.
+    expected_patterns:
+      - "ApplicationInsightsSampler"
+      - "TracerProvider(sampler=sampler)"
+      - "sampling_ratio=0.1"
+    forbidden_patterns:
+      - "ParentBasedTraceIdRatio"
+    tags:
+      - trace
+      - sampling
+    mock_response: |
+      from opentelemetry import trace
+      from opentelemetry.sdk.trace import TracerProvider
+      from azure.monitor.opentelemetry.exporter import ApplicationInsightsSampler
+      
+      sampler = ApplicationInsightsSampler(sampling_ratio=0.1)
+      trace.set_tracer_provider(TracerProvider(sampler=sampler))
+
+  # Offline storage configuration
+  - name: offline_storage_config
+    prompt: |
+      Configure AzureMonitorTraceExporter with offline storage enabled
+      and a custom storage directory.
+    expected_patterns:
+      - "AzureMonitorTraceExporter"
+      - "storage_directory=\"/tmp/otel\""
+      - "disable_offline_storage=False"
+    forbidden_patterns:
+      - "disable_offline_storage=True"
+    tags:
+      - trace
+      - storage
+    mock_response: |
+      from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
+      
+      exporter = AzureMonitorTraceExporter(
+          connection_string="InstrumentationKey=...;IngestionEndpoint=https://...",
+          storage_directory="/tmp/otel",
+          disable_offline_storage=False,
+      )
+
+  # Low-level manual pipeline configuration
+  - name: low_level_pipeline
+    prompt: |
+      Create a low-level OpenTelemetry pipeline that configures trace,
+      metrics, and logs with Azure Monitor exporters. Do not use the distro.
+    expected_patterns:
+      - "AzureMonitorTraceExporter"
+      - "AzureMonitorMetricExporter"
+      - "AzureMonitorLogExporter"
+      - "PeriodicExportingMetricReader"
+      - "BatchLogRecordProcessor"
+    forbidden_patterns:
+      - "configure_azure_monitor"
+    tags:
+      - low-level
+      - trace
+      - metrics
+      - logs
+    mock_response: |
+      import os
+      import logging
+      from opentelemetry import trace, metrics
+      from opentelemetry.sdk.trace import TracerProvider
+      from opentelemetry.sdk.trace.export import BatchSpanProcessor
+      from opentelemetry.sdk.metrics import MeterProvider
+      from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+      from opentelemetry._logs import set_logger_provider
+      from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+      from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+      from azure.monitor.opentelemetry.exporter import (
+          AzureMonitorTraceExporter,
+          AzureMonitorMetricExporter,
+          AzureMonitorLogExporter,
+      )
+      
+      connection_string = os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"]
+      
+      trace_exporter = AzureMonitorTraceExporter(connection_string=connection_string)
+      metric_exporter = AzureMonitorMetricExporter(connection_string=connection_string)
+      log_exporter = AzureMonitorLogExporter(connection_string=connection_string)
+      
+      trace.set_tracer_provider(TracerProvider())
+      trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(trace_exporter))
+      
+      reader = PeriodicExportingMetricReader(metric_exporter)
+      metrics.set_meter_provider(MeterProvider(metric_readers=[reader]))
+      
+      logger_provider = LoggerProvider()
+      logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+      set_logger_provider(logger_provider)
+      logging.getLogger("app").addHandler(
+          LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
+      )
