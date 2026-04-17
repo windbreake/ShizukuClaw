@@ -50,7 +50,8 @@ class AmalaSandbox:
         self.project_root = os.path.abspath(os.path.join(self.root_dir, '..', '..'))
         
         # 初始化数据目录
-        self.data_dir = os.path.join(self.project_root, 'data')
+        from app.core.config import DATA_DIR
+        self.data_dir = DATA_DIR
         os.makedirs(self.data_dir, exist_ok=True)
         
         # 外部文件批准存储

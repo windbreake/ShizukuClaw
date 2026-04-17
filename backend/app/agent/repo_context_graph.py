@@ -20,7 +20,8 @@ class CodeContextGraph:
     def __init__(self, project_root, source_dir="src"):
         self.project_root = project_root
         self.source_dir = os.path.join(project_root, source_dir)
-        self.cache_dir = os.path.join(project_root, "data", "cache")
+        from app.core.config import DATA_DIR
+        self.cache_dir = os.path.join(DATA_DIR, "cache")
         self.index_cache_path = os.path.join(self.cache_dir, "repo_context_graph_index.pkl")
         os.makedirs(self.cache_dir, exist_ok=True)
         self._lock = threading.Lock()

@@ -221,6 +221,10 @@
       "likaku__mck-ppt-design-skill": {
         "enabled": true,
         "allow_model_invocation": true
+      },
+      "zhangxuefeng-skill-main": {
+        "enabled": true,
+        "allow_model_invocation": true
       }
     }
   }

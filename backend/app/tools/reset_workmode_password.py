@@ -6,9 +6,10 @@ import os
 
 
 def main():
-    # reset_workmode_password.py 位于 src/tools/，向上两级到项目根目录
+    # reset_workmode_password.py 位于 backend/app/tools/，向上两级到backend/app
     project_root = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..'))
-    config_path = os.path.join(project_root, 'data', 'system_config.json')
+    from app.core.config import DATA_DIR
+    config_path = os.path.join(DATA_DIR, 'system_config.json')
 
     if not os.path.exists(config_path):
         print(f"Config not found: {config_path}")

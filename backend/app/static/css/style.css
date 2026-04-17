@@ -76,10 +76,16 @@ body {
     font-weight: 500;
 }
 
-#sidebar .nav-link:hover, #sidebar .nav-link.active {
+#sidebar .nav-link:hover {
     color: #101113;
     background: rgba(255,255,255,0.92);
     box-shadow: inset 0 0 0 1px var(--nav-accent-soft), 0 5px 16px rgba(49, 58, 71, 0.09);
+}
+
+#sidebar .nav-link.active:not(.nav-sub-link) {
+    color: #f8fbff;
+    background: linear-gradient(135deg, #3f68a0 0%, #516f95 52%, #5f6f82 100%);
+    box-shadow: 0 10px 24px rgba(43, 58, 79, 0.28), inset 0 0 0 1px rgba(255,255,255,0.22);
 }
 
 #sidebar .nav-link i {
@@ -123,9 +129,13 @@ body {
     }
 }
 
-#sidebar .nav-link.active i,
+#sidebar .nav-link.active:not(.nav-sub-link) i,
 #sidebar .nav-link:hover i {
     color: var(--nav-accent);
+}
+
+#sidebar .nav-link.active:not(.nav-sub-link) i {
+    color: #e8f1ff;
 }
 
 #sidebar .nav-group {
@@ -216,9 +226,13 @@ body {
 }
 
 #sidebar .nav-group.has-active-child > .nav-group-header > .nav-link {
-    color: #111215;
-    background: rgba(255,255,255,0.92);
-    box-shadow: inset 0 0 0 1px var(--nav-accent-soft), 0 5px 16px rgba(49, 58, 71, 0.09);
+    color: #f8fbff;
+    background: linear-gradient(135deg, #3f68a0 0%, #516f95 52%, #5f6f82 100%);
+    box-shadow: 0 10px 24px rgba(43, 58, 79, 0.28), inset 0 0 0 1px rgba(255,255,255,0.22);
+}
+
+#sidebar .nav-group.has-active-child > .nav-group-header > .nav-link i {
+    color: #e8f1ff;
 }
 
 /* 主内容区域 */

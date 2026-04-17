@@ -131,10 +131,10 @@ class AIChatSystem:
 
         # 实时搜索订阅存储
         project_root = PROJECT_ROOT
-        data_dir = os.path.join(project_root, 'data')
-        os.makedirs(data_dir, exist_ok=True)
-        self.realtime_subscriptions_path = os.path.join(data_dir, 'realtime_subscriptions.json')
-        self.realtime_updates_path = os.path.join(data_dir, 'realtime_updates.json')
+        from app.core.config import DATA_DIR
+        os.makedirs(DATA_DIR, exist_ok=True)
+        self.realtime_subscriptions_path = os.path.join(DATA_DIR, 'realtime_subscriptions.json')
+        self.realtime_updates_path = os.path.join(DATA_DIR, 'realtime_updates.json')
         self._realtime_lock = threading.Lock()
         self._ensure_realtime_storage_files()
         self._bothub_pending = {}
@@ -715,7 +715,8 @@ class AIChatSystem:
             if selected is None:
                 return f'未找到类型“{normalized}”，请使用 /bothub 查看可选项'
         project_root = PROJECT_ROOT
-        config_path = os.path.join(project_root, 'data', 'config.json')
+        from app.core.config import DATA_DIR
+        config_path = os.path.join(DATA_DIR, 'config.json')
 
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
@@ -1404,6 +1405,43 @@ class AIChatSystem:
         summary = ' | '.join(errors[-6:]) if errors else 'unknown error'
         raise RuntimeError(f"All chat models failed: {summary}") from last_error
 
+    @staticmethod
+    def _is_long_term_memory_request(user_input: str) -> bool:
+        text = str(user_input or '').strip().lower()
+        if not text:
+            return False
+        compact = re.sub(r'\s+', '', text)
+        keywords = [
+            '查看长期记忆',
+            '显示长期记忆',
+            '读取长期记忆',
+            '看看长期记忆',
+            'longtermmemory',
+            'showlongtermmemory',
+            'viewlongtermmemory',
+        ]
+        if any(k in compact for k in keywords):
+            return True
+        return bool(re.search(r'(查看|显示|读取|看看).*(长期记忆)', text))
+
+    @staticmethod
+    def _format_long_term_memory_reply(payload: dict) -> str:
+        persona = str((payload or {}).get('persona_filename') or 'default')
+        long_term = str((payload or {}).get('long_term') or '暂无长期记忆。').strip() or '暂无长期记忆。'
+        meta = (payload or {}).get('meta') if isinstance(payload, dict) else None
+
+        lines = [f"【长期记忆】角色: {persona}", "", long_term]
+        if isinstance(meta, dict):
+            lines.extend([
+                "",
+                "【长期记忆状态】",
+                f"- 距离上次自动更新的对话轮次: {int(meta.get('dialog_turns_since_long_term_update') or 0)}",
+                f"- 总计已记录对话轮次: {int(meta.get('total_dialog_turns') or 0)}",
+                f"- 自动更新阈值: {int(meta.get('long_term_update_interval') or 0)}",
+                f"- 上次自动更新时间: {str(meta.get('last_long_term_update_at') or '暂无')}",
+            ])
+        return "\n".join(lines)
+
     def stream_chat(self, user_input, image=None, is_admin=False, attachments=None, frontend_source='control_panel', persona_filename=None, onebot_meta=None):
         """真实流式聊天：优先增量输出；复杂场景回退到同步链路。"""
         normalized_input = str(user_input or '').strip()
@@ -1421,6 +1459,19 @@ class AIChatSystem:
                 return
 
         effective_persona_filename = (persona_override or {}).get('filename') or active_persona_filename
+
+        if self._is_long_term_memory_request(normalized_input):
+            try:
+                if hasattr(self, 'agent_manager') and self.agent_manager:
+                    self.agent_manager.set_persona_context(effective_persona_filename)
+                    memory_payload = self.agent_manager.memory.get_long_term_memory_view(
+                        persona_filename=effective_persona_filename,
+                        include_meta=True
+                    )
+                    yield self._format_long_term_memory_reply(memory_payload)
+                    return
+            except Exception:
+                pass
 
         execution_intent = ExecutionIntentDetector.detect(
             normalized_input,
@@ -1928,6 +1979,18 @@ If the request involves modifying existing code, output the full modified file c
                 return f"角色卡加载失败: {str(e)}"
 
         effective_persona_filename = (persona_override or {}).get('filename') or active_persona_filename
+
+        if self._is_long_term_memory_request(normalized_input):
+            try:
+                if hasattr(self, 'agent_manager') and self.agent_manager:
+                    self.agent_manager.set_persona_context(effective_persona_filename)
+                    memory_payload = self.agent_manager.memory.get_long_term_memory_view(
+                        persona_filename=effective_persona_filename,
+                        include_meta=True
+                    )
+                    return self._format_long_term_memory_reply(memory_payload)
+            except Exception as e:
+                return f"读取长期记忆失败: {str(e)}"
 
         # 统一走正常聊天链路：短输入也不再本地模板秒回。
         execution_intent = ExecutionIntentDetector.detect(

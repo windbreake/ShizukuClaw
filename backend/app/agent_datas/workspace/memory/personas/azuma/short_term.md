@@ -1,3 +1,3 @@
 # Short Term Memory
 
-暂无短期记忆。
+- [2026-04-17T23:43:40] user: 将我叫Alisa记录为长期记忆

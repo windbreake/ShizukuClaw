@@ -51,9 +51,9 @@ class AgentSandbox:
         # root_dir itself is the workspace root
         self.workspace_dir = self.root_dir
         self.project_root = os.path.abspath(os.path.join(self.root_dir, '..', '..'))
-        data_dir = os.path.join(self.project_root, 'data')
-        os.makedirs(data_dir, exist_ok=True)
-        self.external_approvals_path = os.path.join(data_dir, 'sandbox_external_approvals.json')
+        from app.core.config import DATA_DIR
+        os.makedirs(DATA_DIR, exist_ok=True)
+        self.external_approvals_path = os.path.join(DATA_DIR, 'sandbox_external_approvals.json')
         self._external_lock = threading.Lock()
         self._ensure_external_approval_storage()
 

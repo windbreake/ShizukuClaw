@@ -337,6 +337,12 @@ For clone/download status responses, do not output diagnostic code snippets. Rep
                     return "Error: Chat system not initialized."
                 command_text = args.get('command_text') or ''
                 return json.dumps(self.ai_chat_system.run_plugin_command(command_text, is_admin=is_admin, frontend_source=frontend_source), ensure_ascii=False, indent=2)
+
+            elif tool_name == 'get_long_term_memory':
+                persona_filename = (args.get('persona_filename') or '').strip() or None
+                include_meta = bool(args.get('include_meta', True))
+                payload = self.memory.get_long_term_memory_view(persona_filename=persona_filename, include_meta=include_meta)
+                return json.dumps(payload, ensure_ascii=False, indent=2)
             
             else:
                 return f"Error: Unknown tool '{tool_name}'"
@@ -729,6 +735,20 @@ For clone/download status responses, do not output diagnostic code snippets. Rep
                                 "config": {"type": "object", "description": "Full runtime config object"}
                             },
                             "required": ["plugin_name", "config"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_long_term_memory",
+                        "description": "Read agent long-term memory content so users can inspect persistent memory.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "persona_filename": {"type": "string", "description": "Optional persona filename to scope memory"},
+                                "include_meta": {"type": "boolean", "description": "Whether to include memory metadata"}
+                            }
                         }
                     }
                 }

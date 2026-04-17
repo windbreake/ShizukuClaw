@@ -30,9 +30,10 @@ class PluginManager:
         self._framework_enabled = True
         self._started = False
         self.project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self.config_path = os.path.join(self.project_root, "data", "config.json")
+        from app.core.config import DATA_DIR
+        self.config_path = os.path.join(DATA_DIR, "config.json")
         # Plugin projects are stored under data/plungin/<plugin_project>/
-        self.external_plugins_dir = external_plugins_dir or os.path.join(self.project_root, "data", "plungin")
+        self.external_plugins_dir = external_plugins_dir or os.path.join(DATA_DIR, "plungin")
 
     @staticmethod
     def _default_policy() -> dict:

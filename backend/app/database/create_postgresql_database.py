@@ -125,7 +125,7 @@ def main():
         print('Check data/database.json: user, password, port, and host (try 127.0.0.1).')
         return
 
-    sql_path = os.path.join(PROJECT_ROOT, 'data', 'init_postgresql.sql')
+    sql_path = os.path.join(PROJECT_ROOT, 'app', 'db', 'data', 'init_postgresql.sql')
     if not execute_sql_file(sql_path, cfg):
         print('SQL execution failed')
         return

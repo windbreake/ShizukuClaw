@@ -101,6 +101,14 @@ def _normalize_trace_retention_days(value, default: int = 7) -> int:
     return max(0, min(days, 3650))
 
 
+def _normalize_long_term_refresh_interval(value, default: int = 8) -> int:
+    try:
+        interval = int(value)
+    except (TypeError, ValueError):
+        interval = int(default)
+    return max(1, min(interval, 200))
+
+
 def _default_chat_settings(existing: dict = None) -> dict:
     existing = existing or {}
     return {
@@ -111,6 +119,7 @@ def _default_chat_settings(existing: dict = None) -> dict:
         'sandbox_use_docker_runtime': bool(existing.get('sandbox_use_docker_runtime', True)),
         'sandbox_agent_autonomous': bool(existing.get('sandbox_agent_autonomous', True)),
         'sandbox_trace_retention_days': _normalize_trace_retention_days(existing.get('sandbox_trace_retention_days', 7), default=7),
+        'long_term_refresh_interval': _normalize_long_term_refresh_interval(existing.get('long_term_refresh_interval', 8), default=8),
     }
 
 
@@ -3669,6 +3678,21 @@ def run_web_server():
                 'plan': plan_content,
                 'memory_count': memory_count
             })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/agent/memory/long_term', methods=['GET'])
+    def api_agent_long_term_memory():
+        try:
+            persona_filename = (request.args.get('persona_filename') or '').strip() or None
+            include_meta_raw = str(request.args.get('include_meta', '1') or '1').strip().lower()
+            include_meta = include_meta_raw not in ('0', 'false', 'no', 'off')
+
+            payload = chat_system.agent_manager.memory.get_long_term_memory_view(
+                persona_filename=persona_filename,
+                include_meta=include_meta
+            )
+            return jsonify({'success': True, **payload})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 

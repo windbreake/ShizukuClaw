@@ -6,7 +6,6 @@
         <h1>控制中心 Dashboard</h1>
         <p>已迁移 legacy 控制面板的首页模块，后续页面将按清单逐个替换。</p>
       </div>
-      <button type="button" class="btn" @click="increment">点击次数: {{ counter }}</button>
     </header>
 
     <div class="quick-grid">

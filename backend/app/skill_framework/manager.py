@@ -30,8 +30,9 @@ class SkillManager:
     def __init__(self, project_root: str):
         self.logger = logging.getLogger("skill_framework")
         self.project_root = project_root
-        self.config_path = os.path.join(project_root, "data", "config.json")
-        self.skills_dir = os.path.join(project_root, "db", "data", "skills")
+        from app.core.config import DATA_DIR
+        self.config_path = os.path.join(DATA_DIR, "config.json")
+        self.skills_dir = os.path.join(DATA_DIR, "skills")
         self.legacy_skills_dir = os.path.join(project_root, "data", "skills")
         self._skills: Dict[str, SkillMeta] = {}
         self._skill_policies: Dict[str, dict] = {}

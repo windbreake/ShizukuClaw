@@ -22,11 +22,14 @@ except Exception:
 from app.core.config import CONFIG
 
 # 获取项目根目录
-# database.py在src/database/，需要向上3层到项目根
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# database.py在backend/app/database/，需要向上2层到backend
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# 导入规范的数据目录常量
+from app.core.config import DATA_DIR
 
 # 数据库文件路径
-DB_PATH = os.path.join(PROJECT_ROOT, 'data', 'chat_history.db')
+DB_PATH = os.path.join(DATA_DIR, 'chat_history.db')
 
 
 def get_engine() -> str:

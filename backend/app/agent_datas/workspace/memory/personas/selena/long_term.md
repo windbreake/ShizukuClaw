@@ -1,3 +1,5 @@
 # Long Term Memory
 
-暂无长期记忆。
+1.用户叫Alisa。
+2.Alisa想要和赛琳娜约会。
+3.Alisa的生日是2005年7月29日

@@ -58,5 +58,45 @@
     "role": "assistant",
     "content": "哥哥真是的！再说1就不理你了哒~",
     "timestamp": 1776284243.33943
+  },
+  {
+    "role": "user",
+    "content": "请永远记住我叫Alisa,记到永久记忆里面",
+    "timestamp": 1776436743.2271123
+  },
+  {
+    "role": "assistant",
+    "content": "好的Alisa~我会永远记住哥哥的名字的喵~",
+    "timestamp": 1776436748.9489613
+  },
+  {
+    "role": "assistant",
+    "content": "Called web_search(query=永久记忆保存到哪里了)",
+    "timestamp": 1776436805.556923
+  },
+  {
+    "role": "system",
+    "content": "Result: 未找到相关搜索结果",
+    "timestamp": 1776436822.5759125
+  },
+  {
+    "role": "user",
+    "content": "永久记忆保存到哪里了",
+    "timestamp": 1776436822.5889397
+  },
+  {
+    "role": "assistant",
+    "content": "记忆都存在人家心里啦…虽然系统会帮忙记录，但最重要的记忆是不会消失的喵~ 哥哥是在测试我有没有认真记住吗Nanaoda~",
+    "timestamp": 1776436830.3223295
+  },
+  {
+    "role": "user",
+    "content": "我叫什么",
+    "timestamp": 1776436992.1294293
+  },
+  {
+    "role": "assistant",
+    "content": "Alisa呀！才过了多久就问这种问题...人家记得可清楚哒~",
+    "timestamp": 1776437001.7127914
   }
 ]

@@ -13,7 +13,7 @@ import os
 import re
 import time
 from datetime import datetime
-from app.core.config import PROJECT_ROOT, DATA_DIR
+from app.core.config import PROJECT_ROOT, DATA_DIR, CONFIG
 
 # 定义文件路径
 WORKSPACE_ROOT = os.path.join(PROJECT_ROOT, 'agent_datas', 'workspace')
@@ -30,12 +30,15 @@ GLOBAL_MID_TERM_PATH = os.path.join(MEMORY_ROOT, 'mid_term.md')
 GLOBAL_LONG_TERM_PATH = os.path.join(MEMORY_ROOT, 'long_term.md')
 GLOBAL_CONTEXT_COMPRESSION_PATH = os.path.join(MEMORY_ROOT, 'context_compression.md')
 GLOBAL_MEMORY_RULES_PATH = os.path.join(MEMORY_ROOT, 'memory_rules.md')
+GLOBAL_MEMORY_META_PATH = os.path.join(MEMORY_ROOT, 'memory_meta.json')
 
 MAX_SHORT_TERM_TOKENS = 3000
 SHORT_TERM_WINDOW = 20
 MID_TERM_MAX_CHARS = 12000
 LONG_TERM_MAX_CHARS = 20000
 CONTEXT_PACKET_MAX_CHARS = 5000
+LONG_TERM_REFRESH_INTERVAL = 8
+LONG_TERM_REFRESH_RECENT_MESSAGES = 24
 # Keep memory layers enabled so sandbox trace can display thought/tool actions reliably.
 MEMORY_LAYER_DISABLED = False
 
@@ -54,6 +57,7 @@ class AgentMemory:
         self.long_term_path = GLOBAL_LONG_TERM_PATH
         self.context_compression_path = GLOBAL_CONTEXT_COMPRESSION_PATH
         self.memory_rules_path = GLOBAL_MEMORY_RULES_PATH
+        self.memory_meta_path = GLOBAL_MEMORY_META_PATH
         self.temp_memory_dir = os.path.join(MEMORY_ROOT, 'temp')
         self._context_packet_cache = {}
         self._context_packet_cache_ttl_seconds = 3.0
@@ -94,8 +98,58 @@ class AgentMemory:
             'long_term_path': os.path.join(base_dir, 'long_term.md'),
             'context_compression_path': os.path.join(base_dir, 'context_compression.md'),
             'memory_rules_path': os.path.join(base_dir, 'memory_rules.md'),
+            'memory_meta_path': os.path.join(base_dir, 'memory_meta.json'),
             'temp_memory_dir': os.path.join(base_dir, 'temp'),
         }
+
+    def _default_memory_meta(self):
+        configured_interval = self._get_configured_long_term_refresh_interval()
+        return {
+            'dialog_turns_since_long_term_update': 0,
+            'total_dialog_turns': 0,
+            'long_term_update_interval': configured_interval,
+            'last_long_term_update_at': None,
+        }
+
+    @staticmethod
+    def _normalize_long_term_refresh_interval(value, default=LONG_TERM_REFRESH_INTERVAL):
+        try:
+            interval = int(value)
+        except (TypeError, ValueError):
+            interval = int(default)
+        return max(1, min(interval, 200))
+
+    def _get_configured_long_term_refresh_interval(self):
+        try:
+            work_mode = CONFIG.get('work_mode', {}) if isinstance(CONFIG, dict) else {}
+            chat_settings = work_mode.get('chat_settings', {}) if isinstance(work_mode, dict) else {}
+            return self._normalize_long_term_refresh_interval(
+                chat_settings.get('long_term_refresh_interval', LONG_TERM_REFRESH_INTERVAL),
+                default=LONG_TERM_REFRESH_INTERVAL,
+            )
+        except Exception:
+            return LONG_TERM_REFRESH_INTERVAL
+
+    def _load_memory_meta(self):
+        default_meta = self._default_memory_meta()
+        try:
+            if os.path.exists(self.memory_meta_path):
+                with open(self.memory_meta_path, 'r', encoding='utf-8') as f:
+                    raw = json.load(f)
+                if isinstance(raw, dict):
+                    merged = dict(default_meta)
+                    merged.update(raw)
+                    return merged
+        except Exception:
+            pass
+        return default_meta
+
+    def _save_memory_meta(self, data):
+        merged = dict(self._default_memory_meta())
+        if isinstance(data, dict):
+            merged.update(data)
+        with open(self.memory_meta_path, 'w', encoding='utf-8') as f:
+            json.dump(merged, f, ensure_ascii=False, indent=2)
 
     def _ensure_global_memory_scaffold(self):
         if not os.path.exists(self.memory_rules_path):
@@ -119,6 +173,9 @@ class AgentMemory:
             with open(self.context_compression_path, 'w', encoding='utf-8') as f:
                 f.write("# Context Compression Snapshot\n\n暂无压缩上下文。\n")
 
+        if not os.path.exists(self.memory_meta_path):
+            self._save_memory_meta(self._default_memory_meta())
+
     def _ensure_persona_scaffold(self, persona_filename: str = None, bootstrap_from_legacy: bool = False):
         paths = self._scope_paths(persona_filename)
         os.makedirs(paths['dir'], exist_ok=True)
@@ -131,6 +188,7 @@ class AgentMemory:
             'long_term.md': GLOBAL_LONG_TERM_PATH,
             'context_compression.md': GLOBAL_CONTEXT_COMPRESSION_PATH,
             'memory_rules.md': GLOBAL_MEMORY_RULES_PATH,
+            'memory_meta.json': GLOBAL_MEMORY_META_PATH,
         }
 
         defaults = {
@@ -140,6 +198,7 @@ class AgentMemory:
             'long_term.md': '# Long Term Memory\n\n暂无长期记忆。\n',
             'context_compression.md': '# Context Compression Snapshot\n\n暂无压缩上下文。\n',
             'memory_rules.md': "# Memory System Rules\n\n## Layering\n- Short-term memory: keep recent turns and active task details.\n- Mid-term memory: keep episodic summaries of completed blocks and unresolved threads.\n- Long-term memory: keep durable facts, user preferences, and stable decisions.\n\n## Compression Policy\n- Trigger compaction when short-term exceeds token budget.\n- Summarize old chunks into mid-term memory without deleting key facts.\n- Consolidate oversized mid-term memory into long-term memory periodically.\n\n## Quality Rules\n- Prefer factual points over wording style.\n- Preserve unresolved tasks and explicit user requirements.\n- Do not store sensitive secrets unless explicitly required by user.\n",
+            'memory_meta.json': json.dumps(self._default_memory_meta(), ensure_ascii=False, indent=2) + '\n',
         }
 
         for filename, target_path in [
@@ -149,6 +208,7 @@ class AgentMemory:
             ('long_term.md', paths['long_term_path']),
             ('context_compression.md', paths['context_compression_path']),
             ('memory_rules.md', paths['memory_rules_path']),
+            ('memory_meta.json', paths['memory_meta_path']),
         ]:
             if os.path.exists(target_path):
                 continue
@@ -193,6 +253,7 @@ class AgentMemory:
         self.long_term_path = paths['long_term_path']
         self.context_compression_path = paths['context_compression_path']
         self.memory_rules_path = paths['memory_rules_path']
+        self.memory_meta_path = paths['memory_meta_path']
         self.temp_memory_dir = paths['temp_memory_dir']
         os.makedirs(self.temp_memory_dir, exist_ok=True)
         self._ensure_persona_scaffold(persona_filename, bootstrap_from_legacy=bootstrap_from_legacy)
@@ -432,6 +493,86 @@ class AgentMemory:
         with open(self.long_term_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
+    @staticmethod
+    def _should_count_dialog_turn(role, content):
+        if str(role) != 'assistant':
+            return False
+        text = str(content or '').strip()
+        if not text:
+            return False
+        if text.startswith('Called '):
+            return False
+        if text.startswith('思考:') or text.startswith('Thought:') or text.startswith('[THINK]'):
+            return False
+        return True
+
+    def _collect_recent_dialogue_messages(self, limit=LONG_TERM_REFRESH_RECENT_MESSAGES):
+        st = self.load_short_term()
+        filtered = []
+        for item in st:
+            role = str(item.get('role', '') or '')
+            content = str(item.get('content', '') or '').strip()
+            if role not in ('user', 'assistant'):
+                continue
+            if not content:
+                continue
+            if role == 'assistant' and not self._should_count_dialog_turn(role, content):
+                continue
+            filtered.append({'role': role, 'content': content})
+        return filtered[-max(int(limit or 0), 2):]
+
+    def _refresh_long_term_if_due(self):
+        meta = self._load_memory_meta()
+        configured_interval = self._get_configured_long_term_refresh_interval()
+        if int(meta.get('long_term_update_interval') or 0) != configured_interval:
+            meta['long_term_update_interval'] = configured_interval
+            self._save_memory_meta(meta)
+
+        interval = max(int(meta.get('long_term_update_interval') or configured_interval), 1)
+        turns = int(meta.get('dialog_turns_since_long_term_update') or 0)
+        if turns < interval:
+            return False
+
+        recent_dialogues = self._collect_recent_dialogue_messages()
+        if not recent_dialogues:
+            meta['dialog_turns_since_long_term_update'] = 0
+            meta['last_long_term_update_at'] = datetime.now().isoformat(timespec='seconds')
+            self._save_memory_meta(meta)
+            return False
+
+        dialogue_block = "\n".join([f"{m.get('role', 'unknown')}: {m.get('content', '')}" for m in recent_dialogues])
+        current_long = self.load_long_term()
+        merged = self._summarize_block(
+            f"[现有长期记忆]\n{current_long}\n\n[最近阶段对话]\n{dialogue_block}",
+            objective='按对话阶段更新长期记忆：保留稳定事实、用户偏好、长期任务'
+        )
+        if len(merged) > LONG_TERM_MAX_CHARS:
+            merged = merged[:LONG_TERM_MAX_CHARS] + "\n\n- (长期记忆已按上限截断)"
+
+        self.save_long_term(merged)
+        meta['dialog_turns_since_long_term_update'] = 0
+        meta['last_long_term_update_at'] = datetime.now().isoformat(timespec='seconds')
+        self._save_memory_meta(meta)
+        self._append_temp_snapshot('Long Term Memory Refresh', merged)
+        self._refresh_context_compression()
+        return True
+
+    def get_long_term_memory_view(self, persona_filename: str = None, include_meta: bool = True):
+        if persona_filename is not None:
+            self.set_persona_context(persona_filename)
+        payload = {
+            'persona_filename': self.current_persona_filename,
+            'long_term': self.load_long_term(),
+        }
+        if include_meta:
+            meta = self._load_memory_meta()
+            configured_interval = self._get_configured_long_term_refresh_interval()
+            if int(meta.get('long_term_update_interval') or 0) != configured_interval:
+                meta['long_term_update_interval'] = configured_interval
+                self._save_memory_meta(meta)
+            payload['meta'] = meta
+        return payload
+
     def append_short_term(self, role, content, persona_filename: str = None):
         """添加消息到短期记忆，并在必要时压缩"""
         if MEMORY_LAYER_DISABLED:
@@ -448,6 +589,12 @@ class AgentMemory:
             st = st[-max_items:]
 
         self.save_short_term(st)
+        if self._should_count_dialog_turn(role, content):
+            meta = self._load_memory_meta()
+            meta['dialog_turns_since_long_term_update'] = int(meta.get('dialog_turns_since_long_term_update') or 0) + 1
+            meta['total_dialog_turns'] = int(meta.get('total_dialog_turns') or 0) + 1
+            self._save_memory_meta(meta)
+            self._refresh_long_term_if_due()
         self._refresh_context_compression()
 
     def summarize_memory(self, messages, persona_filename: str = None):

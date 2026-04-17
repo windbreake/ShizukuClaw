@@ -322,14 +322,72 @@ class InstructionManager:
         """获取人格"""
         return self.personalities.get(personality_id)
     
+    def _load_personas_from_directory(self) -> Dict[str, Personality]:
+        """从 personas 目录加载旧格式的角色卡"""
+        personas = {}
+        repo_root = _repo_root_from_here()
+        personas_dir = os.path.join(repo_root, 'db', 'data', 'personas')
+        
+        if not os.path.isdir(personas_dir):
+            return personas
+        
+        for filename in os.listdir(personas_dir):
+            if not filename.endswith('.json'):
+                continue
+            
+            try:
+                filepath = os.path.join(personas_dir, filename)
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                # 转换旧格式到新 Personality 对象
+                # 使用文件名（去掉.json）作为 ID
+                persona_id = os.path.splitext(filename)[0]
+                
+                # 从 character.name 或 meta.name 提取名称
+                name = data.get('meta', {}).get('name', '') or data.get('character', {}).get('name', persona_id)
+                description = data.get('meta', {}).get('description', '')
+                
+                # 创建 Personality 对象
+                personality = Personality(
+                    id=persona_id,
+                    name=name,
+                    description=description,
+                    traits=data.get('traits', {}),
+                    tone=data.get('tone', 'neutral'),
+                    speaking_style=data.get('speaking_style', data.get('reply_style', '')),
+                    preferences=data.get('preferences', {}),
+                    response_length=data.get('response_length', 'medium'),
+                    emoji_usage=data.get('emoji_usage', True),
+                    enabled=True  # 文件存在就认为启用
+                )
+                
+                # 保存原始数据以便完整保留所有信息
+                personality._original_data = data
+                
+                personas[persona_id] = personality
+            except Exception as e:
+                print(f"Error loading persona from {filename}: {e}")
+        
+        return personas
+    
     def list_personalities(self, enabled_only: bool = True) -> List[Dict[str, Any]]:
         """列表查询人格"""
-        personalities = list(self.personalities.values())
+        # 从 personalities.json 加载
+        personalities = dict(self.personalities)
+        
+        # 从 personas/ 目录加载旧格式角色卡（如果不存在于新格式）
+        personas_from_dir = self._load_personas_from_directory()
+        for persona_id, persona in personas_from_dir.items():
+            if persona_id not in personalities:
+                personalities[persona_id] = persona
+        
+        result = list(personalities.values())
         
         if enabled_only:
-            personalities = [p for p in personalities if p.enabled]
+            result = [p for p in result if p.enabled]
         
-        return [p.to_dict() for p in personalities]
+        return [p.to_dict() for p in result]
     
     def update_personality(self, personality_id: str,
                           updates: Dict[str, Any]) -> Optional[Personality]:
