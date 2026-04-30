@@ -1,0 +1,33 @@
+{
+  "name": "agent-skills-tests",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Test harness for agent-skills - validates skill code generation against acceptance criteria",
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "harness": "tsx harness/runner.ts",
+    "harness:list": "tsx harness/runner.ts --list",
+    "harness:mock": "tsx harness/runner.ts --mock"
+  },
+  "dependencies": {
+    "@github/copilot-sdk": "^0.1.20",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "yaml": "^2.4.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "eslint": "^9.5.0",
+    "tsx": "^4.15.6",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

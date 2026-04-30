@@ -1,0 +1,248 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-ai-voicelive-java skill evaluation
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: client_creation
+    prompt: |
+      Create Java code to set up the Azure AI VoiceLive async client
+      using DefaultAzureCredential authentication.
+    expected_patterns:
+      - "VoiceLiveClientBuilder"
+      - "VoiceLiveAsyncClient"
+      - "DefaultAzureCredentialBuilder"
+      - "buildAsyncClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'endpoint\("https://'
+      - 'AzureKeyCredential\("'
+      - "buildClient()"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import com.azure.ai.voicelive.VoiceLiveAsyncClient;
+      import com.azure.ai.voicelive.VoiceLiveClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_VOICELIVE_ENDPOINT");
+              
+              VoiceLiveAsyncClient client = new VoiceLiveClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildAsyncClient();
+              
+              System.out.println("Client initialized successfully");
+          }
+      }
+
+  - name: start_session
+    prompt: |
+      Create a Java example that starts a VoiceLive session and subscribes
+      to receive events from the server.
+    expected_patterns:
+      - "startSession"
+      - "receiveEvents"
+      - "subscribe"
+      - "getType"
+    tags:
+      - session
+      - basic
+    mock_response: |
+      import com.azure.ai.voicelive.VoiceLiveAsyncClient;
+      import com.azure.ai.voicelive.VoiceLiveClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import reactor.core.publisher.Mono;
+
+      public class StartSession {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_VOICELIVE_ENDPOINT");
+              
+              VoiceLiveAsyncClient client = new VoiceLiveClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildAsyncClient();
+              
+              client.startSession("gpt-4o-realtime-preview")
+                  .flatMap(session -> {
+                      System.out.println("Session started");
+                      
+                      session.receiveEvents()
+                          .subscribe(
+                              event -> System.out.println("Event: " + event.getType()),
+                              error -> System.err.println("Error: " + error.getMessage())
+                          );
+                      
+                      return Mono.just(session);
+                  })
+                  .block();
+          }
+      }
+
+  - name: configure_session_options
+    prompt: |
+      Create a Java example that configures VoiceLive session options
+      including turn detection, voice, and audio settings.
+    expected_patterns:
+      - "VoiceLiveSessionOptions"
+      - "ServerVadTurnDetection"
+      - "setInstructions"
+      - "setVoice"
+      - "OpenAIVoice"
+      - "setInputAudioFormat"
+      - "setTurnDetection"
+      - "ClientEventSessionUpdate"
+    tags:
+      - configuration
+      - advanced
+    mock_response: |
+      import com.azure.ai.voicelive.VoiceLiveAsyncClient;
+      import com.azure.ai.voicelive.VoiceLiveClientBuilder;
+      import com.azure.ai.voicelive.models.*;
+      import com.azure.core.util.BinaryData;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.Arrays;
+
+      public class ConfigureSession {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_VOICELIVE_ENDPOINT");
+              
+              VoiceLiveAsyncClient client = new VoiceLiveClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildAsyncClient();
+              
+              client.startSession("gpt-4o-realtime-preview")
+                  .flatMap(session -> {
+                      ServerVadTurnDetection turnDetection = new ServerVadTurnDetection()
+                          .setThreshold(0.5)
+                          .setPrefixPaddingMs(300)
+                          .setSilenceDurationMs(500)
+                          .setInterruptResponse(true)
+                          .setCreateResponse(true);
+                      
+                      AudioInputTranscriptionOptions transcription = new AudioInputTranscriptionOptions(
+                          AudioInputTranscriptionOptionsModel.WHISPER_1);
+                      
+                      VoiceLiveSessionOptions options = new VoiceLiveSessionOptions()
+                          .setInstructions("You are a helpful AI voice assistant.")
+                          .setVoice(BinaryData.fromObject(new OpenAIVoice(OpenAIVoiceName.ALLOY)))
+                          .setModalities(Arrays.asList(InteractionModality.TEXT, InteractionModality.AUDIO))
+                          .setInputAudioFormat(InputAudioFormat.PCM16)
+                          .setOutputAudioFormat(OutputAudioFormat.PCM16)
+                          .setInputAudioSamplingRate(24000)
+                          .setInputAudioTranscription(transcription)
+                          .setTurnDetection(turnDetection);
+                      
+                      ClientEventSessionUpdate updateEvent = new ClientEventSessionUpdate(options);
+                      return session.sendEvent(updateEvent);
+                  })
+                  .block();
+          }
+      }
+
+  - name: handle_events
+    prompt: |
+      Create a Java example that handles different event types from a
+      VoiceLive session including speech started, stopped, and response events.
+    expected_patterns:
+      - "receiveEvents"
+      - "subscribe"
+      - "ServerEventType"
+      - "SESSION_CREATED"
+      - "INPUT_AUDIO_BUFFER_SPEECH_STARTED"
+      - "INPUT_AUDIO_BUFFER_SPEECH_STOPPED"
+      - "RESPONSE_DONE"
+    tags:
+      - events
+      - handling
+    mock_response: |
+      import com.azure.ai.voicelive.VoiceLiveAsyncClient;
+      import com.azure.ai.voicelive.VoiceLiveClientBuilder;
+      import com.azure.ai.voicelive.models.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class EventHandling {
+          public static void main(String[] args) throws InterruptedException {
+              String endpoint = System.getenv("AZURE_VOICELIVE_ENDPOINT");
+              
+              VoiceLiveAsyncClient client = new VoiceLiveClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildAsyncClient();
+              
+              client.startSession("gpt-4o-realtime-preview")
+                  .flatMap(session -> {
+                      session.receiveEvents().subscribe(event -> {
+                          ServerEventType eventType = event.getType();
+                          
+                          if (ServerEventType.SESSION_CREATED.equals(eventType)) {
+                              System.out.println("Session created");
+                          } else if (ServerEventType.INPUT_AUDIO_BUFFER_SPEECH_STARTED.equals(eventType)) {
+                              System.out.println("User started speaking");
+                          } else if (ServerEventType.INPUT_AUDIO_BUFFER_SPEECH_STOPPED.equals(eventType)) {
+                              System.out.println("User stopped speaking");
+                          } else if (ServerEventType.RESPONSE_AUDIO_DELTA.equals(eventType)) {
+                              System.out.println("Receiving audio response");
+                          } else if (ServerEventType.RESPONSE_DONE.equals(eventType)) {
+                              System.out.println("Response complete");
+                          } else if (ServerEventType.ERROR.equals(eventType)) {
+                              System.err.println("Error occurred");
+                          }
+                      });
+                      
+                      return reactor.core.publisher.Mono.empty();
+                  })
+                  .block();
+              
+              Thread.sleep(60000);
+          }
+      }
+
+  - name: send_audio_input
+    prompt: |
+      Create a Java example that sends audio input to a VoiceLive session
+      using PCM16 audio data.
+    expected_patterns:
+      - "sendInputAudio"
+      - "BinaryData.fromBytes"
+      - "subscribe"
+    tags:
+      - audio
+      - input
+    mock_response: |
+      import com.azure.ai.voicelive.VoiceLiveAsyncClient;
+      import com.azure.ai.voicelive.VoiceLiveClientBuilder;
+      import com.azure.core.util.BinaryData;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class SendAudio {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_VOICELIVE_ENDPOINT");
+              
+              VoiceLiveAsyncClient client = new VoiceLiveClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildAsyncClient();
+              
+              client.startSession("gpt-4o-realtime-preview")
+                  .flatMap(session -> {
+                      // Read PCM16 audio data (24kHz, 16-bit, mono)
+                      byte[] audioData = readAudioChunk();
+                      
+                      return session.sendInputAudio(BinaryData.fromBytes(audioData));
+                  })
+                  .subscribe();
+          }
+          
+          private static byte[] readAudioChunk() {
+              // Implementation to read audio from microphone or file
+              return new byte[4800]; // 100ms of audio at 24kHz
+          }
+      }

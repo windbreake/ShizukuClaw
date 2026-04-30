@@ -1,0 +1,219 @@
+# yaml-language-server: $schema=https://json.schemastore.org/package.json
+---
+# Test scenarios for azure-ai-contentunderstanding-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Client Authentication
+  - name: basic_client_authentication
+    prompt: |
+      Create a basic Content Understanding client using DefaultAzureCredential.
+      Use the environment variable CONTENTUNDERSTANDING_ENDPOINT.
+    expected_patterns:
+      - "ContentUnderstandingClient"
+      - "DefaultAzureCredential"
+      - "CONTENTUNDERSTANDING_ENDPOINT"
+    forbidden_patterns:
+      - "AzureKeyCredential"
+      - "openai"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import os
+      from azure.ai.contentunderstanding import ContentUnderstandingClient
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["CONTENTUNDERSTANDING_ENDPOINT"]
+      credential = DefaultAzureCredential()
+      client = ContentUnderstandingClient(endpoint=endpoint, credential=credential)
+      
+      print(client)
+
+  # Document Extraction from URL
+  - name: document_extraction_url
+    prompt: |
+      Analyze a PDF document URL using prebuilt-documentSearch and print the markdown.
+      Use begin_analyze with AnalyzeInput.
+    expected_patterns:
+      - "begin_analyze"
+      - "AnalyzeInput"
+      - "prebuilt-documentSearch"
+      - "markdown"
+    forbidden_patterns:
+      - "begin_analyze_document"
+      - "analyze_request"
+    tags:
+      - document
+      - extraction
+    mock_response: |
+      import os
+      from azure.ai.contentunderstanding import ContentUnderstandingClient
+      from azure.ai.contentunderstanding.models import AnalyzeInput
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["CONTENTUNDERSTANDING_ENDPOINT"]
+      client = ContentUnderstandingClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+      
+      poller = client.begin_analyze(
+          analyzer_id="prebuilt-documentSearch",
+          inputs=[AnalyzeInput(url="https://example.com/document.pdf")],
+      )
+      result = poller.result()
+      content = result.contents[0]
+      print(content.markdown)
+
+  # Image Extraction from URL
+  - name: image_extraction_url
+    prompt: |
+      Analyze an image URL using prebuilt-imageSearch and print the markdown summary.
+    expected_patterns:
+      - "prebuilt-imageSearch"
+      - "AnalyzeInput"
+      - "begin_analyze"
+    forbidden_patterns:
+      - "prebuilt-image-search"
+      - "begin_analyze_document"
+    tags:
+      - image
+      - extraction
+    mock_response: |
+      import os
+      from azure.ai.contentunderstanding import ContentUnderstandingClient
+      from azure.ai.contentunderstanding.models import AnalyzeInput
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["CONTENTUNDERSTANDING_ENDPOINT"]
+      client = ContentUnderstandingClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+      
+      poller = client.begin_analyze(
+          analyzer_id="prebuilt-imageSearch",
+          inputs=[AnalyzeInput(url="https://example.com/image.jpg")],
+      )
+      result = poller.result()
+      content = result.contents[0]
+      print(content.markdown)
+
+  # Audio Transcription from URL
+  - name: audio_transcription_url
+    prompt: |
+      Transcribe an audio file using prebuilt-audioSearch and print transcript phrases.
+    expected_patterns:
+      - "prebuilt-audioSearch"
+      - "transcript_phrases"
+      - "AnalyzeInput"
+    forbidden_patterns:
+      - "prebuilt-audio-search"
+      - "openai"
+    tags:
+      - audio
+      - transcription
+    mock_response: |
+      import os
+      from azure.ai.contentunderstanding import ContentUnderstandingClient
+      from azure.ai.contentunderstanding.models import AnalyzeInput
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["CONTENTUNDERSTANDING_ENDPOINT"]
+      client = ContentUnderstandingClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+      
+      poller = client.begin_analyze(
+          analyzer_id="prebuilt-audioSearch",
+          inputs=[AnalyzeInput(url="https://example.com/audio.mp3")],
+      )
+      result = poller.result()
+      content = result.contents[0]
+      for phrase in content.transcript_phrases:
+          print(f"[{phrase.start_time}] {phrase.text}")
+
+  # Video Analysis from URL
+  - name: video_analysis_url
+    prompt: |
+      Analyze a video using prebuilt-videoSearch and print transcript phrases and key frames.
+    expected_patterns:
+      - "prebuilt-videoSearch"
+      - "transcript_phrases"
+      - "key_frames"
+    forbidden_patterns:
+      - "prebuilt-video-search"
+      - "begin_analyze_document"
+    tags:
+      - video
+      - analysis
+    mock_response: |
+      import os
+      from azure.ai.contentunderstanding import ContentUnderstandingClient
+      from azure.ai.contentunderstanding.models import AnalyzeInput
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["CONTENTUNDERSTANDING_ENDPOINT"]
+      client = ContentUnderstandingClient(
+          endpoint=endpoint,
+          credential=DefaultAzureCredential(),
+      )
+      
+      poller = client.begin_analyze(
+          analyzer_id="prebuilt-videoSearch",
+          inputs=[AnalyzeInput(url="https://example.com/video.mp4")],
+      )
+      result = poller.result()
+      content = result.contents[0]
+      for phrase in content.transcript_phrases:
+          print(phrase.text)
+      for frame in content.key_frames:
+          print(frame.description)
+
+  # Async Document Extraction
+  - name: async_document_extraction
+    prompt: |
+      Provide an async example that analyzes a document URL using prebuilt-documentSearch.
+      Use the async client and await the poller result.
+    expected_patterns:
+      - "from azure.ai.contentunderstanding.aio import ContentUnderstandingClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with"
+      - "await client.begin_analyze"
+    forbidden_patterns:
+      - "from azure.ai.contentunderstanding import ContentUnderstandingClient"
+      - "begin_analyze_document"
+    tags:
+      - async
+      - document
+    mock_response: |
+      import os
+      import asyncio
+      from azure.ai.contentunderstanding.aio import ContentUnderstandingClient
+      from azure.ai.contentunderstanding.models import AnalyzeInput
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def main() -> None:
+          endpoint = os.environ["CONTENTUNDERSTANDING_ENDPOINT"]
+          credential = DefaultAzureCredential()
+          
+          async with ContentUnderstandingClient(
+              endpoint=endpoint,
+              credential=credential,
+          ) as client:
+              poller = await client.begin_analyze(
+                  analyzer_id="prebuilt-documentSearch",
+                  inputs=[AnalyzeInput(url="https://example.com/document.pdf")],
+              )
+              result = await poller.result()
+              content = result.contents[0]
+              print(content.markdown)
+      
+      asyncio.run(main())

@@ -1,0 +1,236 @@
+# yaml-language-server: $schema=file:///Users/govindm4max/code/oss/agent-skills/tests/scenarios/skill-scenarios.schema.json
+# Test scenarios for azure-monitor-ingestion-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: sync_basic_upload
+    prompt: |
+      Provide a minimal synchronous example that uploads custom logs.
+      Use DefaultAzureCredential, a DCE endpoint from AZURE_DCE_ENDPOINT,
+      and DCR rule/stream names from AZURE_DCR_RULE_ID and AZURE_DCR_STREAM_NAME.
+    expected_patterns:
+      - "from azure.monitor.ingestion import LogsIngestionClient"
+      - "from azure.identity import DefaultAzureCredential"
+      - "AZURE_DCE_ENDPOINT"
+      - "AZURE_DCR_RULE_ID"
+      - "AZURE_DCR_STREAM_NAME"
+      - "client.upload(rule_id=rule_id, stream_name=stream_name, logs=logs)"
+    forbidden_patterns:
+      - "ods.opinsights.azure.com"
+      - "data_collection_endpoint="
+    tags:
+      - basic
+      - sync
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.ingestion import LogsIngestionClient
+
+      endpoint = os.environ["AZURE_DCE_ENDPOINT"]
+      rule_id = os.environ["AZURE_DCR_RULE_ID"]
+      stream_name = os.environ["AZURE_DCR_STREAM_NAME"]
+
+      client = LogsIngestionClient(endpoint=endpoint, credential=DefaultAzureCredential())
+
+      logs = [
+          {"TimeGenerated": "2024-01-15T10:00:00Z", "Computer": "server1", "Message": "Started"},
+          {"TimeGenerated": "2024-01-15T10:01:00Z", "Computer": "server2", "Message": "Processed"},
+      ]
+
+      client.upload(rule_id=rule_id, stream_name=stream_name, logs=logs)
+
+  - name: async_upload_with_context_manager
+    prompt: |
+      Provide an async example using azure.monitor.ingestion.aio LogsIngestionClient.
+      Use async with and await upload.
+    expected_patterns:
+      - "from azure.monitor.ingestion.aio import LogsIngestionClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with LogsIngestionClient"
+      - "await client.upload"
+    forbidden_patterns:
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - async
+    mock_response: |
+      import os
+      import asyncio
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.monitor.ingestion.aio import LogsIngestionClient
+
+      async def main() -> None:
+          endpoint = os.environ["AZURE_DCE_ENDPOINT"]
+          rule_id = os.environ["AZURE_DCR_RULE_ID"]
+          stream_name = os.environ["AZURE_DCR_STREAM_NAME"]
+          logs = [{"TimeGenerated": "2024-01-15T10:00:00Z", "Message": "Async"}]
+
+          async with LogsIngestionClient(endpoint=endpoint, credential=DefaultAzureCredential()) as client:
+              await client.upload(rule_id=rule_id, stream_name=stream_name, logs=logs)
+
+      if __name__ == "__main__":
+          asyncio.run(main())
+
+  - name: sovereign_cloud_scopes
+    prompt: |
+      Show how to create a LogsIngestionClient for Azure Government cloud.
+      Include AzureAuthorityHosts and credential_scopes.
+    expected_patterns:
+      - "from azure.identity import AzureAuthorityHosts"
+      - "credential_scopes=[\"https://monitor.azure.us/.default\"]"
+      - "LogsIngestionClient"
+    forbidden_patterns:
+      - "ods.opinsights.azure.com"
+    tags:
+      - sovereign
+    mock_response: |
+      from azure.identity import AzureAuthorityHosts, DefaultAzureCredential
+      from azure.monitor.ingestion import LogsIngestionClient
+
+      credential = DefaultAzureCredential(authority=AzureAuthorityHosts.AZURE_GOVERNMENT)
+      client = LogsIngestionClient(
+          endpoint="https://example.ingest.monitor.azure.us",
+          credential=credential,
+          credential_scopes=["https://monitor.azure.us/.default"],
+      )
+
+  - name: upload_with_httpresponseerror
+    prompt: |
+      Provide an upload example that catches HttpResponseError.
+    expected_patterns:
+      - "from azure.core.exceptions import HttpResponseError"
+      - "try:"
+      - "except HttpResponseError"
+      - "client.upload"
+    forbidden_patterns:
+      - "except Exception"
+    tags:
+      - error-handling
+    mock_response: |
+      import os
+      from azure.core.exceptions import HttpResponseError
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.ingestion import LogsIngestionClient
+
+      endpoint = os.environ["AZURE_DCE_ENDPOINT"]
+      rule_id = os.environ["AZURE_DCR_RULE_ID"]
+      stream_name = os.environ["AZURE_DCR_STREAM_NAME"]
+
+      client = LogsIngestionClient(endpoint=endpoint, credential=DefaultAzureCredential())
+      logs = [{"TimeGenerated": "2024-01-15T10:00:00Z", "Message": "Hello"}]
+
+      try:
+          client.upload(rule_id=rule_id, stream_name=stream_name, logs=logs)
+      except HttpResponseError as exc:
+          print(f"Upload failed: {exc}")
+
+  - name: upload_with_custom_error_callback
+    prompt: |
+      Provide an example that uses the on_error callback to capture failed logs.
+    expected_patterns:
+      - "on_error"
+      - "failed_logs"
+      - "client.upload"
+    forbidden_patterns:
+      - "def on_error_pass"
+    tags:
+      - error-callback
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.ingestion import LogsIngestionClient
+
+      endpoint = os.environ["AZURE_DCE_ENDPOINT"]
+      rule_id = os.environ["AZURE_DCR_RULE_ID"]
+      stream_name = os.environ["AZURE_DCR_STREAM_NAME"]
+
+      client = LogsIngestionClient(endpoint=endpoint, credential=DefaultAzureCredential())
+      logs = [{"TimeGenerated": "2024-01-15T10:00:00Z", "Message": "Hello"}]
+
+      failed_logs = []
+
+      def on_error(error) -> None:
+          failed_logs.extend(error.failed_logs)
+
+      client.upload(
+          rule_id=rule_id,
+          stream_name=stream_name,
+          logs=logs,
+          on_error=on_error,
+      )
+
+  - name: upload_from_json_file
+    prompt: |
+      Provide an example that loads logs from a JSON file and uploads them.
+    expected_patterns:
+      - "import json"
+      - "with open("
+      - "json.load"
+      - "client.upload"
+    forbidden_patterns:
+      - "json.dumps"
+    tags:
+      - json
+    mock_response: |
+      import json
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.ingestion import LogsIngestionClient
+
+      endpoint = os.environ["AZURE_DCE_ENDPOINT"]
+      rule_id = os.environ["AZURE_DCR_RULE_ID"]
+      stream_name = os.environ["AZURE_DCR_STREAM_NAME"]
+
+      client = LogsIngestionClient(endpoint=endpoint, credential=DefaultAzureCredential())
+
+      with open("logs.json", "r") as f:
+          logs = json.load(f)
+
+      client.upload(rule_id=rule_id, stream_name=stream_name, logs=logs)
+
+  - name: explicit_dce_endpoint_format
+    prompt: |
+      Show a LogsIngestionClient using an explicit DCE URL in the ingest.monitor.azure.com format.
+    expected_patterns:
+      - "https://"
+      - ".ingest.monitor.azure.com"
+      - "LogsIngestionClient"
+    forbidden_patterns:
+      - "ods.opinsights.azure.com"
+    tags:
+      - dce
+    mock_response: |
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.ingestion import LogsIngestionClient
+
+      endpoint = "https://my-dce.westus2.ingest.monitor.azure.com"
+      client = LogsIngestionClient(endpoint=endpoint, credential=DefaultAzureCredential())
+
+  - name: alternate_dcr_env_names
+    prompt: |
+      Provide an example that uses LOGS_DCR_RULE_ID and LOGS_DCR_STREAM_NAME environment variables.
+    expected_patterns:
+      - "LOGS_DCR_RULE_ID"
+      - "LOGS_DCR_STREAM_NAME"
+      - "client.upload"
+    forbidden_patterns:
+      - "LOG_ANALYTICS_WORKSPACE_ID"
+    tags:
+      - dcr
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.ingestion import LogsIngestionClient
+
+      endpoint = os.environ["AZURE_DCE_ENDPOINT"]
+      rule_id = os.environ["LOGS_DCR_RULE_ID"]
+      stream_name = os.environ["LOGS_DCR_STREAM_NAME"]
+
+      client = LogsIngestionClient(endpoint=endpoint, credential=DefaultAzureCredential())
+      logs = [{"TimeGenerated": "2024-01-15T10:00:00Z", "Message": "Alt env"}]
+
+      client.upload(rule_id=rule_id, stream_name=stream_name, logs=logs)

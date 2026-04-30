@@ -1,0 +1,112 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-keyvault-secrets-rust skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: create_secret_client
+    prompt: |
+      Create a Key Vault SecretClient in Rust using DeveloperToolsCredential.
+    expected_patterns:
+      - "DeveloperToolsCredential"
+      - "SecretClient"
+      - "vault.azure.net"
+    forbidden_patterns:
+      - "connection_string"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      use azure_identity::DeveloperToolsCredential;
+      use azure_security_keyvault_secrets::SecretClient;
+
+      let credential = DeveloperToolsCredential::new(None)?;
+      let client = SecretClient::new(
+          "https://<vault-name>.vault.azure.net/",
+          credential.clone(),
+          None,
+      )?;
+
+  - name: get_secret
+    prompt: |
+      Retrieve a secret from Azure Key Vault using the Rust SDK.
+    expected_patterns:
+      - "get_secret"
+      - "into_model"
+      - "value"
+    forbidden_patterns:
+      - "set_secret"
+    tags:
+      - read
+      - secrets
+    mock_response: |
+      let secret = client
+          .get_secret("secret-name", None)
+          .await?
+          .into_model()?;
+
+      println!("Secret value: {:?}", secret.value);
+
+  - name: set_secret
+    prompt: |
+      Create or update a secret in Azure Key Vault using Rust.
+    expected_patterns:
+      - "set_secret"
+      - "SetSecretParameters"
+      - "value"
+    forbidden_patterns:
+      - "get_secret"
+    tags:
+      - write
+      - secrets
+    mock_response: |
+      use azure_security_keyvault_secrets::models::SetSecretParameters;
+
+      let params = SetSecretParameters {
+          value: Some("secret-value".into()),
+          ..Default::default()
+      };
+
+      let secret = client
+          .set_secret("secret-name", params.try_into()?, None)
+          .await?
+          .into_model()?;
+
+  - name: list_secrets
+    prompt: |
+      List all secrets in an Azure Key Vault using the Rust SDK.
+    expected_patterns:
+      - "list_secret_properties"
+      - "into_stream"
+      - "try_next"
+    forbidden_patterns:
+      - "get_secret"
+    tags:
+      - list
+      - secrets
+    mock_response: |
+      use azure_security_keyvault_secrets::ResourceExt;
+      use futures::TryStreamExt;
+
+      let mut pager = client.list_secret_properties(None)?.into_stream();
+      while let Some(secret) = pager.try_next().await? {
+          let name = secret.resource_id()?.name;
+          println!("Secret: {}", name);
+      }
+
+  - name: delete_secret
+    prompt: |
+      Delete a secret from Azure Key Vault using Rust.
+    expected_patterns:
+      - "delete_secret"
+    forbidden_patterns:
+      - "purge"
+    tags:
+      - delete
+      - secrets
+    mock_response: |
+      client.delete_secret("secret-name", None).await?;

@@ -1,0 +1,168 @@
+name: Copilot SDK Tests
+
+on:
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      skill:
+        description: 'Skill to evaluate (leave empty for all)'
+        required: false
+        type: string
+      ralph:
+        description: 'Enable Ralph Loop (iterative improvement)'
+        required: false
+        type: boolean
+        default: false
+      threshold:
+        description: 'Quality threshold (0-100)'
+        required: false
+        type: number
+        default: 60
+      max_iterations:
+        description: 'Max Ralph Loop iterations'
+        required: false
+        type: number
+        default: 2
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    # Only run if COPILOT_TOKEN secret is configured
+    if: ${{ vars.ENABLE_REAL_EVAL == 'true' || github.event_name == 'workflow_dispatch' }}
+    
+    env:
+      # PAT with "Copilot Requests" permission for SDK authentication
+      GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: tests/pnpm-lock.yaml
+
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot
+
+      - name: Verify Copilot CLI
+        run: copilot --version
+
+      - name: Install test dependencies
+        working-directory: tests
+        run: pnpm install
+
+      - name: TypeScript check
+        working-directory: tests
+        run: pnpm typecheck
+
+      - name: Run skill evaluations
+        id: harness
+        working-directory: tests
+        run: |
+          set +e
+          
+          SKILL_ARG="${{ inputs.skill }}"
+          RALPH_FLAG=""
+          THRESHOLD="${{ inputs.threshold || 60 }}"
+          MAX_ITER="${{ inputs.max_iterations || 2 }}"
+          
+          if [ "${{ inputs.ralph }}" = "true" ]; then
+            RALPH_FLAG="--ralph --threshold $THRESHOLD --max-iterations $MAX_ITER"
+          fi
+          
+          if [ -n "$SKILL_ARG" ]; then
+            # Single skill evaluation
+            pnpm harness "$SKILL_ARG" $RALPH_FLAG --verbose --output markdown --output-file results.md
+            HARNESS_EXIT=$?
+            pnpm harness "$SKILL_ARG" $RALPH_FLAG --output json --output-file results.json
+          else
+            # All skills evaluation
+            pnpm harness --all $RALPH_FLAG --verbose --output markdown --output-file results.md
+            HARNESS_EXIT=$?
+            pnpm harness --all $RALPH_FLAG --verbose --output json --output-file results.json
+          fi
+          
+          set -e
+          echo "exit_code=$HARNESS_EXIT" >> $GITHUB_OUTPUT
+          exit 0
+
+      - name: Write job summary
+        if: always()
+        working-directory: tests
+        run: |
+          echo "## Copilot SDK Tests Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Mode:** Real Copilot SDK evaluation (nightly)" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.ralph }}" = "true" ]; then
+            echo "**Ralph Loop:** Enabled (threshold: ${{ inputs.threshold || 60 }}, max iterations: ${{ inputs.max_iterations || 2 }})" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f results.md ]; then
+            cat results.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No results file found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ steps.harness.outputs.exit_code }}" != "0" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "---" >> $GITHUB_STEP_SUMMARY
+            echo "Some skills have failing scenarios. See details above." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-evaluation-results
+          path: |
+            tests/results.md
+            tests/results.json
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Check evaluation results
+        if: always()
+        run: |
+          if [ "${{ steps.harness.outputs.exit_code }}" != "0" ]; then
+            echo "::warning::Some skills have failing scenarios in real SDK evaluation"
+          fi
+
+      - name: Add detailed failure annotations
+        if: always()
+        working-directory: tests
+        run: |
+          if [ "${{ steps.harness.outputs.exit_code }}" != "0" ] && [ -f results.json ]; then
+            node - <<'EOF'
+            const fs = require('fs');
+
+            const raw = fs.readFileSync('results.json', 'utf-8');
+            const data = JSON.parse(raw);
+            const skills = data.skills ?? [];
+
+            for (const skill of skills) {
+              const results = skill.results ?? [];
+              for (const result of results) {
+                if (result.passed) continue;
+                const findings = result.findings ?? [];
+                const failures = findings.filter(f => f.severity === 'error');
+                if (failures.length === 0) continue;
+
+                const top = failures.slice(0, 3);
+                const details = top.map(f => `- ${f.message}${f.suggestion ? ` (💡 ${f.suggestion})` : ''}`).join(' ');
+                const summary = `${skill.skill_name} / ${result.scenario} failed (score: ${Number(result.score).toFixed(1)})`;
+                const message = `${summary} ${details}`;
+
+                console.log(`::error::${message}`);
+              }
+            }
+          EOF
+          fi

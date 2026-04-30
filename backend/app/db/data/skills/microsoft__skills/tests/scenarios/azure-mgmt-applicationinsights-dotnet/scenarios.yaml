@@ -1,0 +1,399 @@
+# Test scenarios for azure-mgmt-applicationinsights-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Create Application Insights Component
+  - name: create_appinsights_component
+    prompt: |
+      Create a workspace-based Application Insights component in C# 
+      with connection to a Log Analytics workspace.
+    expected_patterns:
+      - "ArmClient"
+      - "DefaultAzureCredential"
+      - "GetApplicationInsightsComponents"
+      - "ApplicationInsightsComponentData"
+      - "ApplicationInsightsApplicationType"
+      - "WorkspaceResourceId"
+      - "CreateOrUpdateAsync"
+    forbidden_patterns:
+      - "TelemetryClient"
+    tags:
+      - basic
+      - component
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApplicationInsights;
+      using Azure.ResourceManager.ApplicationInsights.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var subscription = await client.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      ApplicationInsightsComponentCollection components = resourceGroup.Value.GetApplicationInsightsComponents();
+
+      ApplicationInsightsComponentData data = new ApplicationInsightsComponentData(
+          AzureLocation.EastUS,
+          ApplicationInsightsApplicationType.Web)
+      {
+          Kind = "web",
+          WorkspaceResourceId = new ResourceIdentifier(
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/my-rg/providers/Microsoft.OperationalInsights/workspaces/my-workspace"),
+          IngestionMode = IngestionMode.LogAnalytics,
+          RetentionInDays = 90,
+          SamplingPercentage = 100,
+          Tags =
+          {
+              { "environment", "production" }
+          }
+      };
+
+      ArmOperation<ApplicationInsightsComponentResource> operation = await components
+          .CreateOrUpdateAsync(WaitUntil.Completed, "my-appinsights", data);
+
+      ApplicationInsightsComponentResource component = operation.Value;
+
+      Console.WriteLine($"Component created: {component.Data.Name}");
+      Console.WriteLine($"Connection String: {component.Data.ConnectionString}");
+
+  # Get Connection String
+  - name: get_connection_string
+    prompt: |
+      Retrieve the connection string and instrumentation key from an
+      existing Application Insights component.
+    expected_patterns:
+      - "GetApplicationInsightsComponentAsync"
+      - "ConnectionString"
+      - "InstrumentationKey"
+      - "AppId"
+    tags:
+      - connection
+      - keys
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApplicationInsights;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var subscription = await client.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      ApplicationInsightsComponentResource component = await resourceGroup.Value
+          .GetApplicationInsightsComponentAsync("my-appinsights");
+
+      string connectionString = component.Data.ConnectionString;
+      string instrumentationKey = component.Data.InstrumentationKey;
+      string appId = component.Data.AppId;
+
+      Console.WriteLine($"Connection String: {connectionString}");
+      Console.WriteLine($"Instrumentation Key: {instrumentationKey}");
+      Console.WriteLine($"App ID: {appId}");
+
+  # Create Web Test
+  - name: create_web_test
+    prompt: |
+      Create an availability (web) test in Application Insights to monitor
+      a website URL from multiple geographic locations.
+    expected_patterns:
+      - "GetWebTests"
+      - "WebTestData"
+      - "WebTestKind"
+      - "WebTestGeolocation"
+      - "WebTestLocationId"
+      - "Frequency"
+      - "IsEnabled"
+    tags:
+      - webtest
+      - availability
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApplicationInsights;
+      using Azure.ResourceManager.ApplicationInsights.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var subscription = await client.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      WebTestCollection webTests = resourceGroup.Value.GetWebTests();
+
+      string subscriptionId = subscription.Data.SubscriptionId;
+      string resourceGroupName = "my-resource-group";
+
+      WebTestData urlPingTest = new WebTestData(AzureLocation.EastUS)
+      {
+          Kind = WebTestKind.Ping,
+          SyntheticMonitorId = "webtest-ping-homepage",
+          WebTestName = "Homepage Availability",
+          Description = "Checks if homepage is available",
+          IsEnabled = true,
+          Frequency = 300,
+          Timeout = 120,
+          WebTestKind = WebTestKind.Ping,
+          IsRetryEnabled = true,
+          Locations =
+          {
+              new WebTestGeolocation { WebTestLocationId = "us-ca-sjc-azr" },
+              new WebTestGeolocation { WebTestLocationId = "us-tx-sn1-azr" },
+              new WebTestGeolocation { WebTestLocationId = "emea-gb-db3-azr" },
+              new WebTestGeolocation { WebTestLocationId = "apac-sg-sin-azr" }
+          },
+          Configuration = new WebTestConfiguration
+          {
+              WebTest = """
+                  <WebTest Name="Homepage" Enabled="True" Timeout="120"
+                           xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+                      <Items>
+                          <Request Method="GET" Version="1.1" Url="https://myapp.example.com"
+                                   ThinkTime="0" Timeout="120" ParseDependentRequests="False"
+                                   FollowRedirects="True" RecordResult="True" Cache="False"
+                                   ResponseTimeGoal="0" Encoding="utf-8" ExpectedHttpStatusCode="200" />
+                      </Items>
+                  </WebTest>
+              """
+          },
+          Tags =
+          {
+              { $"hidden-link:/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/microsoft.insights/components/my-appinsights", "Resource" }
+          }
+      };
+
+      ArmOperation<WebTestResource> operation = await webTests
+          .CreateOrUpdateAsync(WaitUntil.Completed, "webtest-homepage", urlPingTest);
+
+      WebTestResource webTest = operation.Value;
+      Console.WriteLine($"Web test created: {webTest.Data.WebTestName}");
+
+  # Create API Key
+  - name: create_api_key
+    prompt: |
+      Create an API key for an Application Insights component to enable
+      programmatic access to telemetry data.
+    expected_patterns:
+      - "GetApplicationInsightsComponentApiKeys"
+      - "ApplicationInsightsApiKeyContent"
+      - "LinkedReadProperties"
+      - "CreateOrUpdateAsync"
+    tags:
+      - apikey
+      - security
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApplicationInsights;
+      using Azure.ResourceManager.ApplicationInsights.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var subscription = await client.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      ApplicationInsightsComponentResource component = await resourceGroup.Value
+          .GetApplicationInsightsComponentAsync("my-appinsights");
+
+      string subscriptionId = subscription.Data.SubscriptionId;
+      string resourceGroupName = "my-resource-group";
+      string componentName = component.Data.Name;
+
+      ApplicationInsightsComponentApiKeyCollection apiKeys = component.GetApplicationInsightsComponentApiKeys();
+
+      ApplicationInsightsApiKeyContent keyContent = new ApplicationInsightsApiKeyContent
+      {
+          Name = "ReadTelemetryKey",
+          LinkedReadProperties =
+          {
+              $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/microsoft.insights/components/{componentName}/api",
+              $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/microsoft.insights/components/{componentName}/agentconfig"
+          }
+      };
+
+      ApplicationInsightsComponentApiKeyResource apiKey = await apiKeys
+          .CreateOrUpdateAsync(WaitUntil.Completed, keyContent);
+
+      Console.WriteLine($"API Key Name: {apiKey.Data.Name}");
+      Console.WriteLine($"API Key: {apiKey.Data.ApiKey}");
+
+  # Create Workbook
+  - name: create_workbook
+    prompt: |
+      Create a workbook in Application Insights for custom data visualization
+      and analysis dashboards.
+    expected_patterns:
+      - "GetWorkbooks"
+      - "WorkbookData"
+      - "WorkbookSharedTypeKind"
+      - "SerializedData"
+      - "DisplayName"
+      - "SourceId"
+    tags:
+      - workbook
+      - visualization
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApplicationInsights;
+      using Azure.ResourceManager.ApplicationInsights.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var subscription = await client.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      ApplicationInsightsComponentResource component = await resourceGroup.Value
+          .GetApplicationInsightsComponentAsync("my-appinsights");
+
+      WorkbookCollection workbooks = resourceGroup.Value.GetWorkbooks();
+
+      WorkbookData workbookData = new WorkbookData(AzureLocation.EastUS)
+      {
+          DisplayName = "Application Performance Dashboard",
+          Category = "workbook",
+          Kind = WorkbookSharedTypeKind.Shared,
+          SerializedData = """
+          {
+              "version": "Notebook/1.0",
+              "items": [
+                  {
+                      "type": 1,
+                      "content": {
+                          "json": "# Application Performance\n\nThis workbook shows application performance metrics."
+                      },
+                      "name": "header"
+                  },
+                  {
+                      "type": 3,
+                      "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "requests\n| summarize count() by bin(timestamp, 1h)\n| render timechart",
+                          "size": 0,
+                          "title": "Requests per Hour"
+                      },
+                      "name": "requestsChart"
+                  }
+              ],
+              "isLocked": false
+          }
+          """,
+          SourceId = component.Id,
+          Tags =
+          {
+              { "environment", "production" }
+          }
+      };
+
+      string workbookId = Guid.NewGuid().ToString();
+
+      ArmOperation<WorkbookResource> operation = await workbooks
+          .CreateOrUpdateAsync(WaitUntil.Completed, workbookId, workbookData);
+
+      WorkbookResource workbook = operation.Value;
+      Console.WriteLine($"Workbook created: {workbook.Data.DisplayName}");
+
+  # List Components
+  - name: list_components
+    prompt: |
+      List all Application Insights components in a resource group with
+      their configuration details.
+    expected_patterns:
+      - "GetApplicationInsightsComponents"
+      - "await foreach"
+      - "ApplicationType"
+      - "IngestionMode"
+      - "RetentionInDays"
+    tags:
+      - list
+      - management
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApplicationInsights;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var subscription = await client.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      // List all Application Insights components
+      await foreach (ApplicationInsightsComponentResource component in
+          resourceGroup.Value.GetApplicationInsightsComponents())
+      {
+          Console.WriteLine($"Component: {component.Data.Name}");
+          Console.WriteLine($"  App ID: {component.Data.AppId}");
+          Console.WriteLine($"  Type: {component.Data.ApplicationType}");
+          Console.WriteLine($"  Ingestion Mode: {component.Data.IngestionMode}");
+          Console.WriteLine($"  Retention: {component.Data.RetentionInDays} days");
+      }
+
+      // List web tests
+      await foreach (WebTestResource webTest in resourceGroup.Value.GetWebTests())
+      {
+          Console.WriteLine($"Web Test: {webTest.Data.WebTestName}");
+          Console.WriteLine($"  Enabled: {webTest.Data.IsEnabled}");
+          Console.WriteLine($"  Frequency: {webTest.Data.Frequency}s");
+      }
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Implement proper error handling for Application Insights operations
+      using RequestFailedException.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status"
+      - "catch"
+      - "when"
+    tags:
+      - error-handling
+      - best-practice
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApplicationInsights;
+      using Azure.ResourceManager.ApplicationInsights.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      try
+      {
+          var subscription = await client.GetDefaultSubscriptionAsync();
+          var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+          ApplicationInsightsComponentCollection components = resourceGroup.Value.GetApplicationInsightsComponents();
+
+          ApplicationInsightsComponentData data = new ApplicationInsightsComponentData(
+              AzureLocation.EastUS,
+              ApplicationInsightsApplicationType.Web)
+          {
+              Kind = "web"
+          };
+
+          ArmOperation<ApplicationInsightsComponentResource> operation = await components
+              .CreateOrUpdateAsync(WaitUntil.Completed, "my-appinsights", data);
+      }
+      catch (RequestFailedException ex) when (ex.Status == 409)
+      {
+          Console.WriteLine("Component already exists");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 400)
+      {
+          Console.WriteLine($"Invalid configuration: {ex.Message}");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"Azure error: {ex.Status} - {ex.Message}");
+      }

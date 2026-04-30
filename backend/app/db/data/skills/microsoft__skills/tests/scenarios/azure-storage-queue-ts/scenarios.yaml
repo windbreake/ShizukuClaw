@@ -1,0 +1,431 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-storage-queue-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # DefaultAzureCredential Authentication
+  - name: default_credential_auth
+    prompt: |
+      Create a TypeScript example that connects to Azure Queue Storage
+      using DefaultAzureCredential and lists all queues.
+    expected_patterns:
+      - "QueueServiceClient"
+      - "DefaultAzureCredential"
+      - "@azure/identity"
+      - "listQueues"
+    forbidden_patterns:
+      - "fromConnectionString"
+      - "myaccountkey"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import { QueueServiceClient } from "@azure/storage-queue";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new QueueServiceClient(
+        `https://${accountName}.queue.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      async function listQueues() {
+        for await (const queue of client.listQueues()) {
+          console.log(queue.name);
+        }
+      }
+
+      listQueues();
+
+  # Connection String Authentication
+  - name: connection_string_auth
+    prompt: |
+      Create a TypeScript example that connects to Azure Queue Storage
+      using a connection string.
+    expected_patterns:
+      - "QueueServiceClient"
+      - "fromConnectionString"
+      - "AZURE_STORAGE_CONNECTION_STRING"
+    forbidden_patterns:
+      - "myaccountkey"
+      - "hardcoded"
+    tags:
+      - authentication
+    mock_response: |
+      import { QueueServiceClient } from "@azure/storage-queue";
+
+      const client = QueueServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function listQueues() {
+        for await (const queue of client.listQueues()) {
+          console.log(queue.name);
+        }
+      }
+
+      listQueues();
+
+  # Create and Delete Queue
+  - name: create_delete_queue
+    prompt: |
+      Create a TypeScript example that creates a new queue, gets its
+      properties, and then deletes it.
+    expected_patterns:
+      - "getQueueClient"
+      - "createIfNotExists"
+      - "getProperties"
+      - "deleteIfExists"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - queues
+      - basic
+    mock_response: |
+      import { QueueServiceClient } from "@azure/storage-queue";
+
+      const client = QueueServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function manageQueue() {
+        const queueClient = client.getQueueClient("my-queue");
+
+        // Create queue if not exists
+        await queueClient.createIfNotExists();
+        console.log("Queue created");
+
+        // Get properties
+        const properties = await queueClient.getProperties();
+        console.log("Approximate message count:", properties.approximateMessagesCount);
+
+        // Delete queue
+        await queueClient.deleteIfExists();
+        console.log("Queue deleted");
+      }
+
+      manageQueue();
+
+  # Send and Receive Messages
+  - name: send_receive_messages
+    prompt: |
+      Create a TypeScript example that sends a message to a queue,
+      receives messages, and deletes them after processing.
+    expected_patterns:
+      - "sendMessage"
+      - "receiveMessages"
+      - "deleteMessage"
+      - "messageId"
+      - "popReceipt"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - messages
+      - basic
+    mock_response: |
+      import { QueueServiceClient } from "@azure/storage-queue";
+
+      const client = QueueServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function processMessages() {
+        const queueClient = client.getQueueClient("my-queue");
+
+        // Send message
+        await queueClient.sendMessage("Hello, World!");
+        console.log("Message sent");
+
+        // Receive messages
+        const response = await queueClient.receiveMessages({
+          numberOfMessages: 10,
+          visibilityTimeout: 30,
+        });
+
+        for (const message of response.receivedMessageItems) {
+          console.log("Message ID:", message.messageId);
+          console.log("Content:", message.messageText);
+
+          // Delete after processing
+          await queueClient.deleteMessage(message.messageId, message.popReceipt);
+          console.log("Message deleted");
+        }
+      }
+
+      processMessages();
+
+  # Send Message with Options
+  - name: send_message_with_options
+    prompt: |
+      Create a TypeScript example that sends a message with visibility
+      timeout and time-to-live options.
+    expected_patterns:
+      - "sendMessage"
+      - "visibilityTimeout"
+      - "messageTimeToLive"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - messages
+      - options
+    mock_response: |
+      import { QueueServiceClient } from "@azure/storage-queue";
+
+      const client = QueueServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function sendDelayedMessage() {
+        const queueClient = client.getQueueClient("my-queue");
+
+        // Send with options
+        await queueClient.sendMessage("Delayed message", {
+          visibilityTimeout: 60,  // Hidden for 60 seconds
+          messageTimeToLive: 3600,  // Expires in 1 hour
+        });
+
+        console.log("Delayed message sent");
+      }
+
+      sendDelayedMessage();
+
+  # Peek Messages
+  - name: peek_messages
+    prompt: |
+      Create a TypeScript example that peeks at messages in a queue
+      without removing them.
+    expected_patterns:
+      - "peekMessages"
+      - "peekedMessageItems"
+      - "numberOfMessages"
+    forbidden_patterns:
+      - "receiveMessages"
+    tags:
+      - messages
+      - peek
+    mock_response: |
+      import { QueueServiceClient } from "@azure/storage-queue";
+
+      const client = QueueServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function peekAtMessages() {
+        const queueClient = client.getQueueClient("my-queue");
+
+        const response = await queueClient.peekMessages({
+          numberOfMessages: 5,
+        });
+
+        for (const message of response.peekedMessageItems) {
+          console.log("Message ID:", message.messageId);
+          console.log("Content:", message.messageText);
+        }
+      }
+
+      peekAtMessages();
+
+  # Update Message
+  - name: update_message
+    prompt: |
+      Create a TypeScript example that receives a message, updates its
+      content and visibility timeout.
+    expected_patterns:
+      - "receiveMessages"
+      - "updateMessage"
+      - "popReceipt"
+      - "messageId"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - messages
+      - update
+    mock_response: |
+      import { QueueServiceClient } from "@azure/storage-queue";
+
+      const client = QueueServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function updateMessage() {
+        const queueClient = client.getQueueClient("my-queue");
+
+        const response = await queueClient.receiveMessages();
+        const message = response.receivedMessageItems[0];
+
+        if (message) {
+          const updateResponse = await queueClient.updateMessage(
+            message.messageId,
+            message.popReceipt,
+            "Updated content",
+            60  // New visibility timeout
+          );
+
+          console.log("New pop receipt:", updateResponse.popReceipt);
+        }
+      }
+
+      updateMessage();
+
+  # Poison Message Handling
+  - name: poison_message_handling
+    prompt: |
+      Create a TypeScript example that implements poison message handling
+      by checking dequeueCount and moving failed messages to a poison queue.
+    expected_patterns:
+      - "dequeueCount"
+      - "sendMessage"
+      - "deleteMessage"
+      - "MAX_DEQUEUE"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - messages
+      - poison
+      - advanced
+    mock_response: |
+      import { QueueServiceClient, QueueClient } from "@azure/storage-queue";
+
+      const client = QueueServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      const MAX_DEQUEUE_COUNT = 5;
+
+      async function processWithPoisonHandling(
+        queueClient: QueueClient,
+        poisonQueueClient: QueueClient
+      ): Promise<void> {
+        const response = await queueClient.receiveMessages({
+          numberOfMessages: 10,
+          visibilityTimeout: 30,
+        });
+
+        for (const message of response.receivedMessageItems) {
+          if (message.dequeueCount > MAX_DEQUEUE_COUNT) {
+            // Move to poison queue
+            await poisonQueueClient.sendMessage(message.messageText);
+            await queueClient.deleteMessage(message.messageId, message.popReceipt);
+            console.log(`Moved message ${message.messageId} to poison queue`);
+            continue;
+          }
+
+          try {
+            // Process message
+            console.log("Processing:", message.messageText);
+            await queueClient.deleteMessage(message.messageId, message.popReceipt);
+          } catch (error) {
+            console.error(`Processing failed (attempt ${message.dequeueCount}):`, error);
+          }
+        }
+      }
+
+      const queueClient = client.getQueueClient("my-queue");
+      const poisonQueueClient = client.getQueueClient("my-queue-poison");
+      processWithPoisonHandling(queueClient, poisonQueueClient);
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Create a TypeScript example that handles common errors when
+      working with Azure Queue Storage using RestError.
+    expected_patterns:
+      - "RestError"
+      - "statusCode"
+      - "try"
+      - "catch"
+      - "instanceof"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - errors
+      - best-practices
+    mock_response: |
+      import { QueueServiceClient, RestError } from "@azure/storage-queue";
+
+      const client = QueueServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function handleErrors() {
+        const queueClient = client.getQueueClient("my-queue");
+
+        try {
+          await queueClient.sendMessage("test");
+        } catch (error) {
+          if (error instanceof RestError) {
+            switch (error.statusCode) {
+              case 404:
+                console.log("Queue not found");
+                break;
+              case 400:
+                console.log("Bad request - message too large or invalid");
+                break;
+              case 403:
+                console.log("Access denied");
+                break;
+              case 409:
+                console.log("Queue already exists or being deleted");
+                break;
+              default:
+                console.error(`Storage error ${error.statusCode}: ${error.message}`);
+            }
+          }
+          throw error;
+        }
+      }
+
+      handleErrors();
+
+  # JSON Message Processing
+  - name: json_message_processing
+    prompt: |
+      Create a TypeScript example that sends and receives JSON-structured
+      messages in a queue.
+    expected_patterns:
+      - "JSON.stringify"
+      - "JSON.parse"
+      - "sendMessage"
+      - "receiveMessages"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - messages
+      - json
+    mock_response: |
+      import { QueueServiceClient } from "@azure/storage-queue";
+
+      interface Task {
+        type: string;
+        data: { id: number };
+      }
+
+      const client = QueueServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function processJsonMessages() {
+        const queueClient = client.getQueueClient("my-queue");
+
+        // Send JSON message
+        const task: Task = { type: "process", data: { id: 123 } };
+        await queueClient.sendMessage(JSON.stringify(task));
+        console.log("Task sent");
+
+        // Receive and parse JSON
+        const response = await queueClient.receiveMessages();
+        for (const message of response.receivedMessageItems) {
+          const parsedTask: Task = JSON.parse(message.messageText);
+          console.log("Task type:", parsedTask.type);
+          console.log("Task ID:", parsedTask.data.id);
+
+          await queueClient.deleteMessage(message.messageId, message.popReceipt);
+        }
+      }
+
+      processJsonMessages();

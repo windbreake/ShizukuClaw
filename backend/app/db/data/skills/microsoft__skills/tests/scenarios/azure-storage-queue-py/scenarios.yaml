@@ -1,0 +1,284 @@
+# yaml-language-server: $schema=file:///Users/govindm4max/code/oss/agent-skills/tests/scenarios/skill-scenarios.schema.json
+# Test scenarios for azure-storage-queue-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic QueueServiceClient Usage
+  - name: basic_queue_service_client
+    prompt: |
+      Create a basic example using QueueServiceClient with DefaultAzureCredential.
+      Create a queue, list queues, and delete the queue.
+    expected_patterns:
+      - "QueueServiceClient"
+      - "DefaultAzureCredential"
+      - "create_queue"
+      - "list_queues"
+      - "delete_queue"
+    forbidden_patterns:
+      - "from_connection_string"
+      - "ACCOUNT_KEY"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.queue import QueueServiceClient
+      
+      service_client = QueueServiceClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      service_client.create_queue("tasks")
+      
+      for queue in service_client.list_queues():
+          print(queue.name)
+      
+      service_client.delete_queue("tasks")
+
+  # QueueClient Send/Receive/Peek
+  - name: queue_client_send_receive_peek
+    prompt: |
+      Create a QueueClient that sends a message, receives messages,
+      peeks messages, and deletes messages after processing.
+    expected_patterns:
+      - "QueueClient"
+      - "send_message"
+      - "receive_messages"
+      - "peek_messages"
+      - "delete_message"
+    forbidden_patterns:
+      - "delete_message(message.id"
+    tags:
+      - basic
+      - messages
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.queue import QueueClient
+      
+      queue_client = QueueClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          queue_name="tasks",
+          credential=DefaultAzureCredential(),
+      )
+      
+      queue_client.create_queue()
+      queue_client.send_message("task-1")
+      
+      messages = queue_client.receive_messages(max_messages=2)
+      for message in messages:
+          print(message.content)
+          queue_client.delete_message(message)
+      
+      peeked = queue_client.peek_messages(max_messages=5)
+      for message in peeked:
+          print(message.content)
+      
+      queue_client.delete_queue()
+
+  # Visibility Timeout and TTL
+  - name: visibility_timeout_and_ttl
+    prompt: |
+      Send a delayed message with visibility_timeout and time_to_live,
+      then receive messages with a visibility timeout.
+    expected_patterns:
+      - "visibility_timeout"
+      - "time_to_live"
+      - "send_message"
+      - "receive_messages"
+    forbidden_patterns:
+      - "visibility_timeout=30000"
+    tags:
+      - visibility-timeout
+      - messages
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.queue import QueueClient
+      
+      queue_client = QueueClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          queue_name="delayed-tasks",
+          credential=DefaultAzureCredential(),
+      )
+      
+      queue_client.send_message(
+          content="delayed-task",
+          visibility_timeout=60,
+          time_to_live=3600,
+      )
+      
+      messages = queue_client.receive_messages(
+          visibility_timeout=30,
+          messages_per_page=5,
+      )
+      for message in messages:
+          print(message.content)
+          queue_client.delete_message(message)
+
+  # Update Message Visibility
+  - name: update_message_extend_visibility
+    prompt: |
+      Receive a message and update its visibility timeout and content
+      using update_message with the pop_receipt.
+    expected_patterns:
+      - "update_message"
+      - "pop_receipt"
+      - "visibility_timeout"
+    forbidden_patterns:
+      - "update_message(message.id"
+    tags:
+      - visibility-timeout
+      - update
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.queue import QueueClient
+      
+      queue_client = QueueClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          queue_name="update-tasks",
+          credential=DefaultAzureCredential(),
+      )
+      
+      queue_client.send_message("update-me")
+      messages = queue_client.receive_messages()
+      message = next(messages)
+      
+      queue_client.update_message(
+          message,
+          pop_receipt=message.pop_receipt,
+          visibility_timeout=120,
+          content="updated-task",
+      )
+
+  # QueueClient from QueueServiceClient
+  - name: queue_client_from_service
+    prompt: |
+      Create a QueueServiceClient and obtain a QueueClient using
+      get_queue_client, then send a message.
+    expected_patterns:
+      - "QueueServiceClient"
+      - "get_queue_client"
+      - "send_message"
+    forbidden_patterns:
+      - "QueueClient.from_connection_string"
+    tags:
+      - service-client
+      - messages
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.queue import QueueServiceClient
+      
+      service_client = QueueServiceClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      queue_client = service_client.get_queue_client("tasks")
+      queue_client.send_message("service-task")
+
+  # Async QueueClient Usage
+  - name: async_queue_client_usage
+    prompt: |
+      Create an async QueueClient with DefaultAzureCredential,
+      send a message, and receive/delete messages using async iteration.
+    expected_patterns:
+      - "from azure.storage.queue.aio import QueueClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with"
+      - "await client.send_message"
+      - "async for message in client.receive_messages"
+    forbidden_patterns:
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - async
+      - messages
+    mock_response: |
+      import os
+      import asyncio
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.storage.queue.aio import QueueClient
+      
+      async def main():
+          credential = DefaultAzureCredential()
+          async with QueueClient(
+              account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+              queue_name="async-tasks",
+              credential=credential,
+          ) as client:
+              await client.send_message("async-task")
+              async for message in client.receive_messages():
+                  print(message.content)
+                  await client.delete_message(message)
+      
+      asyncio.run(main())
+
+  # Async QueueServiceClient Listing
+  - name: async_queue_service_client_list
+    prompt: |
+      Create an async QueueServiceClient and list queues using async iteration.
+    expected_patterns:
+      - "from azure.storage.queue.aio import QueueServiceClient"
+      - "async for queue in service_client.list_queues"
+      - "async with"
+    forbidden_patterns:
+      - "from azure.storage.queue import QueueServiceClient"
+    tags:
+      - async
+      - service-client
+    mock_response: |
+      import os
+      import asyncio
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.storage.queue.aio import QueueServiceClient
+      
+      async def main():
+          async with QueueServiceClient(
+              account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+              credential=DefaultAzureCredential(),
+          ) as service_client:
+              async for queue in service_client.list_queues():
+                  print(queue.name)
+      
+      asyncio.run(main())
+
+  # Receive Messages by Page
+  - name: receive_messages_by_page
+    prompt: |
+      Receive messages in pages using receive_messages with messages_per_page
+      and iterate by_page to delete each message.
+    expected_patterns:
+      - "messages_per_page"
+      - "by_page"
+      - "receive_messages"
+      - "delete_message"
+    forbidden_patterns:
+      - "receive_message("  # Should use receive_messages for paging
+    tags:
+      - paging
+      - messages
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.queue import QueueClient
+      
+      queue_client = QueueClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          queue_name="paged-tasks",
+          credential=DefaultAzureCredential(),
+      )
+      
+      messages = queue_client.receive_messages(messages_per_page=5)
+      for page in messages.by_page():
+          for message in page:
+              print(message.content)
+              queue_client.delete_message(message)

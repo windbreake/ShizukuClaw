@@ -1,0 +1,529 @@
+# Test scenarios for azure-resource-manager-sql-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # ArmClient Setup
+  - name: armclient_setup
+    prompt: |
+      Create an ArmClient setup with DefaultAzureCredential for Azure Resource Manager
+      operations on Azure SQL resources.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "ArmClient"
+      - "GetSubscriptionResource"
+      - "Azure.ResourceManager.Sql"
+    forbidden_patterns:
+      - "ClientSecretCredential"
+      - "hardcoded"
+    tags:
+      - authentication
+      - setup
+    mock_response: |
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.Sql;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID");
+      var subscription = armClient.GetSubscriptionResource(
+          new ResourceIdentifier($"/subscriptions/{subscriptionId}"));
+
+  # Create SQL Server with Azure AD Authentication
+  - name: create_server_with_aad
+    prompt: |
+      Create an Azure SQL Server with both SQL authentication and Azure AD authentication
+      enabled, using TLS 1.2 minimum.
+    expected_patterns:
+      - "SqlServerData"
+      - "AdministratorLogin"
+      - "AdministratorLoginPassword"
+      - "Administrators"
+      - "ServerExternalAdministrator"
+      - "SqlAdministratorType.ActiveDirectory"
+      - "MinimalTlsVersion"
+      - "Tls1_2"
+      - "WaitUntil.Completed"
+      - "GetSqlServers"
+    forbidden_patterns:
+      - "Tls1_0"
+      - "Tls1_1"
+    tags:
+      - server
+      - crud
+      - authentication
+    mock_response: |
+      using Azure.ResourceManager.Sql;
+      using Azure.ResourceManager.Sql.Models;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      var serverData = new SqlServerData(AzureLocation.EastUS)
+      {
+          AdministratorLogin = "sqladmin",
+          AdministratorLoginPassword = "YourSecurePassword123!",
+          Administrators = new ServerExternalAdministrator
+          {
+              AdministratorType = SqlAdministratorType.ActiveDirectory,
+              Login = "admin@contoso.com",
+              Sid = Guid.Parse("<azure-ad-user-object-id>"),
+              TenantId = Guid.Parse("<azure-ad-tenant-id>"),
+              AzureADOnlyAuthentication = false
+          },
+          Version = "12.0",
+          MinimalTlsVersion = SqlMinimalTlsVersion.Tls1_2
+      };
+
+      var serverCollection = resourceGroup.Value.GetSqlServers();
+      var operation = await serverCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-sql-server",
+          serverData);
+
+      SqlServerResource server = operation.Value;
+      Console.WriteLine($"Server created: {server.Data.FullyQualifiedDomainName}");
+
+  # Create Serverless Database
+  - name: create_serverless_database
+    prompt: |
+      Create a serverless SQL database with auto-pause and vCore-based pricing.
+    expected_patterns:
+      - "SqlDatabaseData"
+      - "SqlSku"
+      - "GP_S_Gen5"
+      - "GeneralPurpose"
+      - "AutoPauseDelay"
+      - "MinCapacity"
+      - "GetSqlDatabases"
+      - "CreateOrUpdateAsync"
+    tags:
+      - database
+      - serverless
+    mock_response: |
+      using Azure.ResourceManager.Sql;
+      using Azure.ResourceManager.Sql.Models;
+
+      var server = await serverCollection.GetAsync("my-sql-server");
+
+      var databaseData = new SqlDatabaseData(AzureLocation.EastUS)
+      {
+          Sku = new SqlSku("GP_S_Gen5_2") // General Purpose, Serverless, Gen5, 2 vCores
+          {
+              Tier = "GeneralPurpose"
+          },
+          MaxSizeBytes = 34359738368, // 32 GB
+          AutoPauseDelay = 60,  // Minutes
+          MinCapacity = 0.5     // Minimum vCores
+      };
+
+      var databaseCollection = server.Value.GetSqlDatabases();
+      var operation = await databaseCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-database",
+          databaseData);
+
+      SqlDatabaseResource database = operation.Value;
+      Console.WriteLine($"Serverless database created: {database.Data.Name}");
+
+  # Create DTU-Based Database
+  - name: create_dtu_database
+    prompt: |
+      Create a Standard tier DTU-based SQL database.
+    expected_patterns:
+      - "SqlDatabaseData"
+      - "SqlSku"
+      - "S1"
+      - "Standard"
+      - "CreateOrUpdateAsync"
+    tags:
+      - database
+      - dtu
+    mock_response: |
+      using Azure.ResourceManager.Sql;
+      using Azure.ResourceManager.Sql.Models;
+
+      var server = await serverCollection.GetAsync("my-sql-server");
+
+      var databaseData = new SqlDatabaseData(AzureLocation.EastUS)
+      {
+          Sku = new SqlSku("S1")
+          {
+              Tier = "Standard"
+          }
+      };
+
+      var databaseCollection = server.Value.GetSqlDatabases();
+      var operation = await databaseCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-dtu-database",
+          databaseData);
+
+      Console.WriteLine($"DTU database created: {operation.Value.Data.Name}");
+
+  # Create Elastic Pool
+  - name: create_elastic_pool
+    prompt: |
+      Create a General Purpose elastic pool with vCore-based pricing and per-database settings.
+    expected_patterns:
+      - "ElasticPoolData"
+      - "SqlSku"
+      - "GP_Gen5"
+      - "GeneralPurpose"
+      - "PerDatabaseSettings"
+      - "MinCapacity"
+      - "MaxCapacity"
+      - "GetElasticPools"
+    tags:
+      - elastic-pool
+    mock_response: |
+      using Azure.ResourceManager.Sql;
+      using Azure.ResourceManager.Sql.Models;
+
+      var server = await serverCollection.GetAsync("my-sql-server");
+
+      var poolData = new ElasticPoolData(AzureLocation.EastUS)
+      {
+          Sku = new SqlSku("GP_Gen5")
+          {
+              Tier = "GeneralPurpose",
+              Family = "Gen5",
+              Capacity = 2  // vCores
+          },
+          PerDatabaseSettings = new ElasticPoolPerDatabaseSettings
+          {
+              MinCapacity = 0,
+              MaxCapacity = 2
+          }
+      };
+
+      var poolCollection = server.Value.GetElasticPools();
+      var operation = await poolCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-elastic-pool",
+          poolData);
+
+      ElasticPoolResource pool = operation.Value;
+      Console.WriteLine($"Elastic pool created: {pool.Data.Name}");
+
+  # Add Database to Elastic Pool
+  - name: add_database_to_pool
+    prompt: |
+      Create a database inside an elastic pool.
+    expected_patterns:
+      - "SqlDatabaseData"
+      - "ElasticPoolId"
+      - "CreateOrUpdateAsync"
+    tags:
+      - elastic-pool
+      - database
+    mock_response: |
+      using Azure.ResourceManager.Sql;
+      using Azure.ResourceManager.Sql.Models;
+
+      var server = await serverCollection.GetAsync("my-sql-server");
+      var pool = await server.Value.GetElasticPools().GetAsync("my-elastic-pool");
+
+      var databaseData = new SqlDatabaseData(AzureLocation.EastUS)
+      {
+          ElasticPoolId = pool.Value.Id
+      };
+
+      var databaseCollection = server.Value.GetSqlDatabases();
+      var operation = await databaseCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "pooled-database",
+          databaseData);
+
+      Console.WriteLine($"Database added to pool: {operation.Value.Data.Name}");
+
+  # Configure Firewall Rules
+  - name: configure_firewall
+    prompt: |
+      Configure firewall rules for a SQL Server to allow internal network access
+      and Azure services.
+    expected_patterns:
+      - "SqlFirewallRuleData"
+      - "GetSqlFirewallRules"
+      - "StartIPAddress"
+      - "EndIPAddress"
+      - "0.0.0.0"
+      - "CreateOrUpdateAsync"
+    tags:
+      - firewall
+      - security
+    mock_response: |
+      using Azure.ResourceManager.Sql;
+      using Azure.ResourceManager.Sql.Models;
+
+      var server = await serverCollection.GetAsync("my-sql-server");
+      var firewallCollection = server.Value.GetSqlFirewallRules();
+
+      // Allow specific IP range
+      var firewallData = new SqlFirewallRuleData
+      {
+          StartIPAddress = "10.0.0.1",
+          EndIPAddress = "10.0.0.255"
+      };
+
+      await firewallCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "allow-internal",
+          firewallData);
+
+      // Allow Azure services
+      var azureServicesRule = new SqlFirewallRuleData
+      {
+          StartIPAddress = "0.0.0.0",
+          EndIPAddress = "0.0.0.0"
+      };
+
+      await firewallCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "AllowAllWindowsAzureIps",
+          azureServicesRule);
+
+      Console.WriteLine("Firewall rules configured");
+
+  # Configure Virtual Network Rule
+  - name: configure_vnet_rule
+    prompt: |
+      Configure a virtual network rule to allow access from a specific subnet.
+    expected_patterns:
+      - "SqlServerVirtualNetworkRuleData"
+      - "VirtualNetworkSubnetId"
+      - "GetSqlServerVirtualNetworkRules"
+      - "CreateOrUpdateAsync"
+    tags:
+      - vnet
+      - security
+    mock_response: |
+      using Azure.ResourceManager.Sql;
+      using Azure.ResourceManager.Sql.Models;
+
+      var server = await serverCollection.GetAsync("my-sql-server");
+
+      var vnetRuleData = new SqlServerVirtualNetworkRuleData
+      {
+          VirtualNetworkSubnetId = new ResourceIdentifier(
+              "/subscriptions/{sub}/resourceGroups/{rg}/providers/" +
+              "Microsoft.Network/virtualNetworks/{vnet}/subnets/{subnet}"),
+          IgnoreMissingVnetServiceEndpoint = false
+      };
+
+      var vnetRuleCollection = server.Value.GetSqlServerVirtualNetworkRules();
+      await vnetRuleCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "allow-app-subnet",
+          vnetRuleData);
+
+      Console.WriteLine("VNet rule configured");
+
+  # Configure Server Auditing
+  - name: configure_auditing
+    prompt: |
+      Configure blob auditing on a SQL Server with Azure Monitor integration.
+    expected_patterns:
+      - "SqlServerBlobAuditingPolicyData"
+      - "BlobAuditingPolicyState.Enabled"
+      - "StorageEndpoint"
+      - "RetentionDays"
+      - "IsAzureMonitorTargetEnabled"
+      - "GetSqlServerBlobAuditingPolicy"
+    tags:
+      - auditing
+      - security
+    mock_response: |
+      using Azure.ResourceManager.Sql;
+      using Azure.ResourceManager.Sql.Models;
+
+      var server = await serverCollection.GetAsync("my-sql-server");
+
+      var auditingData = new SqlServerBlobAuditingPolicyData
+      {
+          State = BlobAuditingPolicyState.Enabled,
+          StorageEndpoint = "https://mystorageaccount.blob.core.windows.net",
+          StorageAccountAccessKey = "<storage-account-key>",
+          RetentionDays = 90,
+          IsStorageSecondaryKeyInUse = false,
+          IsAzureMonitorTargetEnabled = true
+      };
+
+      var auditingPolicy = server.Value.GetSqlServerBlobAuditingPolicy();
+      await auditingPolicy.CreateOrUpdateAsync(WaitUntil.Completed, auditingData);
+
+      Console.WriteLine("Auditing configured");
+
+  # Check Name Availability
+  - name: check_name_availability
+    prompt: |
+      Check if a SQL server name is available before creating the server.
+    expected_patterns:
+      - "SqlNameAvailabilityContent"
+      - "CheckSqlNameAvailabilityAsync"
+      - "IsAvailable"
+      - "Reason"
+    tags:
+      - validation
+    mock_response: |
+      using Azure.ResourceManager.Sql;
+      using Azure.ResourceManager.Sql.Models;
+
+      var checkRequest = new SqlNameAvailabilityContent
+      {
+          Name = "proposed-server-name",
+          ResourceType = "Microsoft.Sql/servers"
+      };
+
+      var result = await subscription.CheckSqlNameAvailabilityAsync(checkRequest);
+
+      if (result.Value.IsAvailable == true)
+      {
+          Console.WriteLine("Name is available");
+      }
+      else
+      {
+          Console.WriteLine($"Name unavailable: {result.Value.Reason}");
+      }
+
+  # Connect with Entra ID Token
+  - name: connect_with_entra_token
+    prompt: |
+      Build a connection string and connect to Azure SQL using Entra ID token authentication.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "GetTokenAsync"
+      - "database.windows.net"
+      - "AccessToken"
+      - "SqlConnection"
+      - "Encrypt=True"
+    forbidden_patterns:
+      - "Password="
+    tags:
+      - connection
+      - authentication
+    mock_response: |
+      using Azure.Identity;
+      using Microsoft.Data.SqlClient;
+
+      var credential = new DefaultAzureCredential();
+      var token = await credential.GetTokenAsync(
+          new TokenRequestContext(new[] { "https://database.windows.net/.default" }));
+
+      using var connection = new SqlConnection(
+          $"Server=tcp:{server.Data.FullyQualifiedDomainName},1433;" +
+          "Initial Catalog=my-database;" +
+          "Encrypt=True;TrustServerCertificate=False;");
+      connection.AccessToken = token.Token;
+      await connection.OpenAsync();
+
+      Console.WriteLine("Connected with Entra ID token");
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Create a SQL Server with proper error handling for ARM operations.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status == 409"
+      - "ex.Status == 400"
+      - "try"
+      - "catch"
+    forbidden_patterns:
+      - "catch (Exception ex)"
+      - "catch { }"
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure;
+      using Azure.ResourceManager.Sql;
+      using Azure.ResourceManager.Sql.Models;
+
+      try
+      {
+          var serverData = new SqlServerData(AzureLocation.EastUS)
+          {
+              AdministratorLogin = "sqladmin",
+              AdministratorLoginPassword = "YourSecurePassword123!",
+              Version = "12.0",
+              MinimalTlsVersion = SqlMinimalTlsVersion.Tls1_2
+          };
+
+          var operation = await serverCollection.CreateOrUpdateAsync(
+              WaitUntil.Completed,
+              "my-sql-server",
+              serverData);
+      }
+      catch (RequestFailedException ex) when (ex.Status == 409)
+      {
+          Console.WriteLine("Server already exists");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 400)
+      {
+          Console.WriteLine($"Invalid configuration: {ex.Message}");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"ARM Error: {ex.Status} - {ex.ErrorCode}: {ex.Message}");
+      }
+
+  # List Servers and Databases
+  - name: list_resources
+    prompt: |
+      List all SQL servers in a resource group and their databases.
+    expected_patterns:
+      - "await foreach"
+      - "GetSqlServers"
+      - "GetSqlDatabases"
+      - "FullyQualifiedDomainName"
+    tags:
+      - list
+      - enumeration
+    mock_response: |
+      using Azure.ResourceManager.Sql;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      await foreach (var server in resourceGroup.Value.GetSqlServers())
+      {
+          Console.WriteLine($"Server: {server.Data.Name}");
+          Console.WriteLine($"  FQDN: {server.Data.FullyQualifiedDomainName}");
+          Console.WriteLine($"  Version: {server.Data.Version}");
+
+          await foreach (var db in server.GetSqlDatabases())
+          {
+              Console.WriteLine($"  Database: {db.Data.Name}");
+              Console.WriteLine($"    SKU: {db.Data.Sku?.Name}");
+              Console.WriteLine($"    Status: {db.Data.Status}");
+          }
+      }
+
+  # Get Server by Resource ID
+  - name: get_by_resource_id
+    prompt: |
+      Get a SQL Server using its resource ID with CreateResourceIdentifier.
+    expected_patterns:
+      - "CreateResourceIdentifier"
+      - "GetSqlServerResource"
+      - "GetAsync"
+    forbidden_patterns:
+      - "/subscriptions/12345"  # Hardcoded subscription
+    tags:
+      - resourceid
+    mock_response: |
+      using Azure.ResourceManager.Sql;
+
+      var resourceId = SqlServerResource.CreateResourceIdentifier(
+          subscriptionId,
+          "my-resource-group",
+          "my-sql-server");
+
+      var server = armClient.GetSqlServerResource(resourceId);
+      var serverData = await server.GetAsync();
+
+      Console.WriteLine($"Found server: {serverData.Value.Data.FullyQualifiedDomainName}");

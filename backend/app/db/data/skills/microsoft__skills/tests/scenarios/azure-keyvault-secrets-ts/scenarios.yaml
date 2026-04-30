@@ -1,0 +1,451 @@
+# yaml-language-server: $schema=file:///Users/govindm4max/code/oss/agent-skills/tests/scenarios/skill-scenarios.schema.json
+# Test scenarios for azure-keyvault-secrets-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Client Setup
+  - name: basic_client_setup
+    prompt: |
+      Create a basic Azure Key Vault Secret client using SecretClient with proper
+      authentication. Include connecting to a key vault and setting a simple secret.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "SecretClient"
+      - 'import { SecretClient } from "@azure/keyvault-secrets"'
+      - 'import { DefaultAzureCredential } from "@azure/identity"'
+      - "process.env"
+    forbidden_patterns:
+      - "require("
+      - "KeyVaultClient"
+      - "azure-keyvault"
+    tags:
+      - basic
+      - authentication
+      - client-setup
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SecretClient } from "@azure/keyvault-secrets";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new SecretClient(url, credential);
+
+      const secret = await client.setSecret("MySecretName", "MySecretValue");
+      console.log("Secret created:", secret.name);
+
+  # Set Secret with Options
+  - name: set_secret_with_options
+    prompt: |
+      Set a secret in Azure Key Vault with all available options including
+      expiration date, content type, tags, and enabled status.
+    expected_patterns:
+      - "setSecret"
+      - "expiresOn"
+      - "contentType"
+      - "tags"
+      - "enabled"
+    forbidden_patterns:
+      - "createSecret"
+      - "addSecret"
+    tags:
+      - secrets
+      - create
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SecretClient } from "@azure/keyvault-secrets";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new SecretClient(url, credential);
+
+      const secret = await client.setSecret("DatabasePassword", "super-secret-value", {
+        enabled: true,
+        expiresOn: new Date("2025-12-31"),
+        notBefore: new Date("2024-01-01"),
+        contentType: "text/plain",
+        tags: {
+          environment: "production",
+          application: "my-app",
+        },
+      });
+
+      console.log("Secret name:", secret.name);
+      console.log("Secret version:", secret.properties.version);
+      console.log("Expires on:", secret.properties.expiresOn);
+
+  # Get Secret with Version
+  - name: get_secret_with_version
+    prompt: |
+      Get a secret from Azure Key Vault, both the latest version and a specific version.
+      Show how to access the secret value and properties.
+    expected_patterns:
+      - "getSecret"
+      - "version"
+      - "properties.version"
+      - ".value"
+    forbidden_patterns:
+      - "getSecretVersion"
+    tags:
+      - secrets
+      - read
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SecretClient } from "@azure/keyvault-secrets";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new SecretClient(url, credential);
+
+      // Get latest version
+      const latestSecret = await client.getSecret("MySecretName");
+      console.log("Secret value:", latestSecret.value);
+      console.log("Secret version:", latestSecret.properties.version);
+
+      // Get specific version
+      const specificSecret = await client.getSecret("MySecretName", {
+        version: latestSecret.properties.version!,
+      });
+      console.log("Specific version value:", specificSecret.value);
+
+  # Update Secret Properties
+  - name: update_secret_properties
+    prompt: |
+      Update the properties of an existing secret without changing its value.
+      Show how to disable a secret and update its tags.
+    expected_patterns:
+      - "updateSecretProperties"
+      - "enabled"
+      - "tags"
+    forbidden_patterns:
+      - "setSecret"
+      - "updateSecret("
+    tags:
+      - secrets
+      - update
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SecretClient } from "@azure/keyvault-secrets";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new SecretClient(url, credential);
+
+      // Get current secret to get the version
+      const secret = await client.getSecret("MySecretName");
+
+      // Update properties (does not change the value)
+      await client.updateSecretProperties("MySecretName", secret.properties.version!, {
+        enabled: false,
+        tags: {
+          status: "deprecated",
+          replacedBy: "NewSecretName",
+        },
+      });
+
+      console.log("Secret properties updated");
+
+  # Delete Secret with Poller
+  - name: delete_secret_poller
+    prompt: |
+      Delete a secret from Azure Key Vault using the proper poller pattern.
+      Show how to wait for deletion to complete and optionally purge.
+    expected_patterns:
+      - "beginDeleteSecret"
+      - "pollUntilDone"
+      - "purgeDeletedSecret"
+    forbidden_patterns:
+      - "deleteSecret("
+      - "delete("
+    tags:
+      - secrets
+      - delete
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SecretClient } from "@azure/keyvault-secrets";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new SecretClient(url, credential);
+
+      // Start deletion - returns a poller
+      const poller = await client.beginDeleteSecret("MySecretName");
+
+      // Get result immediately (secret is marked for deletion)
+      const deletedSecret = poller.getResult();
+      console.log("Deleted secret:", deletedSecret?.name);
+
+      // Wait for deletion to complete
+      await poller.pollUntilDone();
+
+      // Optionally purge (permanent delete)
+      await client.purgeDeletedSecret("MySecretName");
+      console.log("Secret purged permanently");
+
+  # Recover Deleted Secret
+  - name: recover_deleted_secret
+    prompt: |
+      Recover a deleted secret from Azure Key Vault using the poller pattern.
+      Show how to get the deleted secret and recover it.
+    expected_patterns:
+      - "beginRecoverDeletedSecret"
+      - "pollUntilDone"
+      - "getDeletedSecret"
+    forbidden_patterns:
+      - "recoverSecret("
+    tags:
+      - secrets
+      - recovery
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SecretClient } from "@azure/keyvault-secrets";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new SecretClient(url, credential);
+
+      // Get deleted secret info
+      const deletedSecret = await client.getDeletedSecret("MySecretName");
+      console.log("Deleted on:", deletedSecret.properties.deletedOn);
+      console.log("Scheduled purge:", deletedSecret.properties.scheduledPurgeDate);
+
+      // Recover the deleted secret
+      const recoverPoller = await client.beginRecoverDeletedSecret("MySecretName");
+      const recoveredSecret = await recoverPoller.pollUntilDone();
+
+      console.log("Secret recovered:", recoveredSecret.name);
+
+  # List Secrets
+  - name: list_secrets
+    prompt: |
+      List all secrets and their versions in Azure Key Vault using async iteration.
+      Include both flat iteration and paginated iteration.
+    expected_patterns:
+      - "listPropertiesOfSecrets"
+      - "listPropertiesOfSecretVersions"
+      - "for await"
+      - "byPage"
+    forbidden_patterns:
+      - "listSecrets("
+      - ".then("
+    tags:
+      - secrets
+      - list
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SecretClient } from "@azure/keyvault-secrets";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new SecretClient(url, credential);
+
+      // List all secrets (flat iteration) - returns properties only, not values
+      console.log("All secrets:");
+      for await (const secretProperties of client.listPropertiesOfSecrets()) {
+        console.log(`  Name: ${secretProperties.name}`);
+        console.log(`  Content Type: ${secretProperties.contentType}`);
+      }
+
+      // List with pagination
+      console.log("Secrets by page:");
+      for await (const page of client.listPropertiesOfSecrets().byPage()) {
+        for (const secretProperties of page) {
+          console.log(`  ${secretProperties.name}`);
+        }
+      }
+
+      // List versions of a specific secret
+      console.log("Secret versions:");
+      for await (const versionProperties of client.listPropertiesOfSecretVersions("MySecretName")) {
+        console.log(`  Version: ${versionProperties.version}`);
+        console.log(`  Created: ${versionProperties.createdOn}`);
+      }
+
+  # List Deleted Secrets
+  - name: list_deleted_secrets
+    prompt: |
+      List all deleted secrets in Azure Key Vault that are available for recovery or purge.
+    expected_patterns:
+      - "listDeletedSecrets"
+      - "for await"
+      - "deletedOn"
+      - "scheduledPurgeDate"
+    forbidden_patterns:
+      - "listPropertiesOfDeletedSecrets"
+    tags:
+      - secrets
+      - list
+      - deleted
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SecretClient } from "@azure/keyvault-secrets";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new SecretClient(url, credential);
+
+      console.log("Deleted secrets:");
+      for await (const deletedSecret of client.listDeletedSecrets()) {
+        console.log(`  Name: ${deletedSecret.name}`);
+        console.log(`  Deleted on: ${deletedSecret.properties.deletedOn}`);
+        console.log(`  Purge scheduled: ${deletedSecret.properties.scheduledPurgeDate}`);
+        console.log("---");
+      }
+
+  # Backup and Restore
+  - name: backup_restore
+    prompt: |
+      Demonstrate backing up a secret and restoring it using SecretClient.
+      Show proper handling of the backup blob.
+    expected_patterns:
+      - "backupSecret"
+      - "restoreSecretBackup"
+    forbidden_patterns:
+      - "exportSecret"
+    tags:
+      - secrets
+      - backup
+      - advanced
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SecretClient } from "@azure/keyvault-secrets";
+      import { writeFile, readFile } from "node:fs/promises";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new SecretClient(url, credential);
+
+      // Backup a secret
+      const backupResult = await client.backupSecret("MySecretName");
+      if (backupResult) {
+        // Store backup securely (this is encrypted, can only be restored to same subscription)
+        await writeFile("secret-backup.bin", Buffer.from(backupResult));
+        console.log("Secret backed up successfully");
+      }
+
+      // Restore a secret (can be to a different vault in same subscription)
+      const backupData = await readFile("secret-backup.bin");
+      const restoredSecret = await client.restoreSecretBackup(backupData);
+      console.log("Secret restored:", restoredSecret.name);
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Demonstrate proper error handling when working with Azure Key Vault Secrets.
+      Include handling secret not found and other common errors.
+    expected_patterns:
+      - "try"
+      - "catch"
+      - "RestError"
+      - "statusCode"
+      - "404"
+    forbidden_patterns:
+      - "catch {}"
+      - "catch.*pass"
+    tags:
+      - error-handling
+      - production
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SecretClient } from "@azure/keyvault-secrets";
+      import { RestError } from "@azure/core-rest-pipeline";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new SecretClient(url, credential);
+
+      try {
+        const secret = await client.getSecret("NonExistentSecret");
+        console.log("Secret found:", secret.name);
+      } catch (error) {
+        if (error instanceof RestError) {
+          if (error.statusCode === 404) {
+            console.log("Secret not found");
+          } else if (error.statusCode === 403) {
+            console.log("Access denied - check permissions");
+          } else {
+            console.log(`Azure error: ${error.message}`);
+          }
+        } else {
+          throw error;
+        }
+      }
+
+  # Complete CRUD Workflow
+  - name: complete_crud_workflow
+    prompt: |
+      Create a complete CRUD workflow for secrets including create, read, update, and delete
+      with proper poller handling.
+    expected_patterns:
+      - "setSecret"
+      - "getSecret"
+      - "updateSecretProperties"
+      - "beginDeleteSecret"
+      - "pollUntilDone"
+    forbidden_patterns:
+      - "deleteSecret("
+    tags:
+      - secrets
+      - crud
+      - workflow
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { SecretClient } from "@azure/keyvault-secrets";
+
+      const credential = new DefaultAzureCredential();
+      const vaultName = process.env.AZURE_KEYVAULT_NAME;
+      const url = `https://${vaultName}.vault.azure.net`;
+
+      const client = new SecretClient(url, credential);
+
+      // CREATE - Set a new secret
+      const created = await client.setSecret("MyAppSecret", "initial-value", {
+        tags: { application: "my-app" },
+      });
+      console.log("Created secret:", created.name, "version:", created.properties.version);
+
+      // READ - Get the secret value
+      const retrieved = await client.getSecret("MyAppSecret");
+      console.log("Retrieved value:", retrieved.value);
+
+      // UPDATE - Create new version with setSecret, or update properties
+      const updated = await client.setSecret("MyAppSecret", "updated-value");
+      console.log("Updated secret version:", updated.properties.version);
+
+      // Update just properties (not value)
+      await client.updateSecretProperties("MyAppSecret", updated.properties.version!, {
+        tags: { application: "my-app", version: "2" },
+      });
+
+      // DELETE - Use poller pattern
+      const deletePoller = await client.beginDeleteSecret("MyAppSecret");
+      await deletePoller.pollUntilDone();
+      console.log("Secret deleted");
+
+      // PURGE (optional) - Permanently remove
+      await client.purgeDeletedSecret("MyAppSecret");
+      console.log("Secret purged");

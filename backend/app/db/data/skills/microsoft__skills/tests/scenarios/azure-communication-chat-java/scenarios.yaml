@@ -1,0 +1,239 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-communication-chat-java skill evaluation
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: client_creation
+    prompt: |
+      Create Java code to set up the Azure Communication Chat client
+      using CommunicationTokenCredential authentication.
+    expected_patterns:
+      - "ChatClientBuilder"
+      - "CommunicationTokenCredential"
+      - "buildClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'endpoint\("https://'
+      - 'CommunicationTokenCredential\("eyJ'
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import com.azure.communication.chat.ChatClient;
+      import com.azure.communication.chat.ChatClientBuilder;
+      import com.azure.communication.common.CommunicationTokenCredential;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String userAccessToken = System.getenv("AZURE_COMMUNICATION_USER_TOKEN");
+              
+              CommunicationTokenCredential credential = new CommunicationTokenCredential(userAccessToken);
+              
+              ChatClient chatClient = new ChatClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(credential)
+                  .buildClient();
+              
+              System.out.println("Client initialized successfully");
+          }
+      }
+
+  - name: create_chat_thread
+    prompt: |
+      Create a Java example that creates a chat thread with participants
+      and gets a ChatThreadClient for that thread.
+    expected_patterns:
+      - "CreateChatThreadOptions"
+      - "ChatParticipant"
+      - "createChatThread"
+      - "CreateChatThreadResult"
+      - "getChatThreadClient"
+      - "CommunicationUserIdentifier"
+    tags:
+      - threads
+      - basic
+    mock_response: |
+      import com.azure.communication.chat.ChatClient;
+      import com.azure.communication.chat.ChatClientBuilder;
+      import com.azure.communication.chat.ChatThreadClient;
+      import com.azure.communication.chat.models.*;
+      import com.azure.communication.common.CommunicationTokenCredential;
+      import com.azure.communication.common.CommunicationUserIdentifier;
+      import java.util.ArrayList;
+      import java.util.List;
+
+      public class CreateChatThread {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String userToken = System.getenv("AZURE_COMMUNICATION_USER_TOKEN");
+              
+              ChatClient chatClient = new ChatClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new CommunicationTokenCredential(userToken))
+                  .buildClient();
+              
+              List<ChatParticipant> participants = new ArrayList<>();
+              participants.add(new ChatParticipant()
+                  .setCommunicationIdentifier(new CommunicationUserIdentifier("<user-id-1>"))
+                  .setDisplayName("Alice"));
+              participants.add(new ChatParticipant()
+                  .setCommunicationIdentifier(new CommunicationUserIdentifier("<user-id-2>"))
+                  .setDisplayName("Bob"));
+              
+              CreateChatThreadOptions options = new CreateChatThreadOptions("Project Discussion")
+                  .setParticipants(participants);
+              
+              CreateChatThreadResult result = chatClient.createChatThread(options);
+              String threadId = result.getChatThread().getId();
+              
+              ChatThreadClient threadClient = chatClient.getChatThreadClient(threadId);
+              System.out.println("Thread created: " + threadId);
+          }
+      }
+
+  - name: send_message
+    prompt: |
+      Create a Java example that sends a message to a chat thread
+      and lists messages from the thread.
+    expected_patterns:
+      - "SendChatMessageOptions"
+      - "sendMessage"
+      - "ChatMessageType"
+      - "listMessages"
+      - "getContent"
+    tags:
+      - messages
+    mock_response: |
+      import com.azure.communication.chat.ChatClient;
+      import com.azure.communication.chat.ChatClientBuilder;
+      import com.azure.communication.chat.ChatThreadClient;
+      import com.azure.communication.chat.models.*;
+      import com.azure.communication.common.CommunicationTokenCredential;
+      import com.azure.core.util.paging.PagedIterable;
+
+      public class SendMessage {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String userToken = System.getenv("AZURE_COMMUNICATION_USER_TOKEN");
+              String threadId = System.getenv("CHAT_THREAD_ID");
+              
+              ChatClient chatClient = new ChatClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new CommunicationTokenCredential(userToken))
+                  .buildClient();
+              
+              ChatThreadClient threadClient = chatClient.getChatThreadClient(threadId);
+              
+              SendChatMessageOptions messageOptions = new SendChatMessageOptions()
+                  .setContent("Hello, team!")
+                  .setSenderDisplayName("Alice")
+                  .setType(ChatMessageType.TEXT);
+              
+              SendChatMessageResult sendResult = threadClient.sendMessage(messageOptions);
+              System.out.println("Message sent: " + sendResult.getId());
+              
+              PagedIterable<ChatMessage> messages = threadClient.listMessages();
+              for (ChatMessage message : messages) {
+                  System.out.println("Content: " + message.getContent().getMessage());
+              }
+          }
+      }
+
+  - name: read_receipts
+    prompt: |
+      Create a Java example that sends a read receipt and lists
+      read receipts for a chat thread.
+    expected_patterns:
+      - "sendReadReceipt"
+      - "listReadReceipts"
+      - "ChatMessageReadReceipt"
+      - "getReadOn"
+    tags:
+      - read-receipts
+    mock_response: |
+      import com.azure.communication.chat.ChatClient;
+      import com.azure.communication.chat.ChatClientBuilder;
+      import com.azure.communication.chat.ChatThreadClient;
+      import com.azure.communication.chat.models.*;
+      import com.azure.communication.common.CommunicationTokenCredential;
+      import com.azure.core.util.paging.PagedIterable;
+
+      public class ReadReceipts {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String userToken = System.getenv("AZURE_COMMUNICATION_USER_TOKEN");
+              String threadId = System.getenv("CHAT_THREAD_ID");
+              String messageId = System.getenv("MESSAGE_ID");
+              
+              ChatClient chatClient = new ChatClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new CommunicationTokenCredential(userToken))
+                  .buildClient();
+              
+              ChatThreadClient threadClient = chatClient.getChatThreadClient(threadId);
+              
+              threadClient.sendReadReceipt(messageId);
+              System.out.println("Read receipt sent");
+              
+              PagedIterable<ChatMessageReadReceipt> receipts = threadClient.listReadReceipts();
+              for (ChatMessageReadReceipt receipt : receipts) {
+                  System.out.println("Message ID: " + receipt.getChatMessageId());
+                  System.out.println("Read at: " + receipt.getReadOn());
+              }
+          }
+      }
+
+  - name: error_handling
+    prompt: |
+      Create a Java example showing proper error handling for chat
+      operations with HttpResponseException handling.
+    expected_patterns:
+      - "HttpResponseException"
+      - "try"
+      - "catch"
+      - "getResponse().getStatusCode()"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.communication.chat.ChatClient;
+      import com.azure.communication.chat.ChatClientBuilder;
+      import com.azure.communication.chat.ChatThreadClient;
+      import com.azure.communication.chat.models.*;
+      import com.azure.communication.common.CommunicationTokenCredential;
+      import com.azure.core.exception.HttpResponseException;
+
+      public class ErrorHandling {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String userToken = System.getenv("AZURE_COMMUNICATION_USER_TOKEN");
+              
+              ChatClient chatClient = new ChatClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new CommunicationTokenCredential(userToken))
+                  .buildClient();
+              
+              try {
+                  ChatThreadClient threadClient = chatClient.getChatThreadClient("invalid-thread-id");
+                  threadClient.sendMessage(new SendChatMessageOptions().setContent("test"));
+              } catch (HttpResponseException e) {
+                  switch (e.getResponse().getStatusCode()) {
+                      case 401:
+                          System.err.println("Unauthorized - check token");
+                          break;
+                      case 403:
+                          System.err.println("Forbidden - user not in thread");
+                          break;
+                      case 404:
+                          System.err.println("Thread not found");
+                          break;
+                      default:
+                          System.err.println("Error: " + e.getMessage());
+                  }
+              }
+          }
+      }

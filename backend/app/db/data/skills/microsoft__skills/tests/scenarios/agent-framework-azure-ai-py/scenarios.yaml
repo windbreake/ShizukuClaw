@@ -1,0 +1,315 @@
+# Test scenarios for agent-framework-azure-ai-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic provider agent creation
+  - name: basic_provider_agent
+    prompt: |
+      Create a basic Azure AI agent using AzureAIAgentsProvider.
+      Use async context managers, run a message, and print the response.
+    expected_patterns:
+      - "AzureAIAgentsProvider"
+      - "AzureCliCredential"
+      - "create_agent"
+      - "run"
+    forbidden_patterns:
+      - "AgentsClient"  # Should use provider for basic example
+    tags:
+      - basic
+      - provider
+    mock_response: |
+      import asyncio
+      from agent_framework.azure import AzureAIAgentsProvider
+      from azure.identity.aio import AzureCliCredential
+      
+      async def main():
+          async with (
+              AzureCliCredential() as credential,
+              AzureAIAgentsProvider(credential=credential) as provider,
+          ):
+              agent = await provider.create_agent(
+                  name="MyAgent",
+                  instructions="You are a helpful assistant.",
+              )
+              result = await agent.run("Hello!")
+              print(result.text)
+      
+      asyncio.run(main())
+
+  # Persistent agent and thread usage
+  - name: persistent_agent_thread
+    prompt: |
+      Show how to retrieve an existing agent and continue a conversation
+      using a persistent thread. Include conversation ID handling.
+    expected_patterns:
+      - "get_agent"
+      - "AgentThread"
+      - "conversation_id"
+      - "service_thread_id"
+    tags:
+      - persistent
+      - threads
+    mock_response: |
+      import asyncio
+      from agent_framework import AgentThread
+      from agent_framework.azure import AzureAIAgentsProvider
+      from azure.identity.aio import AzureCliCredential
+      
+      async def main():
+          async with (
+              AzureCliCredential() as credential,
+              AzureAIAgentsProvider(credential=credential) as provider,
+          ):
+              agent = await provider.get_agent(agent_id="agent-123")
+              thread = AgentThread(service_thread_id="thread-abc")
+              result = await agent.run("Continue our conversation", thread=thread)
+              print(result.text)
+              print(thread.conversation_id)
+              print(thread.service_thread_id)
+      
+      asyncio.run(main())
+
+  # Hosted code interpreter tool
+  - name: hosted_code_interpreter
+    prompt: |
+      Create an agent that uses HostedCodeInterpreterTool with an uploaded
+      file reference. Use HostedFileContent to provide inputs.
+    expected_patterns:
+      - "HostedCodeInterpreterTool"
+      - "HostedFileContent"
+      - "tools=code_tool"
+    forbidden_patterns:
+      - "code_interpreter"  # Avoid string tool names
+    tags:
+      - tools
+      - code-interpreter
+    mock_response: |
+      import asyncio
+      from agent_framework import HostedCodeInterpreterTool, HostedFileContent
+      from agent_framework.azure import AzureAIAgentsProvider
+      from azure.identity.aio import AzureCliCredential
+      
+      async def main():
+          async with (
+              AzureCliCredential() as credential,
+              AzureAIAgentsProvider(credential=credential) as provider,
+          ):
+              code_tool = HostedCodeInterpreterTool(
+                  inputs=[HostedFileContent(file_id="file-xyz")],
+              )
+              agent = await provider.create_agent(
+                  name="DataAnalyst",
+                  instructions="Analyze the file.",
+                  tools=code_tool,
+              )
+              result = await agent.run("Summarize the file")
+              print(result.text)
+      
+      asyncio.run(main())
+
+  # Hosted file search with vector store
+  - name: hosted_file_search
+    prompt: |
+      Create an agent with HostedFileSearchTool using a vector store.
+      Upload a file, create a vector store, and pass HostedVectorStoreContent.
+    expected_patterns:
+      - "HostedFileSearchTool"
+      - "HostedVectorStoreContent"
+      - "vector_stores"
+      - "create_and_poll"
+    tags:
+      - tools
+      - file-search
+    mock_response: |
+      import asyncio
+      import os
+      from pathlib import Path
+      from agent_framework import HostedFileSearchTool, HostedVectorStoreContent
+      from agent_framework.azure import AzureAIAgentsProvider
+      from azure.ai.agents.aio import AgentsClient
+      from azure.identity.aio import AzureCliCredential
+      
+      async def main():
+          endpoint = os.environ["AZURE_AI_PROJECT_ENDPOINT"]
+          async with (
+              AzureCliCredential() as credential,
+              AgentsClient(endpoint=endpoint, credential=credential) as agents_client,
+              AzureAIAgentsProvider(agents_client=agents_client) as provider,
+          ):
+              file = await agents_client.files.upload(
+                  file_path=Path("data/knowledge_base.txt"),
+                  purpose="agents",
+              )
+              vector_store = await agents_client.vector_stores.create_and_poll(
+                  file_ids=[file.id],
+                  name="docs-store",
+              )
+              file_search_tool = HostedFileSearchTool(
+                  inputs=[HostedVectorStoreContent(vector_store_id=vector_store.id)],
+                  max_results=10,
+              )
+              agent = await provider.create_agent(
+                  name="ResearchAgent",
+                  instructions="Search documents for answers.",
+                  tools=file_search_tool,
+              )
+              result = await agent.run("What does the document say?")
+              print(result.text)
+      
+      asyncio.run(main())
+
+  # Hosted web search tool
+  - name: hosted_web_search
+    prompt: |
+      Create an agent that uses HostedWebSearchTool with Bing grounding.
+      Include the BING_CONNECTION_ID environment variable usage.
+    expected_patterns:
+      - "HostedWebSearchTool"
+      - "BING_CONNECTION_ID"
+    tags:
+      - tools
+      - web-search
+    mock_response: |
+      import asyncio
+      import os
+      from agent_framework import HostedWebSearchTool
+      from agent_framework.azure import AzureAIAgentsProvider
+      from azure.identity.aio import AzureCliCredential
+      
+      async def main():
+          os.environ["BING_CONNECTION_ID"] = "your-bing-connection-id"
+          async with (
+              AzureCliCredential() as credential,
+              AzureAIAgentsProvider(credential=credential) as provider,
+          ):
+              agent = await provider.create_agent(
+                  name="SearchAgent",
+                  instructions="Search the web for current information.",
+                  tools=HostedWebSearchTool(
+                      name="Bing Grounding Search",
+                      description="Search the web for current information",
+                  ),
+              )
+              result = await agent.run("What are the latest AI updates?")
+              print(result.text)
+      
+      asyncio.run(main())
+
+  # MCP Streamable HTTP tool
+  - name: mcp_streamable_http_tool
+    prompt: |
+      Create an agent that integrates with a client-managed MCP server
+      using MCPStreamableHTTPTool and an async context manager.
+    expected_patterns:
+      - "MCPStreamableHTTPTool"
+      - "async with"
+      - "tools=mcp_tool"
+    forbidden_patterns:
+      - "HostedMCPTool"  # Use streamable tool in this scenario
+    tags:
+      - mcp
+      - tools
+    mock_response: |
+      import asyncio
+      from agent_framework import MCPStreamableHTTPTool
+      from agent_framework.azure import AzureAIAgentsProvider
+      from azure.identity.aio import AzureCliCredential
+      
+      async def main():
+          async with (
+              AzureCliCredential() as credential,
+              MCPStreamableHTTPTool(
+                  name="Docs MCP",
+                  url="https://learn.microsoft.com/api/mcp",
+              ) as mcp_tool,
+              AzureAIAgentsProvider(credential=credential) as provider,
+          ):
+              agent = await provider.create_agent(
+                  name="DocsAgent",
+                  instructions="Answer questions using docs.",
+                  tools=mcp_tool,
+              )
+              result = await agent.run("What is Azure AI Foundry?")
+              print(result.text)
+      
+      asyncio.run(main())
+
+  # Hosted MCP tool
+  - name: hosted_mcp_tool
+    prompt: |
+      Create an agent that uses HostedMCPTool with approval_mode and
+      allowed_tools configuration for a service-managed MCP server.
+    expected_patterns:
+      - "HostedMCPTool"
+      - "approval_mode"
+      - "allowed_tools"
+    forbidden_patterns:
+      - "MCPStreamableHTTPTool"  # Keep hosted MCP isolated
+    tags:
+      - mcp
+      - tools
+    mock_response: |
+      import asyncio
+      from agent_framework import HostedMCPTool
+      from agent_framework.azure import AzureAIAgentsProvider
+      from azure.identity.aio import AzureCliCredential
+      
+      async def main():
+          async with (
+              AzureCliCredential() as credential,
+              AzureAIAgentsProvider(credential=credential) as provider,
+          ):
+              agent = await provider.create_agent(
+                  name="DocsAgent",
+                  instructions="Use Microsoft Learn MCP.",
+                  tools=HostedMCPTool(
+                      name="Microsoft Learn MCP",
+                      url="https://learn.microsoft.com/api/mcp",
+                      approval_mode="never_require",
+                      allowed_tools=["microsoft_docs_search", "microsoft_docs_read"],
+                  ),
+              )
+              result = await agent.run("How do I use Azure Functions?")
+              print(result.text)
+      
+      asyncio.run(main())
+
+  # Streaming responses
+  - name: streaming_responses
+    prompt: |
+      Create an agent that streams responses using run_stream and prints
+      text chunks as they arrive.
+    expected_patterns:
+      - "run_stream"
+      - "async for"
+      - "chunk.text"
+    forbidden_patterns:
+      - "stream=True"  # Use run_stream instead
+    tags:
+      - streaming
+    mock_response: |
+      import asyncio
+      from agent_framework.azure import AzureAIAgentsProvider
+      from azure.identity.aio import AzureCliCredential
+      
+      async def main():
+          async with (
+              AzureCliCredential() as credential,
+              AzureAIAgentsProvider(credential=credential) as provider,
+          ):
+              agent = await provider.create_agent(
+                  name="StreamingAgent",
+                  instructions="You are a helpful assistant.",
+              )
+              print("Agent:", end=" ")
+              async for chunk in agent.run_stream("Tell me a short story"):
+                  if chunk.text:
+                      print(chunk.text, end="", flush=True)
+              print()
+      
+      asyncio.run(main())

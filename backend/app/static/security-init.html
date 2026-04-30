@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔐 安全系统初始化</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: #1f2937;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .status-box {
+            background: #f0f9ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+            display: none;
+        }
+
+        .status-box.show {
+            display: block;
+        }
+
+        .status-box.success {
+            background: #dcfce7;
+            border-color: #86efac;
+        }
+
+        .status-box.error {
+            background: #fee2e2;
+            border-color: #fca5a5;
+        }
+
+        .status-box.error p {
+            color: #7f1d1d;
+        }
+
+        .status-box.success p {
+            color: #166534;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        input[type="password"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        input:disabled {
+            background-color: #f3f4f6;
+            color: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 6px;
+        }
+
+        .separator {
+            height: 1px;
+            background: #e5e7eb;
+            margin: 24px 0;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #667eea;
+        }
+
+        .checkbox-label {
+            font-size: 14px;
+            color: #374151;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #d1d5db;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+            grid-column: 1 / -1;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #5a67d8;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .strength-indicator {
+            height: 4px;
+            background: #e5e7eb;
+            border-radius: 2px;
+            margin-top: 6px;
+            overflow: hidden;
+        }
+
+        .strength-bar {
+            height: 100%;
+            width: 0%;
+            transition: all 0.3s ease;
+        }
+
+        .strength-bar.weak {
+            width: 33%;
+            background: #ef4444;
+        }
+
+        .strength-bar.medium {
+            width: 66%;
+            background: #f59e0b;
+        }
+
+        .strength-bar.strong {
+            width: 100%;
+            background: #10b981;
+        }
+
+        .warning-box {
+            background: #fef3c7;
+            border: 1px solid #fcd34d;
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #92400e;
+            line-height: 1.6;
+        }
+
+        .warning-box strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .success-message {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .success-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .success-message h2 {
+            color: #10b981;
+            margin-bottom: 8px;
+        }
+
+        .success-message p {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .back-btn {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .back-btn:hover {
+            background: #2563eb;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 24px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .button-group {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="init-form">
+            <div class="header">
+                <h1>🔐 安全系统初始化</h1>
+                <p>设置两层密码以保护系统安全</p>
+            </div>
+
+            <div id="status-box" class="status-box">
+                <p id="status-message"></p>
+            </div>
+
+            <form id="password-form">
+                <!-- Level 1 密码部分 -->
+                <div>
+                    <h3 class="section-title">第一层：工作模式密码</h3>
+                    <p style="font-size: 12px; color: #6b7280; margin-bottom: 16px;">
+                        用于启用文件操作和 workspace 访问权限。
+                    </p>
+
+                    <div class="form-group">
+                        <label for="level1-password">工作模式密码</label>
+                        <input
+                            type="password"
+                            id="level1-password"
+                            name="level1-password"
+                            placeholder="至少 8 个字符"
+                            required
+                            autocomplete="off"
+                        />
+                        <div class="strength-indicator">
+                            <div id="level1-strength" class="strength-bar"></div>
+                        </div>
+                        <div class="help-text">⚠️ 请牢记此密码，忘记后无法恢复</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="level1-confirm">确认工作模式密码</label>
+                        <input
+                            type="password"
+                            id="level1-confirm"
+                            name="level1-confirm"
+                            placeholder="再次输入密码"
+                            required
+                            autocomplete="off"
+                        />
+                    </div>
+                </div>
+
+                <div class="separator"></div>
+
+                <!-- Level 2 密码部分 -->
+                <div>
+                    <h3 class="section-title">第二层：全局管理密码</h3>
+                    <p style="font-size: 12px; color: #6b7280; margin-bottom: 16px;">
+                        用于启用全局系统访问，风险更高，请设置为更强的密码。
+                    </p>
+
+                    <div class="form-group">
+                        <label for="level2-password">全局管理密码</label>
+                        <input
+                            type="password"
+                            id="level2-password"
+                            name="level2-password"
+                            placeholder="至少 8 个字符，建议 12+ 个"
+                            required
+                            autocomplete="off"
+                        />
+                        <div class="strength-indicator">
+                            <div id="level2-strength" class="strength-bar"></div>
+                        </div>
+                        <div class="help-text">⚠️ 此密码权限最高，请设置强密码</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="level2-confirm">确认全局管理密码</label>
+                        <input
+                            type="password"
+                            id="level2-confirm"
+                            name="level2-confirm"
+                            placeholder="再次输入密码"
+                            required
+                            autocomplete="off"
+                        />
+                    </div>
+                </div>
+
+                <div class="warning-box">
+                    <strong>🚨 重要提示：</strong>
+                    不要在代码中、版本控制系统中或任何文档中保存这些密码。
+                    定期更改密码以维护系统安全。
+                </div>
+
+                <div class="button-group">
+                    <button type="button" class="btn-secondary" id="cancel-btn">取消</button>
+                    <button type="submit" class="btn-primary" id="submit-btn">初始化安全系统</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 成功消息 -->
+        <div id="success-message" class="success-message">
+            <div class="success-icon">✅</div>
+            <h2>初始化成功！</h2>
+            <p>安全系统已配置完成。现在可以使用两层密码保护系统。</p>
+            <p style="font-size: 12px; color: #9ca3af; margin-bottom: 20px;">
+                系统将在 3 秒后自动关闭此窗口...
+            </p>
+            <button type="button" class="back-btn" id="return-btn">返回系统</button>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('password-form');
+        const successMsg = document.getElementById('success-message');
+        const statusBox = document.getElementById('status-box');
+        const level1PwdInput = document.getElementById('level1-password');
+        const level1ConfirmInput = document.getElementById('level1-confirm');
+        const level2PwdInput = document.getElementById('level2-password');
+        const level2ConfirmInput = document.getElementById('level2-confirm');
+        const cancelBtn = document.getElementById('cancel-btn');
+        const submitBtn = document.getElementById('submit-btn');
+        const returnBtn = document.getElementById('return-btn');
+
+        // 密码强度检测
+        function calculateStrength(password) {
+            let strength = 0;
+            if (password.length >= 8) strength += 20;
+            if (password.length >= 12) strength += 20;
+            if (/[a-z]/.test(password)) strength += 15;
+            if (/[A-Z]/.test(password)) strength += 15;
+            if (/[0-9]/.test(password)) strength += 15;
+            if (/[^a-zA-Z0-9]/.test(password)) strength += 15;
+            return Math.min(strength, 100);
+        }
+
+        function updateStrengthBar(inputId, barId) {
+            const input = document.getElementById(inputId);
+            const bar = document.getElementById(barId);
+            const strength = calculateStrength(input.value);
+
+            bar.className = 'strength-bar';
+            if (strength < 50) {
+                bar.classList.add('weak');
+            } else if (strength < 80) {
+                bar.classList.add('medium');
+            } else {
+                bar.classList.add('strong');
+            }
+        }
+
+        level1PwdInput.addEventListener('input', () => updateStrengthBar('level1-password', 'level1-strength'));
+        level2PwdInput.addEventListener('input', () => updateStrengthBar('level2-password', 'level2-strength'));
+
+        // 取消按钮
+        cancelBtn.addEventListener('click', () => {
+            window.close();
+        });
+
+        // 返回按钮
+        returnBtn.addEventListener('click', () => {
+            window.location.href = '/sandbox';
+        });
+
+        // 表单提交
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const level1Pwd = level1PwdInput.value;
+            const level1Confirm = level1ConfirmInput.value;
+            const level2Pwd = level2PwdInput.value;
+            const level2Confirm = level2ConfirmInput.value;
+
+            // 验证
+            if (level1Pwd.length < 8) {
+                showStatus('工作模式密码至少需要 8 个字符', 'error');
+                return;
+            }
+
+            if (level1Pwd !== level1Confirm) {
+                showStatus('工作模式密码不匹配', 'error');
+                return;
+            }
+
+            if (level2Pwd.length < 8) {
+                showStatus('全局管理密码至少需要 8 个字符', 'error');
+                return;
+            }
+
+            if (level2Pwd !== level2Confirm) {
+                showStatus('全局管理密码不匹配', 'error');
+                return;
+            }
+
+            if (level1Pwd === level2Pwd) {
+                showStatus('⚠️ 两层密码不应相同，为了安全请设置不同的密码', 'error');
+                return;
+            }
+
+            // 提交
+            submitBtn.disabled = true;
+            submitBtn.textContent = '初始化中...';
+
+            try {
+                const response = await fetch('/api/security/config/set-passwords', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        level1_password: level1Pwd,
+                        level2_password: level2Pwd
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.ok) {
+                    showSuccess();
+                    // 3 秒后自动关闭
+                    setTimeout(() => {
+                        window.location.href = '/sandbox';
+                    }, 3000);
+                } else {
+                    showStatus(`初始化失败: ${data.error || '未知错误'}`, 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '初始化安全系统';
+                }
+            } catch (err) {
+                showStatus(`网络错误: ${err.message}`, 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = '初始化安全系统';
+            }
+        });
+
+        function showStatus(message, type = 'error') {
+            statusBox.classList.add('show', type);
+            statusBox.classList.remove(type === 'error' ? 'success' : 'error');
+            document.getElementById('status-message').textContent = message;
+            statusBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function showSuccess() {
+            form.style.display = 'none';
+            successMsg.classList.add('show');
+        }
+    </script>
+</body>
+</html>

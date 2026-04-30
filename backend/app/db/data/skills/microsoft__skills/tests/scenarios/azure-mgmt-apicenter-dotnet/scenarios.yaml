@@ -1,0 +1,482 @@
+# Test scenarios for azure-mgmt-apicenter-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Create API Center Service
+  - name: create_apicenter_service
+    prompt: |
+      Create an Azure API Center service in C# using the Azure.ResourceManager.ApiCenter SDK.
+      Include proper authentication, resource group access, and managed identity.
+    expected_patterns:
+      - "ArmClient"
+      - "DefaultAzureCredential"
+      - "GetApiCenterServices"
+      - "CreateOrUpdateAsync"
+      - "ApiCenterServiceData"
+      - "WaitUntil.Completed"
+    forbidden_patterns:
+      - "ApiCenterClient"
+      - "new ApiCenterClient"
+    tags:
+      - basic
+      - service
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiCenter;
+      using Azure.ResourceManager.ApiCenter.Models;
+      using Azure.ResourceManager.Resources;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      ResourceGroupResource resourceGroup = await client
+          .GetDefaultSubscriptionAsync()
+          .Result
+          .GetResourceGroupAsync("my-resource-group");
+
+      ApiCenterServiceCollection services = resourceGroup.GetApiCenterServices();
+
+      ApiCenterServiceData data = new ApiCenterServiceData(AzureLocation.EastUS)
+      {
+          Identity = new ManagedServiceIdentity(ManagedServiceIdentityType.SystemAssigned)
+      };
+
+      ArmOperation<ApiCenterServiceResource> operation = await services
+          .CreateOrUpdateAsync(WaitUntil.Completed, "my-api-center", data);
+
+      ApiCenterServiceResource service = operation.Value;
+      Console.WriteLine($"Created API Center: {service.Data.Name}");
+
+  # Create Workspace
+  - name: create_workspace
+    prompt: |
+      Create a workspace in Azure API Center to organize APIs by team or domain.
+    expected_patterns:
+      - "GetApiCenterWorkspaces"
+      - "ApiCenterWorkspaceData"
+      - "CreateOrUpdateAsync"
+      - "Title"
+    tags:
+      - workspace
+      - organization
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiCenter;
+      using Azure.ResourceManager.ApiCenter.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var resourceGroup = await client
+          .GetDefaultSubscriptionAsync()
+          .Result
+          .GetResourceGroupAsync("my-resource-group");
+
+      var service = await resourceGroup.GetApiCenterServiceAsync("my-api-center");
+
+      ApiCenterWorkspaceCollection workspaces = service.Value.GetApiCenterWorkspaces();
+
+      ApiCenterWorkspaceData workspaceData = new ApiCenterWorkspaceData
+      {
+          Title = "Engineering APIs",
+          Description = "APIs owned by the engineering team"
+      };
+
+      ArmOperation<ApiCenterWorkspaceResource> operation = await workspaces
+          .CreateOrUpdateAsync(WaitUntil.Completed, "engineering", workspaceData);
+
+      ApiCenterWorkspaceResource workspace = operation.Value;
+      Console.WriteLine($"Created workspace: {workspace.Data.Title}");
+
+  # Create API with Metadata
+  - name: create_api_with_metadata
+    prompt: |
+      Register a new REST API in Azure API Center with custom metadata 
+      including team ownership and lifecycle stage.
+    expected_patterns:
+      - "GetApiCenterApis"
+      - "ApiCenterApiData"
+      - "ApiKind"
+      - "ApiLifecycleStage"
+      - "CustomProperties"
+      - "BinaryData.FromObjectAsJson"
+    tags:
+      - api
+      - metadata
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiCenter;
+      using Azure.ResourceManager.ApiCenter.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var resourceGroup = await client
+          .GetDefaultSubscriptionAsync()
+          .Result
+          .GetResourceGroupAsync("my-resource-group");
+
+      var service = await resourceGroup.GetApiCenterServiceAsync("my-api-center");
+      var workspace = await service.Value.GetApiCenterWorkspaceAsync("engineering");
+
+      ApiCenterApiCollection apis = workspace.Value.GetApiCenterApis();
+
+      ApiCenterApiData apiData = new ApiCenterApiData
+      {
+          Title = "Orders API",
+          Description = "API for managing customer orders",
+          Kind = ApiKind.Rest,
+          LifecycleStage = ApiLifecycleStage.Production,
+          Contacts =
+          {
+              new ApiContact
+              {
+                  Name = "API Support",
+                  Email = "api-support@example.com"
+              }
+          }
+      };
+
+      // Add custom metadata
+      apiData.CustomProperties = BinaryData.FromObjectAsJson(new
+      {
+          team = "orders-team",
+          costCenter = "CC-1234"
+      });
+
+      ArmOperation<ApiCenterApiResource> operation = await apis
+          .CreateOrUpdateAsync(WaitUntil.Completed, "orders-api", apiData);
+
+      ApiCenterApiResource api = operation.Value;
+      Console.WriteLine($"Created API: {api.Data.Title}");
+
+  # Create API Version and Definition
+  - name: create_api_version_definition
+    prompt: |
+      Create an API version in Azure API Center and upload an OpenAPI 
+      specification as the definition.
+    expected_patterns:
+      - "GetApiCenterApiVersions"
+      - "ApiCenterApiVersionData"
+      - "GetApiCenterApiDefinitions"
+      - "ApiCenterApiDefinitionData"
+      - "ImportSpecificationAsync"
+      - "ApiSpecImportContent"
+    tags:
+      - version
+      - definition
+      - openapi
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiCenter;
+      using Azure.ResourceManager.ApiCenter.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var resourceGroup = await client
+          .GetDefaultSubscriptionAsync()
+          .Result
+          .GetResourceGroupAsync("my-resource-group");
+
+      var service = await resourceGroup.GetApiCenterServiceAsync("my-api-center");
+      var workspace = await service.Value.GetApiCenterWorkspaceAsync("engineering");
+      var api = await workspace.Value.GetApiCenterApiAsync("orders-api");
+
+      // Create version
+      ApiCenterApiVersionCollection versions = api.Value.GetApiCenterApiVersions();
+
+      ApiCenterApiVersionData versionData = new ApiCenterApiVersionData
+      {
+          Title = "v1.0.0",
+          LifecycleStage = ApiLifecycleStage.Production
+      };
+
+      var versionOp = await versions
+          .CreateOrUpdateAsync(WaitUntil.Completed, "v1-0-0", versionData);
+
+      // Create definition
+      ApiCenterApiDefinitionCollection definitions = versionOp.Value.GetApiCenterApiDefinitions();
+
+      ApiCenterApiDefinitionData definitionData = new ApiCenterApiDefinitionData
+      {
+          Title = "OpenAPI Specification",
+          Description = "Orders API OpenAPI 3.0 definition"
+      };
+
+      var defOp = await definitions
+          .CreateOrUpdateAsync(WaitUntil.Completed, "openapi", definitionData);
+
+      // Import specification
+      string openApiSpec = await File.ReadAllTextAsync("orders-api.yaml");
+
+      ApiSpecImportContent importContent = new ApiSpecImportContent
+      {
+          Format = ApiSpecImportSourceFormat.Inline,
+          Value = openApiSpec,
+          Specification = new ApiSpecImportSpecification
+          {
+              Name = "openapi",
+              Version = "3.0.1"
+          }
+      };
+
+      await defOp.Value.ImportSpecificationAsync(WaitUntil.Completed, importContent);
+      Console.WriteLine("API definition imported successfully");
+
+  # Create Environment and Deployment
+  - name: create_environment_deployment
+    prompt: |
+      Create a production environment in Azure API Center and deploy 
+      an API to it with runtime URLs.
+    expected_patterns:
+      - "GetApiCenterEnvironments"
+      - "ApiCenterEnvironmentData"
+      - "ApiCenterEnvironmentKind"
+      - "GetApiCenterDeployments"
+      - "ApiCenterDeploymentData"
+      - "ApiCenterDeploymentState"
+    tags:
+      - environment
+      - deployment
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiCenter;
+      using Azure.ResourceManager.ApiCenter.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var resourceGroup = await client
+          .GetDefaultSubscriptionAsync()
+          .Result
+          .GetResourceGroupAsync("my-resource-group");
+
+      var service = await resourceGroup.GetApiCenterServiceAsync("my-api-center");
+      var workspace = await service.Value.GetApiCenterWorkspaceAsync("engineering");
+
+      // Create environment
+      ApiCenterEnvironmentCollection environments = workspace.Value.GetApiCenterEnvironments();
+
+      ApiCenterEnvironmentData envData = new ApiCenterEnvironmentData
+      {
+          Title = "Production",
+          Description = "Production environment",
+          Kind = ApiCenterEnvironmentKind.Production,
+          Server = new ApiCenterEnvironmentServer
+          {
+              ManagementPortalUris = { new Uri("https://portal.azure.com") }
+          },
+          Onboarding = new EnvironmentOnboardingModel
+          {
+              Instructions = "Contact platform team for access"
+          }
+      };
+
+      var envOp = await environments
+          .CreateOrUpdateAsync(WaitUntil.Completed, "production", envData);
+
+      // Create deployment
+      ApiCenterDeploymentCollection deployments = workspace.Value.GetApiCenterDeployments();
+
+      ApiCenterDeploymentData deploymentData = new ApiCenterDeploymentData
+      {
+          Title = "Orders API - Production",
+          Description = "Production deployment of Orders API",
+          EnvironmentId = envOp.Value.Id,
+          State = ApiCenterDeploymentState.Active,
+          Server = new ApiCenterDeploymentServer
+          {
+              RuntimeUris = { new Uri("https://api.example.com/orders") }
+          }
+      };
+
+      var deployOp = await deployments
+          .CreateOrUpdateAsync(WaitUntil.Completed, "orders-api-prod", deploymentData);
+
+      Console.WriteLine($"Deployed to: {deployOp.Value.Data.Server.RuntimeUris[0]}");
+
+  # Create Metadata Schema
+  - name: create_metadata_schema
+    prompt: |
+      Create a metadata schema in Azure API Center to enforce governance 
+      requirements on APIs with required and optional fields.
+    expected_patterns:
+      - "GetApiCenterMetadataSchemas"
+      - "ApiCenterMetadataSchemaData"
+      - "MetadataAssignment"
+      - "MetadataAssignmentEntity"
+      - "Schema"
+    tags:
+      - metadata
+      - governance
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiCenter;
+      using Azure.ResourceManager.ApiCenter.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var resourceGroup = await client
+          .GetDefaultSubscriptionAsync()
+          .Result
+          .GetResourceGroupAsync("my-resource-group");
+
+      var service = await resourceGroup.GetApiCenterServiceAsync("my-api-center");
+
+      ApiCenterMetadataSchemaCollection schemas = service.Value.GetApiCenterMetadataSchemas();
+
+      string jsonSchema = """
+      {
+          "type": "object",
+          "properties": {
+              "team": {
+                  "type": "string",
+                  "title": "Owning Team"
+              },
+              "costCenter": {
+                  "type": "string",
+                  "title": "Cost Center"
+              },
+              "dataClassification": {
+                  "type": "string",
+                  "enum": ["public", "internal", "confidential"],
+                  "title": "Data Classification"
+              }
+          },
+          "required": ["team"]
+      }
+      """;
+
+      ApiCenterMetadataSchemaData schemaData = new ApiCenterMetadataSchemaData
+      {
+          Schema = jsonSchema,
+          AssignedTo =
+          {
+              new MetadataAssignment
+              {
+                  Entity = MetadataAssignmentEntity.Api,
+                  Required = true
+              }
+          }
+      };
+
+      ArmOperation<ApiCenterMetadataSchemaResource> operation = await schemas
+          .CreateOrUpdateAsync(WaitUntil.Completed, "api-metadata", schemaData);
+
+      Console.WriteLine($"Created metadata schema: {operation.Value.Data.Name}");
+
+  # List and Search APIs
+  - name: list_apis
+    prompt: |
+      List all APIs in an Azure API Center workspace with their versions 
+      and lifecycle stages.
+    expected_patterns:
+      - "GetApiCenterApis"
+      - "await foreach"
+      - "GetApiCenterApiVersions"
+      - "LifecycleStage"
+    tags:
+      - list
+      - search
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiCenter;
+      using Azure.ResourceManager.ApiCenter.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var resourceGroup = await client
+          .GetDefaultSubscriptionAsync()
+          .Result
+          .GetResourceGroupAsync("my-resource-group");
+
+      var service = await resourceGroup.GetApiCenterServiceAsync("my-api-center");
+      var workspace = await service.Value.GetApiCenterWorkspaceAsync("engineering");
+
+      // List all APIs
+      await foreach (ApiCenterApiResource api in workspace.Value.GetApiCenterApis())
+      {
+          Console.WriteLine($"API: {api.Data.Title}");
+          Console.WriteLine($"  Kind: {api.Data.Kind}");
+          Console.WriteLine($"  Stage: {api.Data.LifecycleStage}");
+
+          // List versions
+          await foreach (ApiCenterApiVersionResource version in api.GetApiCenterApiVersions())
+          {
+              Console.WriteLine($"  Version: {version.Data.Title} ({version.Data.LifecycleStage})");
+          }
+      }
+
+      // List environments
+      await foreach (ApiCenterEnvironmentResource env in workspace.Value.GetApiCenterEnvironments())
+      {
+          Console.WriteLine($"Environment: {env.Data.Title} ({env.Data.Kind})");
+      }
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Implement proper error handling for Azure API Center operations 
+      using RequestFailedException.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status"
+      - "catch"
+      - "when"
+    tags:
+      - error-handling
+      - best-practice
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiCenter;
+      using Azure.ResourceManager.ApiCenter.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      try
+      {
+          var resourceGroup = await client
+              .GetDefaultSubscriptionAsync()
+              .Result
+              .GetResourceGroupAsync("my-resource-group");
+
+          var services = resourceGroup.GetApiCenterServices();
+
+          ApiCenterServiceData data = new ApiCenterServiceData(AzureLocation.EastUS);
+
+          ArmOperation<ApiCenterServiceResource> operation = await services
+              .CreateOrUpdateAsync(WaitUntil.Completed, "my-api-center", data);
+      }
+      catch (RequestFailedException ex) when (ex.Status == 409)
+      {
+          Console.WriteLine("Service already exists with conflicting configuration");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 400)
+      {
+          Console.WriteLine($"Invalid request: {ex.Message}");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 404)
+      {
+          Console.WriteLine("Resource not found");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"Azure error: {ex.Status} - {ex.ErrorCode}: {ex.Message}");
+      }

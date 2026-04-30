@@ -1,0 +1,267 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-storage-file-datalake-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic client and file system operations
+  - name: basic_service_client_and_filesystem
+    prompt: |
+      Create a basic example that authenticates with DefaultAzureCredential,
+      creates a DataLakeServiceClient, and creates/gets a file system.
+      Include listing file systems.
+    expected_patterns:
+      - "DataLakeServiceClient"
+      - "DefaultAzureCredential"
+      - "create_file_system"
+      - "get_file_system_client"
+    forbidden_patterns:
+      - "BlobServiceClient"
+      - "blob.core.windows.net"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.filedatalake import DataLakeServiceClient
+      
+      account_url = os.environ["AZURE_STORAGE_ACCOUNT_URL"]
+      credential = DefaultAzureCredential()
+      
+      service_client = DataLakeServiceClient(
+          account_url=account_url,
+          credential=credential,
+      )
+      
+      file_system_client = service_client.create_file_system("myfilesystem")
+      
+      for fs in service_client.list_file_systems():
+          print(fs.name)
+      
+      file_system_client = service_client.get_file_system_client("myfilesystem")
+
+  # Directory operations
+  - name: directory_operations
+    prompt: |
+      Show how to create a directory, get a directory client,
+      create a subdirectory, and rename the directory.
+    expected_patterns:
+      - "create_directory"
+      - "get_directory_client"
+      - "get_sub_directory_client"
+      - "rename_directory"
+    forbidden_patterns:
+      - "list_blobs"
+    tags:
+      - directories
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.filedatalake import DataLakeServiceClient
+      
+      service_client = DataLakeServiceClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      file_system_client = service_client.get_file_system_client("myfilesystem")
+      directory_client = file_system_client.create_directory("mydir")
+      
+      subdir_client = directory_client.get_sub_directory_client("subdir")
+      print(subdir_client.path_name)
+      
+      directory_client.rename_directory(new_name="myfilesystem/mydir-renamed")
+
+  # File upload and download
+  - name: file_upload_download
+    prompt: |
+      Create a file client and demonstrate upload_data and download_file
+      with readall().
+    expected_patterns:
+      - "get_file_client"
+      - "upload_data"
+      - "download_file"
+      - "readall"
+    forbidden_patterns:
+      - "upload_blob"
+      - "download_blob"
+    tags:
+      - files
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.filedatalake import DataLakeServiceClient
+      
+      service_client = DataLakeServiceClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      file_system_client = service_client.get_file_system_client("myfilesystem")
+      file_client = file_system_client.get_file_client("mydir/data.txt")
+      
+      file_client.upload_data(b"Hello, Data Lake!", overwrite=True)
+      
+      download = file_client.download_file()
+      content = download.readall()
+      print(content)
+
+  # Append and flush pattern
+  - name: append_and_flush_file
+    prompt: |
+      Demonstrate how to append data to a file and flush it.
+    expected_patterns:
+      - "append_data"
+      - "flush_data"
+    forbidden_patterns:
+      - "upload_blob"
+    tags:
+      - files
+      - append
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.filedatalake import DataLakeServiceClient
+      
+      service_client = DataLakeServiceClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      file_system_client = service_client.get_file_system_client("myfilesystem")
+      file_client = file_system_client.get_file_client("mydir/large.txt")
+      
+      file_client.append_data(data=b"chunk1", offset=0, length=6)
+      file_client.append_data(data=b"chunk2", offset=6, length=6)
+      file_client.flush_data(12)
+
+  # Recursive listing
+  - name: list_paths_recursive
+    prompt: |
+      List files and directories under a path using get_paths with recursive=True.
+    expected_patterns:
+      - "get_paths"
+      - "recursive=True"
+    forbidden_patterns:
+      - "list_blobs"
+    tags:
+      - listing
+      - hierarchical
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.filedatalake import DataLakeServiceClient
+      
+      service_client = DataLakeServiceClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      file_system_client = service_client.get_file_system_client("myfilesystem")
+      for path in file_system_client.get_paths(path="mydir", recursive=True):
+          print(path.name)
+
+  # Async client usage
+  - name: async_client_usage
+    prompt: |
+      Provide an async example using DataLakeServiceClient with DefaultAzureCredential
+      from azure.identity.aio and async with for operations.
+    expected_patterns:
+      - "from azure.storage.filedatalake.aio import DataLakeServiceClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with"
+      - "await file_client.upload_data"
+    forbidden_patterns:
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - async
+    mock_response: |
+      import os
+      import asyncio
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.storage.filedatalake.aio import DataLakeServiceClient
+      
+      async def main():
+          credential = DefaultAzureCredential()
+          async with DataLakeServiceClient(
+              account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+              credential=credential,
+          ) as service_client:
+              file_system_client = service_client.get_file_system_client("myfilesystem")
+              file_client = file_system_client.get_file_client("mydir/async.txt")
+              await file_client.upload_data(b"async content", overwrite=True)
+              download = await file_client.download_file()
+              content = await download.readall()
+              print(content)
+      
+      asyncio.run(main())
+
+  # Access control lists (ACL)
+  - name: directory_acl_operations
+    prompt: |
+      Show how to get and set access control on a directory.
+    expected_patterns:
+      - "get_access_control"
+      - "set_access_control"
+      - "permissions"
+    forbidden_patterns:
+      - "set_acl"
+    tags:
+      - acl
+      - security
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.filedatalake import DataLakeServiceClient
+      
+      service_client = DataLakeServiceClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      file_system_client = service_client.get_file_system_client("myfilesystem")
+      directory_client = file_system_client.get_directory_client("secure")
+      
+      acl = directory_client.get_access_control()
+      print(acl["permissions"])
+      
+      directory_client.set_access_control(
+          owner="user-id",
+          permissions="rwxr-x---",
+      )
+
+  # Nested directory creation and cleanup
+  - name: nested_directory_management
+    prompt: |
+      Create nested directories and delete them after use.
+    expected_patterns:
+      - "create_directory"
+      - "delete_directory"
+      - "get_paths"
+    forbidden_patterns:
+      - "list_blobs"
+    tags:
+      - hierarchical
+      - cleanup
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.filedatalake import DataLakeServiceClient
+      
+      service_client = DataLakeServiceClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      file_system_client = service_client.get_file_system_client("myfilesystem")
+      directory_client = file_system_client.create_directory("path/to/nested/dir")
+      
+      for path in file_system_client.get_paths(path="path", recursive=True):
+          print(path.name)
+      
+      directory_client.delete_directory()

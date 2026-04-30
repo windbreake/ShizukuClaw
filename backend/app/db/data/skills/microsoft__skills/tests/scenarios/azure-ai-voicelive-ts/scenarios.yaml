@@ -1,0 +1,591 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-ai-voicelive-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Voice Assistant
+  - name: basic_voice_assistant
+    prompt: |
+      Create a basic TypeScript voice assistant using the Azure VoiceLive SDK
+      with DefaultAzureCredential, session configuration, and event handling.
+    expected_patterns:
+      - "VoiceLiveClient"
+      - "DefaultAzureCredential"
+      - "startSession"
+      - "updateSession"
+      - "subscribe"
+    forbidden_patterns:
+      - "from azure.ai.voicelive"
+      - "async with connect"
+    tags:
+      - basic
+      - voice-assistant
+    mock_response: |
+      import { VoiceLiveClient } from "@azure/ai-voicelive";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const credential = new DefaultAzureCredential();
+      const endpoint = process.env.AZURE_COGNITIVE_SERVICES_ENDPOINT!;
+
+      // Create client and start session
+      const client = new VoiceLiveClient(endpoint, credential);
+      const session = await client.startSession("gpt-4o-mini-realtime-preview");
+
+      // Configure session
+      await session.updateSession({
+        modalities: ["text", "audio"],
+        instructions: "You are a helpful AI assistant. Respond naturally and conversationally.",
+        voice: {
+          type: "azure-standard",
+          name: "en-US-AvaNeural",
+        },
+        turnDetection: {
+          type: "server_vad",
+          threshold: 0.5,
+          prefixPaddingMs: 300,
+          silenceDurationMs: 500,
+        },
+        inputAudioFormat: "pcm16",
+        outputAudioFormat: "pcm16",
+      });
+
+      // Set up event handlers
+      const subscription = session.subscribe({
+        onResponseTextDelta: async (event) => {
+          process.stdout.write(event.delta);
+        },
+        onResponseAudioDelta: async (event) => {
+          // Handle audio playback
+          const audioData = event.delta;
+          // playAudioChunk(audioData);
+        },
+        onError: async (event) => {
+          console.error("Error:", event);
+        },
+      });
+
+  # API Key Authentication
+  - name: api_key_authentication
+    prompt: |
+      Create a TypeScript VoiceLive client using API key authentication
+      with AzureKeyCredential.
+    expected_patterns:
+      - "VoiceLiveClient"
+      - "AzureKeyCredential"
+      - "startSession"
+    forbidden_patterns:
+      - 'AzureKeyCredential\("'
+    tags:
+      - authentication
+      - api-key
+    mock_response: |
+      import { VoiceLiveClient } from "@azure/ai-voicelive";
+      import { AzureKeyCredential } from "@azure/core-auth";
+
+      const endpoint = process.env.AZURE_COGNITIVE_SERVICES_ENDPOINT!;
+      const apiKey = process.env.AZURE_COGNITIVE_SERVICES_KEY!;
+
+      const credential = new AzureKeyCredential(apiKey);
+      const client = new VoiceLiveClient(endpoint, credential);
+
+      const session = await client.startSession("gpt-4o-realtime-preview");
+
+      console.log("Session started with API key authentication");
+
+  # Advanced Session Configuration
+  - name: advanced_session_configuration
+    prompt: |
+      Create a TypeScript example with advanced session configuration including
+      custom voice, semantic VAD, and audio format settings.
+    expected_patterns:
+      - "updateSession"
+      - "azure-custom"
+      - "endpointId"
+      - "turnDetection"
+    tags:
+      - configuration
+      - advanced
+    mock_response: |
+      import { VoiceLiveClient } from "@azure/ai-voicelive";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new VoiceLiveClient(
+        process.env.AZURE_COGNITIVE_SERVICES_ENDPOINT!,
+        new DefaultAzureCredential(),
+      );
+
+      const session = await client.startSession("gpt-4o-realtime-preview");
+
+      // Advanced configuration with custom voice
+      await session.updateSession({
+        modalities: ["audio", "text"],
+        instructions: "You are a professional customer service representative. Be helpful and concise.",
+        voice: {
+          type: "azure-custom",
+          name: "your-custom-voice-name",
+          endpointId: "your-custom-voice-endpoint",
+        },
+        turnDetection: {
+          type: "server_vad",
+          threshold: 0.6,
+          prefixPaddingMs: 200,
+          silenceDurationMs: 300,
+        },
+        inputAudioFormat: "pcm16",
+        outputAudioFormat: "pcm16",
+      });
+
+  # Event Handling
+  - name: comprehensive_event_handling
+    prompt: |
+      Create a TypeScript example with comprehensive event handling for
+      audio deltas, text deltas, transcription, and errors.
+    expected_patterns:
+      - "subscribe"
+      - "onResponseAudioDelta"
+      - "onResponseTextDelta"
+      - "onInputAudioTranscriptionCompleted"
+      - "onError"
+    tags:
+      - events
+      - streaming
+    mock_response: |
+      import { VoiceLiveClient } from "@azure/ai-voicelive";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new VoiceLiveClient(
+        process.env.AZURE_COGNITIVE_SERVICES_ENDPOINT!,
+        new DefaultAzureCredential(),
+      );
+
+      const session = await client.startSession("gpt-4o-mini-realtime-preview");
+
+      await session.updateSession({
+        modalities: ["text", "audio"],
+        instructions: "You are a helpful assistant.",
+        turnDetection: {
+          type: "server_vad",
+          threshold: 0.5,
+          silenceDurationMs: 500,
+        },
+      });
+
+      // Comprehensive event handlers
+      const subscription = session.subscribe({
+        onResponseAudioDelta: async (event, context) => {
+          // Handle incoming audio chunks
+          const audioData = event.delta;
+          // Play audio using Web Audio API or other audio system
+          console.log("Received audio chunk");
+        },
+
+        onResponseTextDelta: async (event, context) => {
+          // Handle incoming text deltas
+          process.stdout.write(event.delta);
+        },
+
+        onInputAudioTranscriptionCompleted: async (event, context) => {
+          // Handle user speech transcription
+          console.log(`\nUser said: ${event.transcript}`);
+        },
+
+        onResponseDone: async (event, context) => {
+          console.log("\nResponse completed");
+        },
+
+        onError: async (event, context) => {
+          console.error("VoiceLive error:", event);
+        },
+      });
+
+  # Audio Streaming
+  - name: audio_streaming
+    prompt: |
+      Create a TypeScript example that demonstrates sending audio data
+      to the VoiceLive session and receiving audio responses.
+    expected_patterns:
+      - "sendAudio"
+      - "onResponseAudioDelta"
+      - "ArrayBuffer"
+    tags:
+      - audio
+      - streaming
+    mock_response: |
+      import { VoiceLiveClient } from "@azure/ai-voicelive";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new VoiceLiveClient(
+        process.env.AZURE_COGNITIVE_SERVICES_ENDPOINT!,
+        new DefaultAzureCredential(),
+      );
+
+      const session = await client.startSession("gpt-4o-realtime-preview");
+
+      await session.updateSession({
+        modalities: ["audio", "text"],
+        instructions: "You are a helpful voice assistant.",
+        turnDetection: {
+          type: "server_vad",
+          threshold: 0.5,
+          silenceDurationMs: 500,
+        },
+        inputAudioFormat: "pcm16",
+        outputAudioFormat: "pcm16",
+      });
+
+      // Set up audio response handler
+      const subscription = session.subscribe({
+        onResponseAudioDelta: async (event) => {
+          const audioData = event.delta;
+          // Decode base64 and play audio
+          // playAudioChunk(audioData);
+        },
+      });
+
+      // Function to send microphone audio
+      function sendAudioChunk(audioBuffer: ArrayBuffer) {
+        session.sendAudio(audioBuffer);
+      }
+
+      // Example: simulate sending audio from microphone
+      // const microphoneBuffer = await getMicrophoneChunk();
+      // sendAudioChunk(microphoneBuffer);
+
+  # Function Calling
+  - name: function_calling
+    prompt: |
+      Create a TypeScript VoiceLive example with function calling capability
+      including tool definition and handling function call responses.
+    expected_patterns:
+      - "tools"
+      - 'type: "function"'
+      - "onResponseFunctionCallArgumentsDone"
+      - "addConversationItem"
+      - "function_call_output"
+    tags:
+      - function-calling
+      - tools
+    mock_response: |
+      import { VoiceLiveClient } from "@azure/ai-voicelive";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new VoiceLiveClient(
+        process.env.AZURE_COGNITIVE_SERVICES_ENDPOINT!,
+        new DefaultAzureCredential(),
+      );
+
+      const session = await client.startSession("gpt-4o-mini-realtime-preview");
+
+      // Define function tools
+      const tools = [
+        {
+          type: "function" as const,
+          name: "get_weather",
+          description: "Get current weather for a location",
+          parameters: {
+            type: "object",
+            properties: {
+              location: {
+                type: "string",
+                description: "The city and state or country",
+              },
+            },
+            required: ["location"],
+          },
+        },
+      ];
+
+      // Configure session with tools
+      await session.updateSession({
+        modalities: ["audio", "text"],
+        instructions: "You can help users with weather information. Use the get_weather function when needed.",
+        tools: tools,
+        toolChoice: "auto",
+      });
+
+      // Mock weather function
+      async function getWeatherData(location: string): Promise<object> {
+        return {
+          location,
+          temperature: "72°F",
+          condition: "Sunny",
+        };
+      }
+
+      // Handle function calls
+      const subscription = session.subscribe({
+        onResponseFunctionCallArgumentsDone: async (event, context) => {
+          if (event.name === "get_weather") {
+            const args = JSON.parse(event.arguments);
+            const weatherData = await getWeatherData(args.location);
+
+            // Send function result back
+            await session.addConversationItem({
+              type: "function_call_output",
+              callId: event.callId,
+              output: JSON.stringify(weatherData),
+            });
+
+            // Request response generation
+            await session.sendEvent({
+              type: "response.create",
+            });
+          }
+        },
+
+        onResponseTextDelta: async (event) => {
+          process.stdout.write(event.delta);
+        },
+      });
+
+  # Text Conversation Item
+  - name: text_conversation_item
+    prompt: |
+      Create a TypeScript example that adds a text message to the
+      VoiceLive conversation using addConversationItem.
+    expected_patterns:
+      - "addConversationItem"
+      - 'type: "message"'
+      - 'role: "user"'
+      - "input_text"
+      - "sendEvent"
+    tags:
+      - conversation
+      - text-input
+    mock_response: |
+      import { VoiceLiveClient } from "@azure/ai-voicelive";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new VoiceLiveClient(
+        process.env.AZURE_COGNITIVE_SERVICES_ENDPOINT!,
+        new DefaultAzureCredential(),
+      );
+
+      const session = await client.startSession("gpt-4o-realtime-preview");
+
+      await session.updateSession({
+        modalities: ["text", "audio"],
+        instructions: "You are a helpful assistant.",
+        turnDetection: null, // Manual mode
+      });
+
+      // Set up response handler
+      const subscription = session.subscribe({
+        onResponseTextDelta: async (event) => {
+          process.stdout.write(event.delta);
+        },
+      });
+
+      // Add text message to conversation
+      await session.addConversationItem({
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: "Hello, how can you help me today?" }],
+      });
+
+      // Request response generation
+      await session.sendEvent({
+        type: "response.create",
+      });
+
+  # Server VAD Configuration
+  - name: server_vad_configuration
+    prompt: |
+      Create a TypeScript example that configures server-side voice activity
+      detection (VAD) with custom parameters.
+    expected_patterns:
+      - "turnDetection"
+      - 'type: "server_vad"'
+      - "threshold"
+      - "prefixPaddingMs"
+      - "silenceDurationMs"
+    tags:
+      - vad
+      - configuration
+    mock_response: |
+      import { VoiceLiveClient } from "@azure/ai-voicelive";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new VoiceLiveClient(
+        process.env.AZURE_COGNITIVE_SERVICES_ENDPOINT!,
+        new DefaultAzureCredential(),
+      );
+
+      const session = await client.startSession("gpt-4o-realtime-preview");
+
+      // Configure server VAD with custom parameters
+      await session.updateSession({
+        modalities: ["audio", "text"],
+        instructions: "You are a voice assistant.",
+        voice: {
+          type: "azure-standard",
+          name: "en-US-JennyNeural",
+        },
+        turnDetection: {
+          type: "server_vad",
+          threshold: 0.5,        // Voice detection sensitivity (0.0-1.0)
+          prefixPaddingMs: 300,  // Audio to include before speech detected
+          silenceDurationMs: 500, // Silence duration to end turn
+        },
+      });
+
+      console.log("Server VAD configured");
+
+  # Azure Semantic VAD
+  - name: azure_semantic_vad
+    prompt: |
+      Create a TypeScript example that uses Azure Semantic VAD for
+      improved voice activity detection with filler word removal.
+    expected_patterns:
+      - "turnDetection"
+      - "azure_semantic_vad_en"
+    tags:
+      - vad
+      - semantic
+    mock_response: |
+      import { VoiceLiveClient } from "@azure/ai-voicelive";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new VoiceLiveClient(
+        process.env.AZURE_COGNITIVE_SERVICES_ENDPOINT!,
+        new DefaultAzureCredential(),
+      );
+
+      const session = await client.startSession("gpt-4o-realtime-preview");
+
+      // Configure Azure Semantic VAD
+      // This removes filler words and provides better turn detection
+      await session.updateSession({
+        modalities: ["audio", "text"],
+        instructions: "You are a helpful voice assistant.",
+        voice: {
+          type: "azure-standard",
+          name: "en-US-AvaNeural",
+        },
+        turnDetection: {
+          type: "azure_semantic_vad_en",
+        },
+      });
+
+      console.log("Azure Semantic VAD configured");
+
+  # Model Selection
+  - name: model_selection
+    prompt: |
+      Create a TypeScript example that demonstrates selecting different
+      VoiceLive models for different use cases.
+    expected_patterns:
+      - "startSession"
+      - "gpt-4o-realtime-preview"
+      - "gpt-4o-mini-realtime-preview"
+    tags:
+      - models
+      - configuration
+    mock_response: |
+      import { VoiceLiveClient } from "@azure/ai-voicelive";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = new VoiceLiveClient(
+        process.env.AZURE_COGNITIVE_SERVICES_ENDPOINT!,
+        new DefaultAzureCredential(),
+      );
+
+      // Option 1: GPT-4o for high-quality conversational AI
+      const highQualitySession = await client.startSession("gpt-4o-realtime-preview");
+
+      // Option 2: GPT-4o-mini for fast, efficient interactions
+      const efficientSession = await client.startSession("gpt-4o-mini-realtime-preview");
+
+      // Option 3: Phi model for cost-effective applications
+      // const costEffectiveSession = await client.startSession("phi4-mm-realtime");
+
+      console.log("Sessions created with different models");
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Create a TypeScript example with proper error handling for
+      VoiceLive session creation and event processing.
+    expected_patterns:
+      - "try"
+      - "catch"
+      - "onError"
+      - "Error"
+    tags:
+      - error-handling
+      - reliability
+    mock_response: |
+      import { VoiceLiveClient } from "@azure/ai-voicelive";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      async function createVoiceSession() {
+        const client = new VoiceLiveClient(
+          process.env.AZURE_COGNITIVE_SERVICES_ENDPOINT!,
+          new DefaultAzureCredential(),
+        );
+
+        try {
+          const session = await client.startSession("gpt-4o-realtime-preview");
+
+          await session.updateSession({
+            modalities: ["text", "audio"],
+            instructions: "You are helpful.",
+          });
+
+          const subscription = session.subscribe({
+            onResponseTextDelta: async (event) => {
+              process.stdout.write(event.delta);
+            },
+            onError: async (event, context) => {
+              console.error("Session error:", event);
+              // Implement retry logic or graceful degradation
+            },
+          });
+
+          return session;
+        } catch (error) {
+          if (error instanceof Error) {
+            console.error(`Failed to create session: ${error.message}`);
+          }
+          throw error;
+        }
+      }
+
+      // Run with error handling
+      createVoiceSession()
+        .then((session) => console.log("Session ready"))
+        .catch((error) => console.error("Setup failed:", error));
+
+  # Logging Configuration
+  - name: logging_configuration
+    prompt: |
+      Create a TypeScript example that enables Azure SDK logging
+      for debugging VoiceLive connections.
+    expected_patterns:
+      - "setLogLevel"
+      - "@azure/logger"
+      - '"info"'
+    tags:
+      - logging
+      - debugging
+    mock_response: |
+      import { setLogLevel } from "@azure/logger";
+      import { VoiceLiveClient } from "@azure/ai-voicelive";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      // Enable logging for debugging
+      setLogLevel("info");
+
+      const client = new VoiceLiveClient(
+        process.env.AZURE_COGNITIVE_SERVICES_ENDPOINT!,
+        new DefaultAzureCredential(),
+      );
+
+      const session = await client.startSession("gpt-4o-mini-realtime-preview");
+
+      console.log("Session started with logging enabled");

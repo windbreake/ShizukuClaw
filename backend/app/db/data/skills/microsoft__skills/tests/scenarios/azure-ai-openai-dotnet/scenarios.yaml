@@ -1,0 +1,591 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-ai-openai-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Chat Completion with DefaultAzureCredential
+  - name: basic_chat_completion_default_credential
+    prompt: |
+      Create a basic Azure OpenAI chat completions example using
+      DefaultAzureCredential with SystemChatMessage and UserChatMessage.
+      Use environment variables for endpoint and deployment.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "AzureOpenAIClient"
+      - "GetChatClient"
+      - "SystemChatMessage"
+      - "UserChatMessage"
+      - "CompleteChat"
+    forbidden_patterns:
+      - 'new ApiKeyCredential\("'
+      - 'ChatCompletionsClient'
+    tags:
+      - basic
+      - authentication
+      - chat
+    mock_response: |
+      using Azure.AI.OpenAI;
+      using Azure.Identity;
+      using OpenAI.Chat;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT not set");
+      string deployment = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_DEPLOYMENT not set");
+      
+      AzureOpenAIClient azureClient = new(new Uri(endpoint), new DefaultAzureCredential());
+      ChatClient chatClient = azureClient.GetChatClient(deployment);
+      
+      ChatCompletion completion = chatClient.CompleteChat(
+          [
+              new SystemChatMessage("You are a helpful assistant."),
+              new UserChatMessage("What is Azure OpenAI?"),
+          ]);
+      
+      Console.WriteLine($"{completion.Role}: {completion.Content[0].Text}");
+
+  # API Key Authentication
+  - name: api_key_chat_completion
+    prompt: |
+      Create a chat completions example using API key credential with
+      environment variables for the API key and endpoint.
+    expected_patterns:
+      - "ApiKeyCredential"
+      - "AZURE_OPENAI_API_KEY"
+      - "AzureOpenAIClient"
+    forbidden_patterns:
+      - 'new ApiKeyCredential\("[^"]+"\)'
+    tags:
+      - authentication
+      - api-key
+    mock_response: |
+      using Azure.AI.OpenAI;
+      using OpenAI.Chat;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT not set");
+      string apiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_API_KEY not set");
+      string deployment = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_DEPLOYMENT not set");
+      
+      AzureOpenAIClient azureClient = new(new Uri(endpoint), new ApiKeyCredential(apiKey));
+      ChatClient chatClient = azureClient.GetChatClient(deployment);
+      
+      ChatCompletion completion = chatClient.CompleteChat(
+          [
+              new SystemChatMessage("You are a helpful assistant."),
+              new UserChatMessage("Hello!"),
+          ]);
+      
+      Console.WriteLine(completion.Content[0].Text);
+
+  # Multi-turn Conversation
+  - name: multi_turn_conversation
+    prompt: |
+      Create a multi-turn conversation example with system, user, and
+      assistant messages showing conversation history.
+    expected_patterns:
+      - "SystemChatMessage"
+      - "UserChatMessage"
+      - "AssistantChatMessage"
+      - "CompleteChat"
+    forbidden_patterns:
+      - 'new ChatMessage\('
+    tags:
+      - chat
+      - conversation
+    mock_response: |
+      using Azure.AI.OpenAI;
+      using Azure.Identity;
+      using OpenAI.Chat;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT not set");
+      
+      AzureOpenAIClient azureClient = new(new Uri(endpoint), new DefaultAzureCredential());
+      ChatClient chatClient = azureClient.GetChatClient("gpt-4o-deployment");
+      
+      ChatCompletion completion = chatClient.CompleteChat(
+          [
+              new SystemChatMessage("You are a helpful assistant that talks like a pirate."),
+              new UserChatMessage("Hi, can you help me?"),
+              new AssistantChatMessage("Arrr! Of course, me hearty! What can I do for ye?"),
+              new UserChatMessage("What's the best way to train a parrot?"),
+          ]);
+      
+      Console.WriteLine($"{completion.Role}: {completion.Content[0].Text}");
+
+  # Streaming Chat Completions
+  - name: streaming_chat_completions
+    prompt: |
+      Create a streaming chat completions example using CompleteChatStreaming
+      and iterate over StreamingChatCompletionUpdate.
+    expected_patterns:
+      - "CompleteChatStreaming"
+      - "StreamingChatCompletionUpdate"
+      - "ContentUpdate"
+      - "foreach"
+    forbidden_patterns:
+      - 'CompleteChatAsync'
+    tags:
+      - streaming
+      - chat
+    mock_response: |
+      using Azure.AI.OpenAI;
+      using Azure.Identity;
+      using OpenAI.Chat;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT not set");
+      
+      AzureOpenAIClient azureClient = new(new Uri(endpoint), new DefaultAzureCredential());
+      ChatClient chatClient = azureClient.GetChatClient("gpt-4o-deployment");
+      
+      CollectionResult<StreamingChatCompletionUpdate> completionUpdates = chatClient.CompleteChatStreaming(
+          [
+              new SystemChatMessage("You are a helpful assistant."),
+              new UserChatMessage("Write a short poem about cloud computing."),
+          ]);
+      
+      foreach (StreamingChatCompletionUpdate update in completionUpdates)
+      {
+          foreach (ChatMessageContentPart contentPart in update.ContentUpdate)
+          {
+              Console.Write(contentPart.Text);
+          }
+      }
+
+  # Async Streaming
+  - name: async_streaming_chat_completions
+    prompt: |
+      Create an async streaming chat completions example using
+      CompleteChatStreamingAsync and await foreach.
+    expected_patterns:
+      - "CompleteChatStreamingAsync"
+      - "AsyncCollectionResult"
+      - "await foreach"
+    forbidden_patterns:
+      - '(?<!await\s)foreach \(StreamingChatCompletionUpdate'
+    tags:
+      - async
+      - streaming
+    mock_response: |
+      using Azure.AI.OpenAI;
+      using Azure.Identity;
+      using OpenAI.Chat;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT not set");
+      
+      AzureOpenAIClient azureClient = new(new Uri(endpoint), new DefaultAzureCredential());
+      ChatClient chatClient = azureClient.GetChatClient("gpt-4o-deployment");
+      
+      AsyncCollectionResult<StreamingChatCompletionUpdate> completionUpdates = 
+          chatClient.CompleteChatStreamingAsync(
+              [
+                  new SystemChatMessage("You are a helpful assistant."),
+                  new UserChatMessage("Tell me about Azure."),
+              ]);
+      
+      await foreach (StreamingChatCompletionUpdate update in completionUpdates)
+      {
+          foreach (ChatMessageContentPart contentPart in update.ContentUpdate)
+          {
+              Console.Write(contentPart.Text);
+          }
+      }
+
+  # Function/Tool Calling
+  - name: function_tool_calling
+    prompt: |
+      Create a function calling example with ChatTool.CreateFunctionTool,
+      handle tool calls, and continue the conversation with ToolChatMessage.
+    expected_patterns:
+      - "ChatTool.CreateFunctionTool"
+      - "ChatCompletionOptions"
+      - "Tools"
+      - "ChatToolCall"
+      - "ToolChatMessage"
+      - "FinishReason.*ToolCalls"
+    forbidden_patterns:
+      - 'Functions.*='
+    tags:
+      - tools
+      - function-calling
+    mock_response: |
+      using System.Text.Json;
+      using Azure.AI.OpenAI;
+      using Azure.Identity;
+      using OpenAI.Chat;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT not set");
+      
+      AzureOpenAIClient azureClient = new(new Uri(endpoint), new DefaultAzureCredential());
+      ChatClient chatClient = azureClient.GetChatClient("gpt-4o-deployment");
+      
+      // Define the function tool
+      ChatTool getCurrentWeatherTool = ChatTool.CreateFunctionTool(
+          functionName: "get_current_weather",
+          functionDescription: "Get the current weather in a given location",
+          functionParameters: BinaryData.FromString("""
+          {
+              "type": "object",
+              "properties": {
+                  "location": {
+                      "type": "string",
+                      "description": "The city and state, e.g. Boston, MA"
+                  }
+              },
+              "required": ["location"]
+          }
+          """)
+      );
+      
+      ChatCompletionOptions options = new()
+      {
+          Tools = { getCurrentWeatherTool },
+      };
+      
+      List<ChatMessage> messages =
+          [
+              new UserChatMessage("What's the weather like in Seattle?"),
+          ];
+      
+      ChatCompletion completion = chatClient.CompleteChat(messages, options);
+      
+      if (completion.FinishReason == ChatFinishReason.ToolCalls)
+      {
+          messages.Add(new AssistantChatMessage(completion));
+          
+          foreach (ChatToolCall toolCall in completion.ToolCalls)
+          {
+              // Simulate getting weather data
+              string weatherResult = """{"temperature": 72, "condition": "sunny"}""";
+              messages.Add(new ToolChatMessage(toolCall.Id, weatherResult));
+          }
+          
+          completion = chatClient.CompleteChat(messages, options);
+      }
+      
+      Console.WriteLine(completion.Content[0].Text);
+
+  # Streaming Tool Calls
+  - name: streaming_tool_calls
+    prompt: |
+      Create a streaming example that handles tool calls using
+      StreamingChatToolCallsBuilder to accumulate tool call data.
+    expected_patterns:
+      - "CompleteChatStreaming"
+      - "StreamingChatToolCallsBuilder"
+      - "ToolCallUpdates"
+      - "toolCallsBuilder.Build"
+    forbidden_patterns:
+      - 'completion.ToolCalls'
+    tags:
+      - streaming
+      - tools
+    mock_response: |
+      using System.Text;
+      using Azure.AI.OpenAI;
+      using Azure.Identity;
+      using OpenAI.Chat;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT not set");
+      
+      AzureOpenAIClient azureClient = new(new Uri(endpoint), new DefaultAzureCredential());
+      ChatClient chatClient = azureClient.GetChatClient("gpt-4o-deployment");
+      
+      ChatTool weatherTool = ChatTool.CreateFunctionTool(
+          functionName: "get_weather",
+          functionDescription: "Get weather for a location",
+          functionParameters: BinaryData.FromString("""{"type":"object","properties":{"location":{"type":"string"}}}""")
+      );
+      
+      ChatCompletionOptions options = new() { Tools = { weatherTool } };
+      List<ChatMessage> messages = [new UserChatMessage("What's the weather in Paris?")];
+      
+      StringBuilder contentBuilder = new();
+      StreamingChatToolCallsBuilder toolCallsBuilder = new();
+      
+      foreach (StreamingChatCompletionUpdate update in chatClient.CompleteChatStreaming(messages, options))
+      {
+          foreach (ChatMessageContentPart contentPart in update.ContentUpdate)
+          {
+              contentBuilder.Append(contentPart.Text);
+          }
+          
+          foreach (StreamingChatToolCallUpdate toolCallUpdate in update.ToolCallUpdates)
+          {
+              toolCallsBuilder.Append(toolCallUpdate);
+          }
+      }
+      
+      IReadOnlyList<ChatToolCall> toolCalls = toolCallsBuilder.Build();
+      
+      if (toolCalls.Count > 0)
+      {
+          AssistantChatMessage assistantMessage = new(toolCalls);
+          if (contentBuilder.Length > 0)
+          {
+              assistantMessage.Content.Add(ChatMessageContentPart.CreateTextPart(contentBuilder.ToString()));
+          }
+          messages.Add(assistantMessage);
+          
+          // Add tool responses and continue...
+      }
+
+  # On Your Data (Azure AI Search)
+  - name: on_your_data_azure_search
+    prompt: |
+      Create an example using Azure OpenAI On Your Data feature with
+      Azure AI Search as the data source.
+    expected_patterns:
+      - "AOAI001"
+      - "AddDataSource"
+      - "AzureSearchChatDataSource"
+      - "IndexName"
+      - "GetMessageContext"
+    forbidden_patterns:
+      - 'DataSources\['
+    tags:
+      - on-your-data
+      - azure-search
+    mock_response: |
+      using Azure.AI.OpenAI;
+      using Azure.AI.OpenAI.Chat;
+      using Azure.Identity;
+      using OpenAI.Chat;
+      
+      #pragma warning disable AOAI001
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT not set");
+      string searchEndpoint = Environment.GetEnvironmentVariable("AZURE_SEARCH_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_SEARCH_ENDPOINT not set");
+      string searchKey = Environment.GetEnvironmentVariable("AZURE_SEARCH_KEY")
+          ?? throw new InvalidOperationException("AZURE_SEARCH_KEY not set");
+      
+      AzureOpenAIClient azureClient = new(new Uri(endpoint), new DefaultAzureCredential());
+      ChatClient chatClient = azureClient.GetChatClient("gpt-4o-deployment");
+      
+      ChatCompletionOptions options = new();
+      options.AddDataSource(new AzureSearchChatDataSource()
+      {
+          Endpoint = new Uri(searchEndpoint),
+          IndexName = "products-index",
+          Authentication = DataSourceAuthentication.FromApiKey(searchKey),
+      });
+      
+      ChatCompletion completion = chatClient.CompleteChat(
+          [
+              new UserChatMessage("What products do we have in stock?"),
+          ],
+          options);
+      
+      ChatMessageContext context = completion.GetMessageContext();
+      
+      Console.WriteLine($"Response: {completion.Content[0].Text}");
+      
+      if (context?.Intent is not null)
+      {
+          Console.WriteLine($"Intent: {context.Intent}");
+      }
+      
+      foreach (ChatCitation citation in context?.Citations ?? [])
+      {
+          Console.WriteLine($"Citation: {citation.Content}");
+      }
+
+  # Assistants API
+  - name: assistants_api_basic
+    prompt: |
+      Create an example using the Assistants API with code interpreter tool,
+      create a thread with initial message, and stream the run.
+    expected_patterns:
+      - "OPENAI001"
+      - "AssistantClient"
+      - "CreateAssistantAsync"
+      - "AssistantThread"
+      - "CreateRunStreamingAsync"
+    forbidden_patterns:
+      - 'ThreadRun'
+    tags:
+      - assistants
+      - streaming
+    mock_response: |
+      using Azure.AI.OpenAI;
+      using Azure.Identity;
+      using OpenAI.Assistants;
+      
+      #pragma warning disable OPENAI001
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT not set");
+      
+      AzureOpenAIClient azureClient = new(new Uri(endpoint), new DefaultAzureCredential());
+      AssistantClient assistantClient = azureClient.GetAssistantClient();
+      
+      // Create an assistant
+      Assistant assistant = await assistantClient.CreateAssistantAsync(
+          model: "gpt-4o-deployment",
+          new AssistantCreationOptions()
+          {
+              Name = "Math Tutor",
+              Instructions = "You help with math problems. Use the code interpreter when needed.",
+              Tools = { ToolDefinition.CreateCodeInterpreter() },
+          });
+      
+      // Create a thread with initial message
+      ThreadInitializationMessage initialMessage = new(
+          MessageRole.User,
+          ["Calculate the factorial of 10"]);
+      
+      AssistantThread thread = await assistantClient.CreateThreadAsync(new ThreadCreationOptions()
+      {
+          InitialMessages = { initialMessage },
+      });
+      
+      // Stream the run
+      await foreach (StreamingUpdate update in assistantClient.CreateRunStreamingAsync(thread.Id, assistant.Id))
+      {
+          if (update.UpdateKind == StreamingUpdateReason.RunCreated)
+          {
+              Console.WriteLine("--- Run started ---");
+          }
+          else if (update is MessageContentUpdate contentUpdate)
+          {
+              Console.Write(contentUpdate.Text);
+          }
+      }
+      
+      // Cleanup
+      await assistantClient.DeleteAssistantAsync(assistant.Id);
+      await assistantClient.DeleteThreadAsync(thread.Id);
+
+  # Embeddings
+  - name: generate_embeddings
+    prompt: |
+      Create an example to generate embeddings for multiple text inputs
+      using Azure OpenAI embeddings client.
+    expected_patterns:
+      - "EmbeddingClient|GetEmbeddingClient"
+      - "GenerateEmbeddings"
+      - "Embedding"
+      - "ToFloats"
+    forbidden_patterns:
+      - 'text-embedding-ada-002'
+    tags:
+      - embeddings
+    mock_response: |
+      using Azure.AI.OpenAI;
+      using Azure.Identity;
+      using OpenAI.Embeddings;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT not set");
+      string embeddingDeployment = Environment.GetEnvironmentVariable("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_EMBEDDING_DEPLOYMENT not set");
+      
+      AzureOpenAIClient azureClient = new(new Uri(endpoint), new DefaultAzureCredential());
+      EmbeddingClient embeddingClient = azureClient.GetEmbeddingClient(embeddingDeployment);
+      
+      EmbeddingCollection embeddings = embeddingClient.GenerateEmbeddings(
+          [
+              "Azure OpenAI provides REST API access to OpenAI's models.",
+              "Embeddings are useful for semantic search applications.",
+          ]);
+      
+      foreach (Embedding embedding in embeddings)
+      {
+          ReadOnlyMemory<float> vector = embedding.ToFloats();
+          Console.WriteLine($"Embedding dimensions: {vector.Length}");
+      }
+
+  # Image Generation
+  - name: image_generation_dalle
+    prompt: |
+      Create an example to generate an image using DALL-E 3 with
+      1024x1024 resolution and high quality.
+    expected_patterns:
+      - "ImageClient|GetImageClient"
+      - "GenerateImage"
+      - "ImageGenerationOptions"
+      - "Size"
+      - "Quality"
+    forbidden_patterns:
+      - 'dall-e-2'
+    tags:
+      - images
+      - dall-e
+    mock_response: |
+      using Azure.AI.OpenAI;
+      using Azure.Identity;
+      using OpenAI.Images;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT not set");
+      string imageDeployment = Environment.GetEnvironmentVariable("AZURE_OPENAI_IMAGE_DEPLOYMENT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_IMAGE_DEPLOYMENT not set");
+      
+      AzureOpenAIClient azureClient = new(new Uri(endpoint), new DefaultAzureCredential());
+      ImageClient imageClient = azureClient.GetImageClient(imageDeployment);
+      
+      GeneratedImage image = imageClient.GenerateImage(
+          "A futuristic cityscape with flying cars at sunset, digital art style",
+          new ImageGenerationOptions()
+          {
+              Size = GeneratedImageSize.W1024xH1024,
+              Quality = GeneratedImageQuality.High,
+          });
+      
+      Console.WriteLine($"Image URL: {image.ImageUri}");
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Show how to handle API errors when making chat completions requests,
+      including rate limiting (429) and other errors.
+    expected_patterns:
+      - "ClientResultException"
+      - "catch"
+      - "Status.*429|ex.Status"
+    forbidden_patterns:
+      - 'catch \{\s*\}'
+      - 'catch \(Exception\)'
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure.AI.OpenAI;
+      using Azure.Identity;
+      using OpenAI;
+      using OpenAI.Chat;
+      
+      string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+          ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT not set");
+      
+      AzureOpenAIClient azureClient = new(new Uri(endpoint), new DefaultAzureCredential());
+      ChatClient chatClient = azureClient.GetChatClient("gpt-4o-deployment");
+      
+      try
+      {
+          ChatCompletion completion = await chatClient.CompleteChatAsync(
+              [new UserChatMessage("Hello!")]);
+          
+          Console.WriteLine(completion.Content[0].Text);
+      }
+      catch (ClientResultException ex) when (ex.Status == 429)
+      {
+          Console.WriteLine("Rate limited. Please retry after a delay.");
+      }
+      catch (ClientResultException ex)
+      {
+          Console.WriteLine($"API error ({ex.Status}): {ex.Message}");
+      }

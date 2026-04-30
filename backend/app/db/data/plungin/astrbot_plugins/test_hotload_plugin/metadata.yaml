@@ -1,0 +1,5 @@
+name: test_hotload_plugin
+version: 1.0.0
+description: 测试热加载功能的AstrBot插件
+author: Test Author
+dependencies: []

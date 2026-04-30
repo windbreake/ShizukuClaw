@@ -1,0 +1,264 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+# Test scenarios for azure-identity-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: default_credential_basic
+    prompt: |
+      Create a .NET example using DefaultAzureCredential to authenticate a Key Vault SecretClient.
+    expected_patterns:
+      - "using Azure.Identity"
+      - "DefaultAzureCredential"
+      - "SecretClient"
+    forbidden_patterns:
+      - "client_secret"
+      - "hardcoded"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Secrets;
+
+      var credential = new DefaultAzureCredential();
+      var client = new SecretClient(
+          new Uri("https://myvault.vault.azure.net"),
+          credential);
+
+      KeyVaultSecret secret = await client.GetSecretAsync("my-secret");
+      Console.WriteLine($"Secret value: {secret.Value}");
+
+  - name: default_credential_customized
+    prompt: |
+      Show how to customize DefaultAzureCredential to use a specific tenant ID and
+      exclude environment credential.
+    expected_patterns:
+      - "DefaultAzureCredentialOptions"
+      - "ExcludeEnvironmentCredential"
+      - "TenantId"
+    forbidden_patterns:
+      - "ClientSecretCredential"
+    tags:
+      - configuration
+    mock_response: |
+      using Azure.Identity;
+
+      var credential = new DefaultAzureCredential(
+          new DefaultAzureCredentialOptions
+          {
+              ExcludeEnvironmentCredential = true,
+              ExcludeManagedIdentityCredential = false,
+              TenantId = "<tenant-id>",
+              ManagedIdentityClientId = "<user-assigned-mi-client-id>"
+          });
+
+  - name: managed_identity_system_assigned
+    prompt: |
+      Create a ManagedIdentityCredential for a system-assigned managed identity in .NET.
+    expected_patterns:
+      - "ManagedIdentityCredential"
+      - "ManagedIdentityId.SystemAssigned"
+    forbidden_patterns:
+      - "client_id"
+      - "ClientSecretCredential"
+    tags:
+      - managed-identity
+    mock_response: |
+      using Azure.Identity;
+
+      var credential = new ManagedIdentityCredential(ManagedIdentityId.SystemAssigned);
+
+  - name: managed_identity_user_assigned
+    prompt: |
+      Create a ManagedIdentityCredential for a user-assigned managed identity using client ID.
+    expected_patterns:
+      - "ManagedIdentityCredential"
+      - "ManagedIdentityId.FromUserAssignedClientId"
+    forbidden_patterns:
+      - "SystemAssigned"
+    tags:
+      - managed-identity
+    mock_response: |
+      using Azure.Identity;
+
+      var clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
+      var credential = new ManagedIdentityCredential(
+          ManagedIdentityId.FromUserAssignedClientId(clientId));
+
+  - name: client_secret_credential_env
+    prompt: |
+      Authenticate using ClientSecretCredential with environment variables for
+      tenant ID, client ID, and client secret.
+    expected_patterns:
+      - "ClientSecretCredential"
+      - "Environment.GetEnvironmentVariable"
+      - "AZURE_TENANT_ID"
+      - "AZURE_CLIENT_SECRET"
+    forbidden_patterns:
+      - 'clientSecret: "'
+      - 'tenantId: "'
+    tags:
+      - service-principal
+    mock_response: |
+      using Azure.Identity;
+
+      var credential = new ClientSecretCredential(
+          tenantId: Environment.GetEnvironmentVariable("AZURE_TENANT_ID"),
+          clientId: Environment.GetEnvironmentVariable("AZURE_CLIENT_ID"),
+          clientSecret: Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET"));
+
+  - name: client_certificate_credential
+    prompt: |
+      Show how to use ClientCertificateCredential with a certificate file in .NET.
+    expected_patterns:
+      - "ClientCertificateCredential"
+      - "X509CertificateLoader.LoadCertificateFromFile"
+    forbidden_patterns:
+      - "new X509Certificate2"
+    tags:
+      - service-principal
+      - certificate
+    mock_response: |
+      using Azure.Identity;
+      using System.Security.Cryptography.X509Certificates;
+
+      var certificate = X509CertificateLoader.LoadCertificateFromFile("MyCertificate.pfx");
+      var credential = new ClientCertificateCredential(
+          tenantId: Environment.GetEnvironmentVariable("AZURE_TENANT_ID"),
+          clientId: Environment.GetEnvironmentVariable("AZURE_CLIENT_ID"),
+          certificate);
+
+  - name: chained_token_credential
+    prompt: |
+      Build a ChainedTokenCredential that tries ManagedIdentityCredential first
+      and then AzureCliCredential.
+    expected_patterns:
+      - "ChainedTokenCredential"
+      - "ManagedIdentityCredential"
+      - "AzureCliCredential"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+    tags:
+      - chained
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Secrets;
+
+      var credential = new ChainedTokenCredential(
+          new ManagedIdentityCredential(),
+          new AzureCliCredential());
+
+      var client = new SecretClient(
+          new Uri("https://myvault.vault.azure.net"),
+          credential);
+
+  - name: aspnet_core_di
+    prompt: |
+      Show how to configure Azure clients with DefaultAzureCredential in ASP.NET Core
+      using dependency injection.
+    expected_patterns:
+      - "Microsoft.Extensions.Azure"
+      - "AddAzureClients"
+      - "UseCredential"
+      - "DefaultAzureCredential"
+    forbidden_patterns:
+      - "AzureKeyCredential"
+    tags:
+      - dependency-injection
+      - aspnet-core
+    mock_response: |
+      using Azure.Identity;
+      using Microsoft.Extensions.Azure;
+
+      builder.Services.AddAzureClients(clientBuilder =>
+      {
+          clientBuilder.AddBlobServiceClient(
+              new Uri("https://myaccount.blob.core.windows.net"));
+          clientBuilder.AddSecretClient(
+              new Uri("https://myvault.vault.azure.net"));
+          
+          clientBuilder.UseCredential(new DefaultAzureCredential());
+      });
+
+  - name: sovereign_cloud
+    prompt: |
+      Configure DefaultAzureCredential for Azure Government cloud.
+    expected_patterns:
+      - "AzureAuthorityHosts.AzureGovernment"
+      - "AuthorityHost"
+    forbidden_patterns:
+      - "AzurePublicCloud"
+    tags:
+      - sovereign-cloud
+    mock_response: |
+      using Azure.Identity;
+
+      var credential = new DefaultAzureCredential(
+          new DefaultAzureCredentialOptions
+          {
+              AuthorityHost = AzureAuthorityHosts.AzureGovernment
+          });
+
+  - name: error_handling
+    prompt: |
+      Show proper error handling for authentication failures in .NET.
+    expected_patterns:
+      - "AuthenticationFailedException"
+      - "CredentialUnavailableException"
+      - "catch"
+    forbidden_patterns:
+      - "catch (Exception)"
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Secrets;
+
+      var client = new SecretClient(
+          new Uri("https://myvault.vault.azure.net"),
+          new DefaultAzureCredential());
+
+      try
+      {
+          KeyVaultSecret secret = await client.GetSecretAsync("secret1");
+      }
+      catch (AuthenticationFailedException e)
+      {
+          Console.WriteLine($"Authentication Failed: {e.Message}");
+      }
+      catch (CredentialUnavailableException e)
+      {
+          Console.WriteLine($"Credential Unavailable: {e.Message}");
+      }
+
+  - name: environment_based_selection
+    prompt: |
+      Show how to select different credentials based on production vs development environment.
+    expected_patterns:
+      - "IsProduction"
+      - "ManagedIdentityCredential"
+      - "DefaultAzureCredential"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - environment
+      - best-practices
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Core;
+
+      TokenCredential credential = builder.Environment.IsProduction()
+          ? new ManagedIdentityCredential(
+              ManagedIdentityId.FromUserAssignedClientId("<client-id>"))
+          : new DefaultAzureCredential();
+
+      builder.Services.AddAzureClients(clientBuilder =>
+      {
+          clientBuilder.UseCredential(credential);
+          clientBuilder.AddSecretClient(new Uri("https://myvault.vault.azure.net"));
+      });

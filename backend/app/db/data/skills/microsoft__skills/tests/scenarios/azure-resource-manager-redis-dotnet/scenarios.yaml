@@ -1,0 +1,490 @@
+# Test scenarios for azure-resource-manager-redis-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # ArmClient Setup
+  - name: armclient_setup
+    prompt: |
+      Create an ArmClient setup with DefaultAzureCredential for Azure Resource Manager
+      operations on Azure Cache for Redis resources.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "ArmClient"
+      - "GetSubscriptionResource"
+      - "Azure.ResourceManager.Redis"
+    forbidden_patterns:
+      - "ClientSecretCredential"
+      - "hardcoded"
+    tags:
+      - authentication
+      - setup
+    mock_response: |
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.Redis;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID");
+      var subscription = armClient.GetSubscriptionResource(
+          new ResourceIdentifier($"/subscriptions/{subscriptionId}"));
+
+  # Create Standard Redis Cache
+  - name: create_standard_cache
+    prompt: |
+      Create a Standard tier Redis cache with TLS 1.2, SSL-only access,
+      and volatile-lru eviction policy.
+    expected_patterns:
+      - "RedisCreateOrUpdateContent"
+      - "RedisSku"
+      - "RedisSkuName.Standard"
+      - "EnableNonSslPort = false"
+      - "MinimumTlsVersion"
+      - "Tls1_2"
+      - "MaxMemoryPolicy"
+      - "WaitUntil.Completed"
+      - "GetAllRedis"
+    forbidden_patterns:
+      - "EnableNonSslPort = true"
+      - "Tls1_0"
+      - "Tls1_1"
+    tags:
+      - cache
+      - crud
+    mock_response: |
+      using Azure.ResourceManager.Redis;
+      using Azure.ResourceManager.Redis.Models;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      var cacheData = new RedisCreateOrUpdateContent(
+          location: AzureLocation.EastUS,
+          sku: new RedisSku(RedisSkuName.Standard, RedisSkuFamily.BasicOrStandard, 1))
+      {
+          EnableNonSslPort = false,
+          MinimumTlsVersion = RedisTlsVersion.Tls1_2,
+          RedisConfiguration = new RedisCommonConfiguration
+          {
+              MaxMemoryPolicy = "volatile-lru"
+          },
+          Tags =
+          {
+              ["environment"] = "production"
+          }
+      };
+
+      var cacheCollection = resourceGroup.Value.GetAllRedis();
+      var operation = await cacheCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-redis-cache",
+          cacheData);
+
+      RedisResource cache = operation.Value;
+      Console.WriteLine($"Cache created: {cache.Data.HostName}");
+      Console.WriteLine($"SSL Port: {cache.Data.SslPort}");
+
+  # Create Premium Cache with Clustering
+  - name: create_premium_cache
+    prompt: |
+      Create a Premium tier Redis cache with clustering (2 shards) and RDB persistence enabled.
+    expected_patterns:
+      - "RedisCreateOrUpdateContent"
+      - "RedisSku"
+      - "RedisSkuName.Premium"
+      - "RedisSkuFamily.Premium"
+      - "ShardCount"
+      - "IsRdbBackupEnabled"
+      - "RdbBackupFrequency"
+    forbidden_patterns:
+      - "RedisSkuFamily.BasicOrStandard"
+    tags:
+      - cache
+      - premium
+      - clustering
+    mock_response: |
+      using Azure.ResourceManager.Redis;
+      using Azure.ResourceManager.Redis.Models;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      var premiumCacheData = new RedisCreateOrUpdateContent(
+          location: AzureLocation.EastUS,
+          sku: new RedisSku(RedisSkuName.Premium, RedisSkuFamily.Premium, 1))
+      {
+          EnableNonSslPort = false,
+          MinimumTlsVersion = RedisTlsVersion.Tls1_2,
+          ShardCount = 2,
+          RedisConfiguration = new RedisCommonConfiguration
+          {
+              MaxMemoryPolicy = "volatile-lru",
+              IsRdbBackupEnabled = "true",
+              RdbBackupFrequency = "60"
+          }
+      };
+
+      var cacheCollection = resourceGroup.Value.GetAllRedis();
+      var operation = await cacheCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-premium-redis",
+          premiumCacheData);
+
+      RedisResource cache = operation.Value;
+      Console.WriteLine($"Premium cache created with {premiumCacheData.ShardCount} shards");
+
+  # Get Access Keys
+  - name: get_access_keys
+    prompt: |
+      Get the access keys from a Redis cache for use in application configuration.
+    expected_patterns:
+      - "GetKeysAsync"
+      - "PrimaryKey"
+      - "SecondaryKey"
+    forbidden_patterns:
+      - "Console.WriteLine.*Key"  # Don't log keys
+      - "LogInformation.*Key"
+    tags:
+      - keys
+      - security
+    mock_response: |
+      using Azure.ResourceManager.Redis;
+
+      var cache = await resourceGroup.Value.GetRedisAsync("my-redis-cache");
+
+      var keys = await cache.Value.GetKeysAsync();
+      var primaryKey = keys.Value.PrimaryKey;
+      var secondaryKey = keys.Value.SecondaryKey;
+
+      // Store securely, do not log
+      // Use keys for StackExchange.Redis connection string
+
+  # Regenerate Access Keys
+  - name: regenerate_keys
+    prompt: |
+      Regenerate the primary access key for a Redis cache.
+    expected_patterns:
+      - "RedisRegenerateKeyContent"
+      - "RedisRegenerateKeyType.Primary"
+      - "RegenerateKeyAsync"
+    tags:
+      - keys
+      - rotation
+    mock_response: |
+      using Azure.ResourceManager.Redis;
+      using Azure.ResourceManager.Redis.Models;
+
+      var cache = await resourceGroup.Value.GetRedisAsync("my-redis-cache");
+
+      var regenerateContent = new RedisRegenerateKeyContent(RedisRegenerateKeyType.Primary);
+      var newKeys = await cache.Value.RegenerateKeyAsync(regenerateContent);
+
+      // Store new key securely, update application configuration
+
+  # Configure Firewall Rules
+  - name: configure_firewall
+    prompt: |
+      Create a firewall rule for a Redis cache to allow access from an internal network.
+    expected_patterns:
+      - "RedisFirewallRuleData"
+      - "GetRedisFirewallRules"
+      - "startIP"
+      - "endIP"
+      - "CreateOrUpdateAsync"
+    tags:
+      - firewall
+      - security
+    mock_response: |
+      using Azure.ResourceManager.Redis;
+      using Azure.ResourceManager.Redis.Models;
+
+      var cache = await resourceGroup.Value.GetRedisAsync("my-redis-cache");
+
+      var firewallData = new RedisFirewallRuleData(
+          startIP: System.Net.IPAddress.Parse("10.0.0.1"),
+          endIP: System.Net.IPAddress.Parse("10.0.0.255"));
+
+      var firewallCollection = cache.Value.GetRedisFirewallRules();
+      var firewallOperation = await firewallCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "allow-internal-network",
+          firewallData);
+
+      Console.WriteLine($"Firewall rule created: {firewallOperation.Value.Data.Name}");
+
+  # List Firewall Rules
+  - name: list_firewall_rules
+    prompt: |
+      List all firewall rules configured on a Redis cache.
+    expected_patterns:
+      - "await foreach"
+      - "GetRedisFirewallRules"
+      - "rule.Data"
+      - "StartIP"
+      - "EndIP"
+    tags:
+      - firewall
+      - list
+    mock_response: |
+      using Azure.ResourceManager.Redis;
+
+      var cache = await resourceGroup.Value.GetRedisAsync("my-redis-cache");
+
+      await foreach (var rule in cache.Value.GetRedisFirewallRules())
+      {
+          Console.WriteLine($"Rule: {rule.Data.Name} ({rule.Data.StartIP} - {rule.Data.EndIP})");
+      }
+
+  # Configure Patch Schedule (Premium)
+  - name: configure_patch_schedule
+    prompt: |
+      Configure a maintenance window patch schedule for a Premium Redis cache
+      on Saturday and Sunday at 2 AM.
+    expected_patterns:
+      - "RedisPatchScheduleData"
+      - "RedisPatchScheduleSetting"
+      - "RedisDayOfWeek.Saturday"
+      - "RedisDayOfWeek.Sunday"
+      - "MaintenanceWindow"
+      - "GetRedisPatchSchedules"
+    tags:
+      - premium
+      - maintenance
+    mock_response: |
+      using Azure.ResourceManager.Redis;
+      using Azure.ResourceManager.Redis.Models;
+
+      var cache = await resourceGroup.Value.GetRedisAsync("my-premium-redis");
+
+      var scheduleData = new RedisPatchScheduleData(
+          new[]
+          {
+              new RedisPatchScheduleSetting(RedisDayOfWeek.Saturday, 2) // 2 AM Saturday
+              {
+                  MaintenanceWindow = TimeSpan.FromHours(5)
+              },
+              new RedisPatchScheduleSetting(RedisDayOfWeek.Sunday, 2) // 2 AM Sunday
+              {
+                  MaintenanceWindow = TimeSpan.FromHours(5)
+              }
+          });
+
+      var scheduleCollection = cache.Value.GetRedisPatchSchedules();
+      await scheduleCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          RedisPatchScheduleDefaultName.Default,
+          scheduleData);
+
+      Console.WriteLine("Patch schedule configured");
+
+  # Import/Export Data (Premium)
+  - name: import_export_data
+    prompt: |
+      Import and export Redis data from/to Azure Blob Storage for a Premium cache.
+    expected_patterns:
+      - "ImportRdbContent"
+      - "ExportRdbContent"
+      - "ImportDataAsync"
+      - "ExportDataAsync"
+      - "RDB"
+    tags:
+      - premium
+      - backup
+    mock_response: |
+      using Azure.ResourceManager.Redis;
+      using Azure.ResourceManager.Redis.Models;
+
+      var cache = await resourceGroup.Value.GetRedisAsync("my-premium-redis");
+
+      // Import data from blob storage
+      var importContent = new ImportRdbContent(
+          files: new[] { "https://mystorageaccount.blob.core.windows.net/container/dump.rdb" },
+          format: "RDB");
+
+      await cache.Value.ImportDataAsync(WaitUntil.Completed, importContent);
+      Console.WriteLine("Data imported");
+
+      // Export data to blob storage
+      var exportContent = new ExportRdbContent(
+          prefix: "backup",
+          container: "https://mystorageaccount.blob.core.windows.net/container?sastoken",
+          format: "RDB");
+
+      await cache.Value.ExportDataAsync(WaitUntil.Completed, exportContent);
+      Console.WriteLine("Data exported");
+
+  # Update Cache
+  - name: update_cache
+    prompt: |
+      Scale up a Redis cache to a larger capacity and change the eviction policy.
+    expected_patterns:
+      - "RedisPatch"
+      - "RedisSku"
+      - "MaxMemoryPolicy"
+      - "UpdateAsync"
+      - "WaitUntil.Completed"
+    tags:
+      - scale
+      - update
+    mock_response: |
+      using Azure.ResourceManager.Redis;
+      using Azure.ResourceManager.Redis.Models;
+
+      var cache = await resourceGroup.Value.GetRedisAsync("my-redis-cache");
+
+      var patchData = new RedisPatch
+      {
+          Sku = new RedisSku(RedisSkuName.Standard, RedisSkuFamily.BasicOrStandard, 2),
+          RedisConfiguration = new RedisCommonConfiguration
+          {
+              MaxMemoryPolicy = "allkeys-lru"
+          }
+      };
+
+      var updateOperation = await cache.Value.UpdateAsync(
+          WaitUntil.Completed,
+          patchData);
+
+      Console.WriteLine($"Cache scaled to C{updateOperation.Value.Data.Sku.Capacity}");
+
+  # Force Reboot
+  - name: force_reboot
+    prompt: |
+      Force reboot all nodes of a Redis cache.
+    expected_patterns:
+      - "RedisRebootContent"
+      - "RedisRebootType.AllNodes"
+      - "ForceRebootAsync"
+    tags:
+      - operations
+      - maintenance
+    mock_response: |
+      using Azure.ResourceManager.Redis;
+      using Azure.ResourceManager.Redis.Models;
+
+      var cache = await resourceGroup.Value.GetRedisAsync("my-redis-cache");
+
+      var rebootContent = new RedisRebootContent
+      {
+          RebootType = RedisRebootType.AllNodes,
+          ShardId = 0 // For clustered caches
+      };
+
+      await cache.Value.ForceRebootAsync(rebootContent);
+      Console.WriteLine("Cache rebooted");
+
+  # Connect with StackExchange.Redis
+  - name: connect_stackexchange
+    prompt: |
+      Get connection information from the management SDK and connect using StackExchange.Redis.
+    expected_patterns:
+      - "GetKeysAsync"
+      - "HostName"
+      - "SslPort"
+      - "ConnectionMultiplexer"
+      - "ssl=True"
+      - "abortConnect=False"
+    forbidden_patterns:
+      - "ssl=False"
+      - "(?<!Ssl)Port"  # Should use SslPort
+    tags:
+      - connection
+      - data-plane
+    mock_response: |
+      using Azure.ResourceManager.Redis;
+      using StackExchange.Redis;
+
+      // Get connection info from management SDK
+      var cache = await resourceGroup.Value.GetRedisAsync("my-redis-cache");
+      var keys = await cache.Value.GetKeysAsync();
+
+      // Connect with StackExchange.Redis
+      var connectionString = $"{cache.Value.Data.HostName}:{cache.Value.Data.SslPort}," +
+          $"password={keys.Value.PrimaryKey}," +
+          "ssl=True," +
+          "abortConnect=False";
+          
+      var connection = ConnectionMultiplexer.Connect(connectionString);
+      var db = connection.GetDatabase();
+
+      // Data operations
+      await db.StringSetAsync("key", "value");
+      var value = await db.StringGetAsync("key");
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Create a Redis cache with proper error handling for ARM operations.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status == 409"
+      - "ex.Status == 400"
+      - "try"
+      - "catch"
+    forbidden_patterns:
+      - "catch (Exception ex)"
+      - "catch { }"
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure;
+      using Azure.ResourceManager.Redis;
+      using Azure.ResourceManager.Redis.Models;
+
+      try
+      {
+          var cacheData = new RedisCreateOrUpdateContent(
+              location: AzureLocation.EastUS,
+              sku: new RedisSku(RedisSkuName.Standard, RedisSkuFamily.BasicOrStandard, 1))
+          {
+              EnableNonSslPort = false,
+              MinimumTlsVersion = RedisTlsVersion.Tls1_2
+          };
+
+          var operation = await cacheCollection.CreateOrUpdateAsync(
+              WaitUntil.Completed,
+              "my-redis-cache",
+              cacheData);
+      }
+      catch (RequestFailedException ex) when (ex.Status == 409)
+      {
+          Console.WriteLine("Cache already exists");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 400)
+      {
+          Console.WriteLine($"Invalid configuration: {ex.Message}");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"ARM Error: {ex.Status} - {ex.ErrorCode}: {ex.Message}");
+      }
+
+  # List Caches
+  - name: list_caches
+    prompt: |
+      List all Redis caches in a resource group with their properties.
+    expected_patterns:
+      - "await foreach"
+      - "GetAllRedis"
+      - "HostName"
+      - "Sku"
+      - "ProvisioningState"
+    tags:
+      - list
+      - enumeration
+    mock_response: |
+      using Azure.ResourceManager.Redis;
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      await foreach (var redis in resourceGroup.Value.GetAllRedis())
+      {
+          Console.WriteLine($"Cache: {redis.Data.Name}");
+          Console.WriteLine($"  Host: {redis.Data.HostName}");
+          Console.WriteLine($"  SKU: {redis.Data.Sku.Name} {redis.Data.Sku.Family} C{redis.Data.Sku.Capacity}");
+          Console.WriteLine($"  State: {redis.Data.ProvisioningState}");
+      }

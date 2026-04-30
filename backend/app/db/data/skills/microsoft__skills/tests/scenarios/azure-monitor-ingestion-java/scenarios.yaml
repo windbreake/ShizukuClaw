@@ -1,0 +1,375 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-monitor-ingestion-java skill evaluation
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: client_creation
+    prompt: |
+      Create Java code to set up the Azure Monitor Logs Ingestion client
+      using DefaultAzureCredential authentication.
+    expected_patterns:
+      - "LogsIngestionClientBuilder"
+      - "DefaultAzureCredentialBuilder"
+      - "buildClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'endpoint\("https://'
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import com.azure.monitor.ingestion.LogsIngestionClient;
+      import com.azure.monitor.ingestion.LogsIngestionClientBuilder;
+      import com.azure.identity.DefaultAzureCredential;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("DATA_COLLECTION_ENDPOINT");
+              
+              DefaultAzureCredential credential = new DefaultAzureCredentialBuilder().build();
+              
+              LogsIngestionClient client = new LogsIngestionClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(credential)
+                  .buildClient();
+              
+              System.out.println("Client initialized successfully");
+          }
+      }
+
+  - name: upload_logs
+    prompt: |
+      Create a Java example that uploads custom logs to Azure Monitor
+      using the Logs Ingestion API.
+    expected_patterns:
+      - "upload"
+      - "LogsIngestionClient"
+      - "List"
+    tags:
+      - upload
+      - basic
+    mock_response: |
+      import com.azure.monitor.ingestion.LogsIngestionClient;
+      import com.azure.monitor.ingestion.LogsIngestionClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.ArrayList;
+      import java.util.List;
+
+      public class UploadLogs {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("DATA_COLLECTION_ENDPOINT");
+              String ruleId = System.getenv("DATA_COLLECTION_RULE_ID");
+              String streamName = System.getenv("STREAM_NAME");
+              
+              LogsIngestionClient client = new LogsIngestionClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              List<Object> logs = new ArrayList<>();
+              logs.add(new MyLogEntry("2024-01-15T10:30:00Z", "INFO", "Application started"));
+              logs.add(new MyLogEntry("2024-01-15T10:30:05Z", "DEBUG", "Processing request"));
+              logs.add(new MyLogEntry("2024-01-15T10:30:10Z", "ERROR", "Failed to connect"));
+              
+              client.upload(ruleId, streamName, logs);
+              System.out.println("Logs uploaded successfully");
+          }
+          
+          static class MyLogEntry {
+              private String timeGenerated;
+              private String level;
+              private String message;
+              
+              public MyLogEntry(String timeGenerated, String level, String message) {
+                  this.timeGenerated = timeGenerated;
+                  this.level = level;
+                  this.message = message;
+              }
+              
+              public String getTimeGenerated() { return timeGenerated; }
+              public String getLevel() { return level; }
+              public String getMessage() { return message; }
+          }
+      }
+
+  - name: upload_with_error_handling
+    prompt: |
+      Create a Java example that uploads logs with error handling
+      using LogsUploadOptions and an error consumer.
+    expected_patterns:
+      - "LogsUploadOptions"
+      - "setLogsUploadErrorConsumer"
+      - "getFailedLogs"
+      - "setMaxConcurrency"
+    tags:
+      - upload
+      - error-handling
+    mock_response: |
+      import com.azure.monitor.ingestion.LogsIngestionClient;
+      import com.azure.monitor.ingestion.LogsIngestionClientBuilder;
+      import com.azure.monitor.ingestion.models.LogsUploadOptions;
+      import com.azure.core.util.Context;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.List;
+
+      public class UploadWithErrorHandling {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("DATA_COLLECTION_ENDPOINT");
+              String ruleId = System.getenv("DATA_COLLECTION_RULE_ID");
+              String streamName = System.getenv("STREAM_NAME");
+              
+              LogsIngestionClient client = new LogsIngestionClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              List<Object> logs = getLogs();
+              
+              LogsUploadOptions options = new LogsUploadOptions()
+                  .setMaxConcurrency(3)
+                  .setLogsUploadErrorConsumer(uploadError -> {
+                      System.err.println("Upload error: " + uploadError.getResponseException().getMessage());
+                      System.err.println("Failed logs count: " + uploadError.getFailedLogs().size());
+                  });
+              
+              client.upload(ruleId, streamName, logs, options, Context.NONE);
+              System.out.println("Upload completed");
+          }
+          
+          private static List<Object> getLogs() {
+              return List.of(/* logs */);
+          }
+      }
+
+  - name: async_client
+    prompt: |
+      Create Java code to set up the Azure Monitor Logs Ingestion async client
+      and upload logs using Reactor patterns with subscribe.
+    expected_patterns:
+      - "LogsIngestionAsyncClient"
+      - "LogsIngestionClientBuilder"
+      - "buildAsyncClient"
+      - "subscribe"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - "buildClient\\(\\)"
+    tags:
+      - async
+      - authentication
+    mock_response: |
+      import com.azure.monitor.ingestion.LogsIngestionAsyncClient;
+      import com.azure.monitor.ingestion.LogsIngestionClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.List;
+
+      public class AsyncClientSetup {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("DATA_COLLECTION_ENDPOINT");
+              String ruleId = System.getenv("DATA_COLLECTION_RULE_ID");
+              String streamName = System.getenv("STREAM_NAME");
+              
+              LogsIngestionAsyncClient asyncClient = new LogsIngestionClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildAsyncClient();
+              
+              List<Object> logs = getLogs();
+              
+              asyncClient.upload(ruleId, streamName, logs)
+                  .doOnSuccess(v -> System.out.println("Upload completed"))
+                  .doOnError(e -> System.err.println("Upload failed: " + e.getMessage()))
+                  .subscribe();
+          }
+          
+          private static List<Object> getLogs() {
+              return List.of(/* logs */);
+          }
+      }
+
+  - name: log_entry_model
+    prompt: |
+      Create a Java log entry class suitable for Azure Monitor ingestion
+      with TimeGenerated, Level, and Message fields including proper getters.
+    expected_patterns:
+      - "class"
+      - "timeGenerated|TimeGenerated"
+      - "level|Level"
+      - "message|Message"
+      - "getTimeGenerated|getLevel|getMessage"
+    tags:
+      - model
+      - logging
+    mock_response: |
+      public class MyLogEntry {
+          private String timeGenerated;
+          private String level;
+          private String message;
+          
+          public MyLogEntry(String timeGenerated, String level, String message) {
+              this.timeGenerated = timeGenerated;
+              this.level = level;
+              this.message = message;
+          }
+          
+          // Getters required for JSON serialization
+          public String getTimeGenerated() { return timeGenerated; }
+          public String getLevel() { return level; }
+          public String getMessage() { return message; }
+      }
+
+  - name: http_exception_handling
+    prompt: |
+      Create a Java example that handles HTTP exceptions when uploading logs
+      to Azure Monitor, checking status codes for common errors like 403 and 404.
+    expected_patterns:
+      - "HttpResponseException"
+      - "getResponse"
+      - "getStatusCode"
+      - "403|404"
+      - "try"
+      - "catch"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.monitor.ingestion.LogsIngestionClient;
+      import com.azure.monitor.ingestion.LogsIngestionClientBuilder;
+      import com.azure.core.exception.HttpResponseException;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.List;
+
+      public class HttpExceptionHandling {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("DATA_COLLECTION_ENDPOINT");
+              String ruleId = System.getenv("DATA_COLLECTION_RULE_ID");
+              String streamName = System.getenv("STREAM_NAME");
+              
+              LogsIngestionClient client = new LogsIngestionClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              List<Object> logs = List.of(/* logs */);
+              
+              try {
+                  client.upload(ruleId, streamName, logs);
+              } catch (HttpResponseException e) {
+                  System.err.println("HTTP Status: " + e.getResponse().getStatusCode());
+                  System.err.println("Error: " + e.getMessage());
+                  
+                  if (e.getResponse().getStatusCode() == 403) {
+                      System.err.println("Check DCR permissions and managed identity");
+                  } else if (e.getResponse().getStatusCode() == 404) {
+                      System.err.println("Verify DCE endpoint and DCR ID");
+                  }
+              }
+          }
+      }
+
+  - name: upload_with_concurrency
+    prompt: |
+      Create a Java example that uploads a large collection of logs
+      using LogsUploadOptions with setMaxConcurrency for parallel uploads.
+    expected_patterns:
+      - "LogsUploadOptions"
+      - "setMaxConcurrency"
+      - "upload"
+      - "Context"
+    tags:
+      - upload
+      - performance
+    mock_response: |
+      import com.azure.monitor.ingestion.LogsIngestionClient;
+      import com.azure.monitor.ingestion.LogsIngestionClientBuilder;
+      import com.azure.monitor.ingestion.models.LogsUploadOptions;
+      import com.azure.core.util.Context;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.List;
+
+      public class UploadWithConcurrency {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("DATA_COLLECTION_ENDPOINT");
+              String ruleId = System.getenv("DATA_COLLECTION_RULE_ID");
+              String streamName = System.getenv("STREAM_NAME");
+              
+              LogsIngestionClient client = new LogsIngestionClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              List<Object> largeLogs = getLargeLogs(); // Large collection
+              
+              LogsUploadOptions options = new LogsUploadOptions()
+                  .setMaxConcurrency(3);
+              
+              client.upload(ruleId, streamName, largeLogs, options, Context.NONE);
+              System.out.println("Large upload completed with concurrency");
+          }
+          
+          private static List<Object> getLargeLogs() {
+              return List.of(/* many logs */);
+          }
+      }
+
+  - name: batch_upload
+    prompt: |
+      Create a Java example that demonstrates batching multiple log entries
+      into a list and uploading them to Azure Monitor in a single call.
+    expected_patterns:
+      - "List<Object>|ArrayList"
+      - "add"
+      - "upload"
+      - "LogsIngestionClient"
+    tags:
+      - upload
+      - batch
+    mock_response: |
+      import com.azure.monitor.ingestion.LogsIngestionClient;
+      import com.azure.monitor.ingestion.LogsIngestionClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.ArrayList;
+      import java.util.List;
+
+      public class BatchUpload {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("DATA_COLLECTION_ENDPOINT");
+              String ruleId = System.getenv("DATA_COLLECTION_RULE_ID");
+              String streamName = System.getenv("STREAM_NAME");
+              
+              LogsIngestionClient client = new LogsIngestionClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              // Batch multiple log entries
+              List<Object> logs = new ArrayList<>();
+              logs.add(new MyLogEntry("2024-01-15T10:30:00Z", "INFO", "Application started"));
+              logs.add(new MyLogEntry("2024-01-15T10:30:05Z", "DEBUG", "Processing request"));
+              logs.add(new MyLogEntry("2024-01-15T10:30:10Z", "WARN", "High memory usage"));
+              logs.add(new MyLogEntry("2024-01-15T10:30:15Z", "ERROR", "Connection timeout"));
+              
+              // Upload batch in single call
+              client.upload(ruleId, streamName, logs);
+              System.out.println("Batch of " + logs.size() + " logs uploaded successfully");
+          }
+          
+          static class MyLogEntry {
+              private String timeGenerated;
+              private String level;
+              private String message;
+              
+              public MyLogEntry(String timeGenerated, String level, String message) {
+                  this.timeGenerated = timeGenerated;
+                  this.level = level;
+                  this.message = message;
+              }
+              
+              public String getTimeGenerated() { return timeGenerated; }
+              public String getLevel() { return level; }
+              public String getMessage() { return message; }
+          }
+      }

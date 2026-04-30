@@ -1,0 +1,227 @@
+# Test scenarios for m365-agents-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: aspnet_agent_hosting
+    prompt: |
+      Create a minimal ASP.NET Core host for a Microsoft 365 Agent using
+      AddAgentApplicationOptions, AddAgent<T>, and the /api/messages endpoint.
+    expected_patterns:
+      - "AddAgentApplicationOptions"
+      - "AddAgent<"
+      - "IAgentHttpAdapter"
+      - "ProcessAsync"
+      - 'MapPost("/api/messages")'
+      - "AddAgentAspNetAuthentication"
+    forbidden_patterns:
+      - "BotFrameworkHttpAdapter"
+      - "Microsoft.Bot.Builder"
+    tags:
+      - hosting
+      - authentication
+    mock_response: |
+      using Microsoft.Agents.Builder;
+      using Microsoft.Agents.Hosting.AspNetCore;
+      using Microsoft.Agents.Storage;
+      using Microsoft.AspNetCore.Builder;
+      using Microsoft.AspNetCore.Http;
+      using Microsoft.Extensions.DependencyInjection;
+      using Microsoft.Extensions.Hosting;
+
+      var builder = WebApplication.CreateBuilder(args);
+      builder.Services.AddHttpClient();
+      builder.AddAgentApplicationOptions();
+      builder.AddAgent<MyAgent>();
+      builder.Services.AddSingleton<IStorage, MemoryStorage>();
+
+      builder.Services.AddControllers();
+      builder.Services.AddAgentAspNetAuthentication(builder.Configuration);
+
+      WebApplication app = builder.Build();
+      app.UseAuthentication();
+      app.UseAuthorization();
+
+      var incomingRoute = app.MapPost("/api/messages",
+          async (HttpRequest request, HttpResponse response, IAgentHttpAdapter adapter, IAgent agent, CancellationToken ct) =>
+          {
+              await adapter.ProcessAsync(request, response, agent, ct);
+          });
+
+      if (!app.Environment.IsDevelopment())
+      {
+          incomingRoute.RequireAuthorization();
+      }
+
+      app.Run();
+
+  - name: agent_application_routing
+    prompt: |
+      Create an AgentApplication subclass that handles welcome messages,
+      message activities, and turn errors using Microsoft.Agents SDK.
+    expected_patterns:
+      - "AgentApplication"
+      - "OnConversationUpdate"
+      - "OnActivity"
+      - "OnTurnError"
+      - "EndOfConversationCodes.Error"
+    forbidden_patterns:
+      - "ActivityHandler"
+    tags:
+      - routing
+      - errors
+    mock_response: |
+      using Microsoft.Agents.Builder;
+      using Microsoft.Agents.Builder.App;
+      using Microsoft.Agents.Builder.State;
+      using Microsoft.Agents.Core.Models;
+      using System;
+      using System.Threading;
+      using System.Threading.Tasks;
+
+      public sealed class MyAgent : AgentApplication
+      {
+          public MyAgent(AgentApplicationOptions options) : base(options)
+          {
+              OnConversationUpdate(ConversationUpdateEvents.MembersAdded, WelcomeAsync);
+              OnActivity(ActivityTypes.Message, OnMessageAsync, rank: RouteRank.Last);
+              OnTurnError(OnTurnErrorAsync);
+          }
+
+          private static async Task WelcomeAsync(ITurnContext turnContext, ITurnState turnState, CancellationToken ct)
+          {
+              foreach (ChannelAccount member in turnContext.Activity.MembersAdded)
+              {
+                  if (member.Id != turnContext.Activity.Recipient.Id)
+                  {
+                      await turnContext.SendActivityAsync(MessageFactory.Text("Welcome!"), ct);
+                  }
+              }
+          }
+
+          private static async Task OnMessageAsync(ITurnContext turnContext, ITurnState turnState, CancellationToken ct)
+          {
+              await turnContext.SendActivityAsync(MessageFactory.Text(turnContext.Activity.Text), ct);
+          }
+
+          private static async Task OnTurnErrorAsync(ITurnContext turnContext, ITurnState turnState, Exception ex, CancellationToken ct)
+          {
+              await turnState.Conversation.DeleteStateAsync(turnContext, ct);
+
+              var eoc = Activity.CreateEndOfConversationActivity();
+              eoc.Code = EndOfConversationCodes.Error;
+              eoc.Text = ex.Message;
+              await turnContext.SendActivityAsync(eoc, ct);
+          }
+      }
+
+  - name: copilot_studio_client
+    prompt: |
+      Show how to configure CopilotClient with IHttpClientFactory and
+      start a conversation using StartConversationAsync and AskQuestionAsync.
+    expected_patterns:
+      - "CopilotClient"
+      - 'AddHttpClient("mcs")'
+      - "StartConversationAsync"
+      - "AskQuestionAsync"
+    forbidden_patterns:
+      - "DirectLineClient"
+    tags:
+      - copilot-studio
+      - client
+    mock_response: |
+      using Microsoft.Agents.CopilotStudio.Client;
+      using Microsoft.Extensions.DependencyInjection;
+      using Microsoft.Extensions.Hosting;
+
+      HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+      var settings = new SampleConnectionSettings(builder.Configuration.GetSection("CopilotStudioClientSettings"));
+
+      builder.Services.AddHttpClient("mcs").ConfigurePrimaryHttpMessageHandler(() =>
+      {
+          return new AddTokenHandler(settings);
+      });
+
+      builder.Services.AddTransient<CopilotClient>(sp =>
+      {
+          var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<CopilotClient>();
+          return new CopilotClient(settings, sp.GetRequiredService<IHttpClientFactory>(), logger, "mcs");
+      });
+
+      IHost host = builder.Build();
+      var client = host.Services.GetRequiredService<CopilotClient>();
+
+      await foreach (var activity in client.StartConversationAsync(emitStartConversationEvent: true))
+      {
+          Console.WriteLine(activity.Type);
+      }
+
+      await foreach (var activity in client.AskQuestionAsync("Hello!", null))
+      {
+          Console.WriteLine(activity.Type);
+      }
+
+  - name: token_handler_msal
+    prompt: |
+      Create a DelegatingHandler that uses MSAL to acquire a token for
+      Copilot Studio requests and attaches it to Authorization headers.
+    expected_patterns:
+      - "DelegatingHandler"
+      - "PublicClientApplicationBuilder"
+      - "AcquireTokenSilent"
+      - "AcquireTokenInteractive"
+      - "CopilotClient.ScopeFromSettings"
+      - "AuthenticationHeaderValue"
+    tags:
+      - authentication
+      - msal
+    mock_response: |
+      using System.Net.Http.Headers;
+      using Microsoft.Agents.CopilotStudio.Client;
+      using Microsoft.Identity.Client;
+
+      internal sealed class AddTokenHandler : DelegatingHandler
+      {
+          private readonly SampleConnectionSettings _settings;
+
+          public AddTokenHandler(SampleConnectionSettings settings) : base(new HttpClientHandler())
+          {
+              _settings = settings;
+          }
+
+          protected override async Task<HttpResponseMessage> SendAsync(
+              HttpRequestMessage request,
+              CancellationToken cancellationToken)
+          {
+              if (request.Headers.Authorization is null)
+              {
+                  string[] scopes = [CopilotClient.ScopeFromSettings(_settings)];
+
+                  IPublicClientApplication app = PublicClientApplicationBuilder
+                      .Create(_settings.AppClientId)
+                      .WithAuthority(AadAuthorityAudience.AzureAdMyOrg)
+                      .WithTenantId(_settings.TenantId)
+                      .WithRedirectUri("http://localhost")
+                      .Build();
+
+                  AuthenticationResult authResponse;
+                  try
+                  {
+                      var account = (await app.GetAccountsAsync()).FirstOrDefault();
+                      authResponse = await app.AcquireTokenSilent(scopes, account).ExecuteAsync(cancellationToken);
+                  }
+                  catch (MsalUiRequiredException)
+                  {
+                      authResponse = await app.AcquireTokenInteractive(scopes).ExecuteAsync(cancellationToken);
+                  }
+
+                  request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", authResponse.AccessToken);
+              }
+
+              return await base.SendAsync(request, cancellationToken);
+          }
+      }

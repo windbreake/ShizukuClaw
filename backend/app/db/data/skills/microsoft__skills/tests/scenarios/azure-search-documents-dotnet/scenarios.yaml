@@ -1,0 +1,406 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+# Test scenarios for azure-search-documents-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: search_client_default_credential
+    prompt: |
+      Create a SearchClient in .NET using DefaultAzureCredential for authentication.
+    expected_patterns:
+      - "using Azure.Identity"
+      - "using Azure.Search.Documents"
+      - "DefaultAzureCredential"
+      - "SearchClient"
+    forbidden_patterns:
+      - "AzureKeyCredential"
+      - "api-key"
+    tags:
+      - authentication
+      - basic
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Search.Documents;
+
+      var credential = new DefaultAzureCredential();
+      var endpoint = new Uri(Environment.GetEnvironmentVariable("SEARCH_ENDPOINT"));
+      var indexName = Environment.GetEnvironmentVariable("SEARCH_INDEX_NAME");
+
+      var client = new SearchClient(endpoint, indexName, credential);
+
+  - name: search_client_api_key
+    prompt: |
+      Create a SearchClient using API key authentication from environment variable.
+    expected_patterns:
+      - "AzureKeyCredential"
+      - "Environment.GetEnvironmentVariable"
+      - "SearchClient"
+    forbidden_patterns:
+      - '"my-api-key'
+    tags:
+      - authentication
+    mock_response: |
+      using Azure;
+      using Azure.Search.Documents;
+
+      var credential = new AzureKeyCredential(
+          Environment.GetEnvironmentVariable("SEARCH_API_KEY"));
+      var endpoint = new Uri(Environment.GetEnvironmentVariable("SEARCH_ENDPOINT"));
+      var indexName = Environment.GetEnvironmentVariable("SEARCH_INDEX_NAME");
+
+      var client = new SearchClient(endpoint, indexName, credential);
+
+  - name: create_index_with_fieldbuilder
+    prompt: |
+      Create a search index in .NET using FieldBuilder with a Hotel model that has
+      vector search capabilities.
+    expected_patterns:
+      - "FieldBuilder"
+      - "SimpleField"
+      - "SearchableField"
+      - "VectorSearchField"
+      - "CreateOrUpdateIndexAsync"
+    forbidden_patterns:
+      - "CreateIndexAsync"
+    tags:
+      - index-management
+      - vector-search
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Search.Documents.Indexes;
+      using Azure.Search.Documents.Indexes.Models;
+
+      public class Hotel
+      {
+          [SimpleField(IsKey = true, IsFilterable = true)]
+          public string HotelId { get; set; }
+
+          [SearchableField(IsSortable = true)]
+          public string HotelName { get; set; }
+
+          [SearchableField(AnalyzerName = LexicalAnalyzerName.EnLucene)]
+          public string Description { get; set; }
+
+          [SimpleField(IsFilterable = true, IsSortable = true, IsFacetable = true)]
+          public double? Rating { get; set; }
+
+          [VectorSearchField(VectorSearchDimensions = 1536, VectorSearchProfileName = "vector-profile")]
+          public ReadOnlyMemory<float>? DescriptionVector { get; set; }
+      }
+
+      var endpoint = new Uri(Environment.GetEnvironmentVariable("SEARCH_ENDPOINT"));
+      var indexClient = new SearchIndexClient(endpoint, new DefaultAzureCredential());
+
+      var fieldBuilder = new FieldBuilder();
+      var fields = fieldBuilder.Build(typeof(Hotel));
+
+      var index = new SearchIndex("hotels")
+      {
+          Fields = fields,
+          VectorSearch = new VectorSearch
+          {
+              Profiles = { new VectorSearchProfile("vector-profile", "hnsw-algo") },
+              Algorithms = { new HnswAlgorithmConfiguration("hnsw-algo") }
+          }
+      };
+
+      await indexClient.CreateOrUpdateIndexAsync(index);
+
+  - name: basic_search_with_options
+    prompt: |
+      Perform a basic search query with filter, sort, and pagination options.
+    expected_patterns:
+      - "SearchOptions"
+      - "Filter"
+      - "OrderBy"
+      - "Select"
+      - "Size"
+      - "SearchAsync"
+    forbidden_patterns:
+      - "VectorSearch"
+    tags:
+      - search
+      - basic
+    mock_response: |
+      using Azure.Search.Documents;
+      using Azure.Search.Documents.Models;
+
+      var options = new SearchOptions
+      {
+          Filter = "rating ge 4",
+          OrderBy = { "rating desc" },
+          Select = { "hotelId", "hotelName", "rating" },
+          Size = 10,
+          Skip = 0,
+          IncludeTotalCount = true
+      };
+
+      SearchResults<Hotel> results = await searchClient.SearchAsync<Hotel>("luxury", options);
+
+      Console.WriteLine($"Total: {results.TotalCount}");
+      await foreach (SearchResult<Hotel> result in results.GetResultsAsync())
+      {
+          Console.WriteLine($"{result.Document.HotelName} (Score: {result.Score})");
+      }
+
+  - name: vector_search_pure
+    prompt: |
+      Perform a pure vector search using VectorizedQuery in .NET.
+    expected_patterns:
+      - "VectorizedQuery"
+      - "KNearestNeighborsCount"
+      - "VectorSearchOptions"
+    forbidden_patterns:
+      - "SemanticSearch"
+    tags:
+      - vector-search
+    mock_response: |
+      using Azure.Search.Documents;
+      using Azure.Search.Documents.Models;
+
+      // embedding is a ReadOnlyMemory<float> from your embedding model
+      var vectorQuery = new VectorizedQuery(embedding)
+      {
+          KNearestNeighborsCount = 5,
+          Fields = { "descriptionVector" }
+      };
+
+      var options = new SearchOptions
+      {
+          VectorSearch = new VectorSearchOptions
+          {
+              Queries = { vectorQuery }
+          }
+      };
+
+      var results = await searchClient.SearchAsync<Hotel>(null, options);
+
+      await foreach (var result in results.Value.GetResultsAsync())
+      {
+          Console.WriteLine($"{result.Document.HotelName} (Score: {result.Score})");
+      }
+
+  - name: semantic_search
+    prompt: |
+      Perform a semantic search with extractive captions and answers.
+    expected_patterns:
+      - "QueryType.Semantic"
+      - "SemanticSearchOptions"
+      - "SemanticConfigurationName"
+      - "QueryCaption"
+      - "QueryAnswer"
+    forbidden_patterns:
+      - "VectorizedQuery"
+    tags:
+      - semantic-search
+    mock_response: |
+      using Azure.Search.Documents;
+      using Azure.Search.Documents.Models;
+
+      var options = new SearchOptions
+      {
+          QueryType = SearchQueryType.Semantic,
+          SemanticSearch = new SemanticSearchOptions
+          {
+              SemanticConfigurationName = "my-semantic-config",
+              QueryCaption = new QueryCaption(QueryCaptionType.Extractive),
+              QueryAnswer = new QueryAnswer(QueryAnswerType.Extractive)
+          }
+      };
+
+      var results = await searchClient.SearchAsync<Hotel>("best hotel for families", options);
+
+      // Access semantic answers
+      foreach (var answer in results.Value.SemanticSearch.Answers)
+      {
+          Console.WriteLine($"Answer: {answer.Text} (Score: {answer.Score})");
+      }
+
+      // Access captions from results
+      await foreach (var result in results.Value.GetResultsAsync())
+      {
+          var caption = result.SemanticSearch?.Captions?.FirstOrDefault();
+          Console.WriteLine($"Caption: {caption?.Text}");
+      }
+
+  - name: hybrid_search
+    prompt: |
+      Perform a hybrid search combining vector, keyword, and semantic search.
+    expected_patterns:
+      - "VectorizedQuery"
+      - "QueryType.Semantic"
+      - "SemanticSearchOptions"
+      - "VectorSearchOptions"
+    forbidden_patterns:
+      - "null, options"
+    tags:
+      - hybrid-search
+    mock_response: |
+      using Azure.Search.Documents;
+      using Azure.Search.Documents.Models;
+
+      var vectorQuery = new VectorizedQuery(embedding)
+      {
+          KNearestNeighborsCount = 5,
+          Fields = { "descriptionVector" }
+      };
+
+      var options = new SearchOptions
+      {
+          QueryType = SearchQueryType.Semantic,
+          SemanticSearch = new SemanticSearchOptions
+          {
+              SemanticConfigurationName = "my-semantic-config"
+          },
+          VectorSearch = new VectorSearchOptions
+          {
+              Queries = { vectorQuery }
+          }
+      };
+
+      // Combines keyword search, vector search, and semantic ranking
+      var results = await searchClient.SearchAsync<Hotel>("luxury beachfront", options);
+
+  - name: document_operations_batch
+    prompt: |
+      Perform batch document operations including upload, merge, and delete.
+    expected_patterns:
+      - "IndexDocumentsBatch"
+      - "IndexDocumentsAction.Upload"
+      - "IndexDocumentsAction.Merge"
+      - "IndexDocumentsAction.Delete"
+      - "IndexDocumentsAsync"
+    forbidden_patterns:
+      - "UploadDocumentsAsync"
+    tags:
+      - document-operations
+    mock_response: |
+      using Azure.Search.Documents;
+      using Azure.Search.Documents.Models;
+
+      var hotel1 = new Hotel { HotelId = "1", HotelName = "New Hotel" };
+      var hotel2 = new Hotel { HotelId = "2", HotelName = "Updated Hotel" };
+      var hotel3 = new Hotel { HotelId = "3" };
+
+      var batch = IndexDocumentsBatch.Create(
+          IndexDocumentsAction.Upload(hotel1),
+          IndexDocumentsAction.Merge(hotel2),
+          IndexDocumentsAction.Delete(hotel3));
+
+      IndexDocumentsResult result = await searchClient.IndexDocumentsAsync(batch);
+
+      foreach (var item in result.Results)
+      {
+          Console.WriteLine($"Key: {item.Key}, Succeeded: {item.Succeeded}");
+      }
+
+  - name: faceted_search
+    prompt: |
+      Perform a faceted search to get aggregated counts by category and rating.
+    expected_patterns:
+      - "Facets"
+      - "SearchOptions"
+      - "results.Value.Facets"
+    forbidden_patterns:
+      - "VectorSearch"
+    tags:
+      - facets
+    mock_response: |
+      using Azure.Search.Documents;
+      using Azure.Search.Documents.Models;
+
+      var options = new SearchOptions
+      {
+          Facets = { "rating,count:5", "category" }
+      };
+
+      var results = await searchClient.SearchAsync<Hotel>("*", options);
+
+      foreach (var facet in results.Value.Facets["rating"])
+      {
+          Console.WriteLine($"Rating {facet.Value}: {facet.Count}");
+      }
+
+      foreach (var facet in results.Value.Facets["category"])
+      {
+          Console.WriteLine($"Category {facet.Value}: {facet.Count}");
+      }
+
+  - name: autocomplete_and_suggest
+    prompt: |
+      Implement autocomplete and suggestions for a search box.
+    expected_patterns:
+      - "AutocompleteAsync"
+      - "SuggestAsync"
+      - "AutocompleteOptions"
+      - "SuggestOptions"
+    forbidden_patterns:
+      - "SearchAsync"
+    tags:
+      - autocomplete
+      - suggestions
+    mock_response: |
+      using Azure.Search.Documents;
+      using Azure.Search.Documents.Models;
+
+      // Autocomplete
+      var autocompleteOptions = new AutocompleteOptions
+      {
+          Mode = AutocompleteMode.OneTermWithContext
+      };
+      var autocomplete = await searchClient.AutocompleteAsync(
+          "lux", "suggester-name", autocompleteOptions);
+
+      foreach (var result in autocomplete.Value.Results)
+      {
+          Console.WriteLine($"Autocomplete: {result.Text}");
+      }
+
+      // Suggestions
+      var suggestOptions = new SuggestOptions
+      {
+          UseFuzzyMatching = true
+      };
+      var suggestions = await searchClient.SuggestAsync<Hotel>(
+          "lux", "suggester-name", suggestOptions);
+
+      foreach (var result in suggestions.Value.Results)
+      {
+          Console.WriteLine($"Suggestion: {result.Text} - {result.Document.HotelName}");
+      }
+
+  - name: error_handling
+    prompt: |
+      Show proper error handling for search operations.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status"
+      - "ex.ErrorCode"
+    forbidden_patterns:
+      - "catch (Exception ex)"
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure;
+      using Azure.Search.Documents;
+
+      try
+      {
+          var results = await searchClient.SearchAsync<Hotel>("query");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 404)
+      {
+          Console.WriteLine("Index not found");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 400)
+      {
+          Console.WriteLine($"Bad request: {ex.ErrorCode}: {ex.Message}");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"Search error: {ex.Status} - {ex.ErrorCode}: {ex.Message}");
+      }

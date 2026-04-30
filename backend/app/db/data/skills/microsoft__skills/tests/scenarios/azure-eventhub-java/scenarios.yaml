@@ -1,0 +1,403 @@
+# Test scenarios for azure-eventhub-java skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Producer Client with DefaultAzureCredential
+  - name: producer_client_default_credential
+    prompt: |
+      Create an EventHubProducerClient using DefaultAzureCredential with
+      namespace and event hub name from environment variables.
+    expected_patterns:
+      - "EventHubProducerClient"
+      - "EventHubClientBuilder"
+      - "DefaultAzureCredentialBuilder"
+      - "fullyQualifiedNamespace"
+      - "eventHubName"
+      - "System.getenv"
+    forbidden_patterns:
+      - "connectionString"
+      - "SharedAccessKey"
+    tags:
+      - authentication
+      - producer
+    mock_response: |
+      import com.azure.messaging.eventhubs.EventHubProducerClient;
+      import com.azure.messaging.eventhubs.EventHubClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      EventHubProducerClient producer = new EventHubClientBuilder()
+          .fullyQualifiedNamespace(System.getenv("EVENT_HUBS_NAMESPACE"))
+          .eventHubName(System.getenv("EVENT_HUB_NAME"))
+          .credential(new DefaultAzureCredentialBuilder().build())
+          .buildProducerClient();
+
+  # Batch Event Sending
+  - name: batch_event_sending
+    prompt: |
+      Send multiple events using EventDataBatch. Handle the case when
+      batch is full by sending and creating a new batch.
+    expected_patterns:
+      - "EventDataBatch"
+      - "createBatch"
+      - "tryAdd"
+      - "if (!batch.tryAdd"
+      - "producer.send(batch)"
+      - "getCount"
+    forbidden_patterns:
+      - "send(Collections.singletonList"
+      - "send(Arrays.asList"
+    tags:
+      - producer
+      - batching
+    mock_response: |
+      import com.azure.messaging.eventhubs.EventData;
+      import com.azure.messaging.eventhubs.EventDataBatch;
+      import java.util.List;
+
+      public void sendEvents(List<String> eventDataList) {
+          EventDataBatch batch = producer.createBatch();
+
+          for (String data : eventDataList) {
+              EventData event = new EventData(data);
+              if (!batch.tryAdd(event)) {
+                  // Batch is full, send and create new batch
+                  producer.send(batch);
+                  batch = producer.createBatch();
+
+                  if (!batch.tryAdd(event)) {
+                      throw new IllegalArgumentException("Event too large for batch");
+                  }
+              }
+          }
+
+          // Send remaining events
+          if (batch.getCount() > 0) {
+              producer.send(batch);
+          }
+      }
+
+  # Send with Partition Key
+  - name: send_with_partition_key
+    prompt: |
+      Send events with a partition key to ensure related events go to
+      the same partition. Use CreateBatchOptions.
+    expected_patterns:
+      - "CreateBatchOptions"
+      - "setPartitionKey"
+      - "createBatch(options)"
+    forbidden_patterns:
+      - "setPartitionId"
+    tags:
+      - producer
+      - partitioning
+    mock_response: |
+      import com.azure.messaging.eventhubs.EventData;
+      import com.azure.messaging.eventhubs.EventDataBatch;
+      import com.azure.messaging.eventhubs.models.CreateBatchOptions;
+
+      public void sendCustomerEvents(String customerId, List<String> events) {
+          CreateBatchOptions options = new CreateBatchOptions()
+              .setPartitionKey("customer-" + customerId);
+
+          EventDataBatch batch = producer.createBatch(options);
+
+          for (String eventData : events) {
+              EventData event = new EventData(eventData);
+              event.getProperties().put("customerId", customerId);
+
+              if (!batch.tryAdd(event)) {
+                  producer.send(batch);
+                  batch = producer.createBatch(options);
+                  batch.tryAdd(event);
+              }
+          }
+
+          if (batch.getCount() > 0) {
+              producer.send(batch);
+          }
+      }
+
+  # EventProcessorClient with Checkpointing
+  - name: event_processor_with_checkpointing
+    prompt: |
+      Create an EventProcessorClient with BlobCheckpointStore for production.
+      Include processEvent handler with checkpointing and processError handler.
+    expected_patterns:
+      - "EventProcessorClient"
+      - "EventProcessorClientBuilder"
+      - "BlobCheckpointStore"
+      - "checkpointStore"
+      - "processEvent"
+      - "processError"
+      - "updateCheckpoint"
+      - "consumerGroup"
+    forbidden_patterns:
+      - "buildConsumerClient"
+      - "receiveFromPartition"
+    tags:
+      - consumer
+      - checkpointing
+      - production
+    mock_response: |
+      import com.azure.messaging.eventhubs.EventProcessorClient;
+      import com.azure.messaging.eventhubs.EventProcessorClientBuilder;
+      import com.azure.messaging.eventhubs.checkpointstore.blob.BlobCheckpointStore;
+      import com.azure.messaging.eventhubs.models.EventContext;
+      import com.azure.messaging.eventhubs.EventData;
+      import com.azure.storage.blob.BlobContainerAsyncClient;
+      import com.azure.storage.blob.BlobContainerClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      // Create checkpoint store
+      BlobContainerAsyncClient blobClient = new BlobContainerClientBuilder()
+          .connectionString(System.getenv("STORAGE_CONNECTION_STRING"))
+          .containerName("checkpoints")
+          .buildAsyncClient();
+
+      // Create processor
+      EventProcessorClient processor = new EventProcessorClientBuilder()
+          .fullyQualifiedNamespace(System.getenv("EVENT_HUBS_NAMESPACE"))
+          .eventHubName(System.getenv("EVENT_HUB_NAME"))
+          .credential(new DefaultAzureCredentialBuilder().build())
+          .consumerGroup("$Default")
+          .checkpointStore(new BlobCheckpointStore(blobClient))
+          .processEvent(eventContext -> {
+              EventData event = eventContext.getEventData();
+              System.out.printf("Processing: %s from partition %s%n",
+                  event.getBodyAsString(),
+                  eventContext.getPartitionContext().getPartitionId());
+
+              // Process the event
+              processEvent(event);
+
+              // Checkpoint after successful processing
+              eventContext.updateCheckpoint();
+          })
+          .processError(errorContext -> {
+              System.err.printf("Error on partition %s: %s%n",
+                  errorContext.getPartitionContext().getPartitionId(),
+                  errorContext.getThrowable().getMessage());
+          })
+          .buildEventProcessorClient();
+
+      // Start processing
+      processor.start();
+
+      // Register shutdown hook for graceful stop
+      Runtime.getRuntime().addShutdownHook(new Thread(processor::stop));
+
+  # Batch Event Processing
+  - name: batch_event_processing
+    prompt: |
+      Create an EventProcessorClient that processes events in batches
+      for better throughput. Use processEventBatch with maxBatchSize.
+    expected_patterns:
+      - "processEventBatch"
+      - "getEvents()"
+      - "updateCheckpoint"
+      - "maxBatchSize"
+    forbidden_patterns:
+      - ".processEvent(eventContext"  # SDK single-event callback (vs batch)
+    tags:
+      - consumer
+      - batching
+    mock_response: |
+      import com.azure.messaging.eventhubs.EventProcessorClient;
+      import com.azure.messaging.eventhubs.EventProcessorClientBuilder;
+      import com.azure.messaging.eventhubs.checkpointstore.blob.BlobCheckpointStore;
+      import com.azure.messaging.eventhubs.EventData;
+      import java.util.List;
+
+      EventProcessorClient processor = new EventProcessorClientBuilder()
+          .fullyQualifiedNamespace(System.getenv("EVENT_HUBS_NAMESPACE"))
+          .eventHubName(System.getenv("EVENT_HUB_NAME"))
+          .credential(new DefaultAzureCredentialBuilder().build())
+          .consumerGroup("$Default")
+          .checkpointStore(new BlobCheckpointStore(blobClient))
+          .processEventBatch(eventBatchContext -> {
+              List<EventData> events = eventBatchContext.getEvents();
+              System.out.printf("Processing batch of %d events from partition %s%n",
+                  events.size(),
+                  eventBatchContext.getPartitionContext().getPartitionId());
+
+              for (EventData event : events) {
+                  processEvent(event);
+              }
+
+              // Checkpoint after processing entire batch
+              eventBatchContext.updateCheckpoint();
+          }, 100)  // maxBatchSize
+          .processError(errorContext -> {
+              System.err.printf("Error: %s%n", errorContext.getThrowable().getMessage());
+          })
+          .buildEventProcessorClient();
+
+  # Receive Events with EventPosition
+  - name: receive_with_event_position
+    prompt: |
+      Receive events from a specific partition using different EventPosition
+      options: earliest, latest, from offset, from sequence number.
+    expected_patterns:
+      - "receiveFromPartition"
+      - "EventPosition"
+      - "earliest"
+      - "latest"
+      - "getSequenceNumber"
+      - "getOffset"
+    forbidden_patterns:
+      - "EventProcessorClient"
+    tags:
+      - consumer
+      - positioning
+    mock_response: |
+      import com.azure.messaging.eventhubs.EventHubConsumerClient;
+      import com.azure.messaging.eventhubs.EventHubClientBuilder;
+      import com.azure.messaging.eventhubs.models.EventPosition;
+      import com.azure.messaging.eventhubs.models.PartitionEvent;
+      import com.azure.messaging.eventhubs.EventData;
+      import java.time.Duration;
+      import java.time.Instant;
+
+      EventHubConsumerClient consumer = new EventHubClientBuilder()
+          .fullyQualifiedNamespace(System.getenv("EVENT_HUBS_NAMESPACE"))
+          .eventHubName(System.getenv("EVENT_HUB_NAME"))
+          .credential(new DefaultAzureCredentialBuilder().build())
+          .consumerGroup(EventHubClientBuilder.DEFAULT_CONSUMER_GROUP_NAME)
+          .buildConsumerClient();
+
+      // Receive from beginning of partition
+      Iterable<PartitionEvent> events = consumer.receiveFromPartition(
+          "0",                           // partitionId
+          100,                           // maxEvents
+          EventPosition.earliest(),      // from beginning
+          Duration.ofSeconds(30)         // timeout
+      );
+
+      for (PartitionEvent partitionEvent : events) {
+          EventData event = partitionEvent.getData();
+          System.out.printf("Sequence: %d, Offset: %s, Body: %s%n",
+              event.getSequenceNumber(),
+              event.getOffset(),
+              event.getBodyAsString());
+      }
+
+      // Other EventPosition options:
+      // EventPosition.latest()                              - new events only
+      // EventPosition.fromOffset(12345L)                    - from specific offset
+      // EventPosition.fromSequenceNumber(100L)              - from sequence number
+      // EventPosition.fromEnqueuedTime(Instant.now().minus(Duration.ofHours(1)))  - from time
+
+  # Error Handling with AmqpException
+  - name: error_handling_amqp
+    prompt: |
+      Implement error handling in processError that distinguishes between
+      transient and non-transient errors using AmqpException.
+    expected_patterns:
+      - "processError"
+      - "AmqpException"
+      - "isTransient"
+      - "getPartitionContext"
+      - "getThrowable"
+    forbidden_patterns:
+      - "catch (Exception"
+      - "printStackTrace"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.messaging.eventhubs.models.ErrorContext;
+      import com.azure.core.amqp.exception.AmqpException;
+
+      .processError(errorContext -> {
+          Throwable error = errorContext.getThrowable();
+          String partitionId = errorContext.getPartitionContext().getPartitionId();
+
+          if (error instanceof AmqpException) {
+              AmqpException amqpError = (AmqpException) error;
+              if (amqpError.isTransient()) {
+                  System.out.printf("Transient error on partition %s, will retry: %s%n",
+                      partitionId, amqpError.getMessage());
+                  return;  // SDK will retry automatically
+              }
+          }
+
+          // Non-transient error - log and potentially alert
+          System.err.printf("Non-transient error on partition %s: %s%n",
+              partitionId, error.getMessage());
+          // Send to monitoring/alerting system
+          alertMonitoringSystem(partitionId, error);
+      })
+
+  # Resource Cleanup with Try-With-Resources
+  - name: resource_cleanup
+    prompt: |
+      Show proper resource cleanup for EventHubProducerClient using
+      try-with-resources pattern.
+    expected_patterns:
+      - "try ("
+      - "buildProducerClient"
+      - ".close()"
+    forbidden_patterns:
+      - "finally"
+    tags:
+      - cleanup
+      - best-practices
+    mock_response: |
+      import com.azure.messaging.eventhubs.EventHubProducerClient;
+      import com.azure.messaging.eventhubs.EventHubClientBuilder;
+      import com.azure.messaging.eventhubs.EventData;
+      import com.azure.messaging.eventhubs.EventDataBatch;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      try (EventHubProducerClient producer = new EventHubClientBuilder()
+              .fullyQualifiedNamespace(System.getenv("EVENT_HUBS_NAMESPACE"))
+              .eventHubName(System.getenv("EVENT_HUB_NAME"))
+              .credential(new DefaultAzureCredentialBuilder().build())
+              .buildProducerClient()) {
+
+          EventDataBatch batch = producer.createBatch();
+          batch.tryAdd(new EventData("Test event"));
+          producer.send(batch);
+
+          System.out.println("Events sent successfully");
+      }
+      // Producer is automatically closed here
+
+  # Get Event Hub Properties
+  - name: get_event_hub_properties
+    prompt: |
+      Get Event Hub properties including partition IDs and individual
+      partition properties like sequence numbers.
+    expected_patterns:
+      - "getEventHubProperties"
+      - "getPartitionIds"
+      - "getPartitionProperties"
+      - "getBeginningSequenceNumber"
+      - "getLastEnqueuedSequenceNumber"
+    forbidden_patterns: []
+    tags:
+      - metadata
+    mock_response: |
+      import com.azure.messaging.eventhubs.EventHubProperties;
+      import com.azure.messaging.eventhubs.PartitionProperties;
+
+      // Get Event Hub properties
+      EventHubProperties hubProps = producer.getEventHubProperties();
+      System.out.printf("Event Hub: %s%n", hubProps.getName());
+      System.out.printf("Partitions: %s%n", hubProps.getPartitionIds());
+      System.out.printf("Created at: %s%n", hubProps.getCreatedAt());
+
+      // Get individual partition properties
+      for (String partitionId : hubProps.getPartitionIds()) {
+          PartitionProperties partitionProps = producer.getPartitionProperties(partitionId);
+          System.out.printf("Partition %s:%n", partitionId);
+          System.out.printf("  Begin sequence: %d%n", partitionProps.getBeginningSequenceNumber());
+          System.out.printf("  Last sequence: %d%n", partitionProps.getLastEnqueuedSequenceNumber());
+          System.out.printf("  Last offset: %s%n", partitionProps.getLastEnqueuedOffset());
+          System.out.printf("  Last enqueued time: %s%n", partitionProps.getLastEnqueuedTime());
+          System.out.printf("  Is empty: %b%n", partitionProps.isEmpty());
+      }

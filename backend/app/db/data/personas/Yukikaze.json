@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "name": "Yukikaze",
+    "description": "Created via Control Panel",
+    "version": "1.0",
+    "author": "User",
+    "ui_theme": "default"
+  },
+  "character": {
+    "name": "Yukikaze",
+    "personality": "",
+    "brother_qqid": "",
+    "height": "",
+    "weight": "",
+    "catchphrases": ""
+  },
+  "system_prompt": {
+    "template": ""
+  },
+  "reply_style": "",
+  "states": [],
+  "state_probability": 0.3,
+  "plan_style": "",
+  "plan_style_private": "",
+  "plan_style_group": "",
+  "state_weights": [],
+  "enable_expression_learning": true,
+  "behavior_rules": []
+}

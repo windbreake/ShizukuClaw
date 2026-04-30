@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated PPT files (keep examples only)
+*.pptx
+!examples/*.pptx
+
+# Temp files
+*.tmp
+*.bak
+
+# Keep asset icons (PNG) — these are part of the skill
+!assets/icons/*.png
+
+# User configuration (personal themes, logos — NOT tracked in git)
+user-config/theme.yaml
+user-config/themes/
+user-config/assets/
+!user-config/.gitkeep
+!user-config/themes/.gitkeep
+!user-config/assets/.gitkeep
+!user-config/README.md

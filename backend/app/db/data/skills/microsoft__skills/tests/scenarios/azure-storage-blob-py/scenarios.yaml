@@ -1,0 +1,259 @@
+# yaml-language-server: $schema=file:///Users/govindm4max/code/oss/agent-skills/tests/scenarios/skill-scenarios.schema.json
+# Test scenarios for azure-storage-blob-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic BlobServiceClient creation
+  - name: basic_blob_service_client
+    prompt: |
+      Create a basic Azure Blob Storage example that authenticates with
+      DefaultAzureCredential and initializes a BlobServiceClient. Then
+      create a container client and create the container.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "BlobServiceClient"
+      - "get_container_client"
+      - "create_container"
+    forbidden_patterns:
+      - "from_connection_string"
+      - "AccountKey="
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.blob import BlobServiceClient
+      
+      account_url = os.environ["AZURE_STORAGE_ACCOUNT_URL"]
+      credential = DefaultAzureCredential()
+      
+      blob_service_client = BlobServiceClient(account_url, credential=credential)
+      container_client = blob_service_client.get_container_client("sample-container")
+      container_client.create_container()
+
+  # Upload with BlobClient
+  - name: upload_blob_with_blob_client
+    prompt: |
+      Upload a local file to Azure Blob Storage using BlobClient.
+      Use overwrite=True when uploading.
+    expected_patterns:
+      - "get_blob_client"
+      - "upload_blob"
+      - "overwrite=True"
+    forbidden_patterns:
+      - "from_connection_string"
+    tags:
+      - upload
+      - blob-client
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.blob import BlobServiceClient
+      
+      account_url = os.environ["AZURE_STORAGE_ACCOUNT_URL"]
+      credential = DefaultAzureCredential()
+      
+      blob_service_client = BlobServiceClient(account_url, credential=credential)
+      blob_client = blob_service_client.get_blob_client(
+          container="sample-container",
+          blob="sample.txt",
+      )
+      
+      with open("./local-file.txt", "rb") as data:
+          blob_client.upload_blob(data, overwrite=True)
+
+  # Download blob to file
+  - name: download_blob_to_file
+    prompt: |
+      Download a blob to a local file using BlobClient.
+      Use download_blob().readall().
+    expected_patterns:
+      - "download_blob"
+      - "readall"
+      - "wb"
+    forbidden_patterns:
+      - "from_connection_string"
+    tags:
+      - download
+      - blob-client
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.blob import BlobServiceClient
+      
+      account_url = os.environ["AZURE_STORAGE_ACCOUNT_URL"]
+      credential = DefaultAzureCredential()
+      
+      blob_service_client = BlobServiceClient(account_url, credential=credential)
+      blob_client = blob_service_client.get_blob_client(
+          container="sample-container",
+          blob="sample.txt",
+      )
+      
+      with open("./downloaded.txt", "wb") as file:
+          download_stream = blob_client.download_blob()
+          file.write(download_stream.readall())
+
+  # List blobs with prefix
+  - name: list_blobs_with_prefix
+    prompt: |
+      List blobs in a container using a prefix filter.
+      Use list_blobs(name_starts_with=...).
+    expected_patterns:
+      - "list_blobs"
+      - "name_starts_with"
+    forbidden_patterns:
+      - "blob_service_client.list_blobs"
+    tags:
+      - list
+      - container-client
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.blob import BlobServiceClient
+      
+      account_url = os.environ["AZURE_STORAGE_ACCOUNT_URL"]
+      credential = DefaultAzureCredential()
+      
+      blob_service_client = BlobServiceClient(account_url, credential=credential)
+      container_client = blob_service_client.get_container_client("sample-container")
+      
+      for blob in container_client.list_blobs(name_starts_with="logs/"):
+          print(blob.name)
+
+  # Upload via ContainerClient
+  - name: container_client_upload
+    prompt: |
+      Upload a blob using ContainerClient.upload_blob with overwrite=True.
+    expected_patterns:
+      - "get_container_client"
+      - "upload_blob"
+      - "overwrite=True"
+    forbidden_patterns:
+      - "blob_service_client.upload_blob"
+    tags:
+      - upload
+      - container-client
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.blob import BlobServiceClient
+      
+      account_url = os.environ["AZURE_STORAGE_ACCOUNT_URL"]
+      credential = DefaultAzureCredential()
+      
+      blob_service_client = BlobServiceClient(account_url, credential=credential)
+      container_client = blob_service_client.get_container_client("sample-container")
+      
+      with open("./local-file.txt", "rb") as data:
+          container_client.upload_blob(name="sample.txt", data=data, overwrite=True)
+
+  # Blob properties and metadata
+  - name: blob_properties_metadata
+    prompt: |
+      Retrieve blob properties and set metadata and content type using
+      BlobClient.
+    expected_patterns:
+      - "get_blob_properties"
+      - "set_blob_metadata"
+      - "ContentSettings"
+    forbidden_patterns:
+      - "metadata=None"
+    tags:
+      - properties
+      - metadata
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.blob import BlobServiceClient, ContentSettings
+      
+      account_url = os.environ["AZURE_STORAGE_ACCOUNT_URL"]
+      credential = DefaultAzureCredential()
+      
+      blob_service_client = BlobServiceClient(account_url, credential=credential)
+      blob_client = blob_service_client.get_blob_client("sample-container", "sample.txt")
+      
+      properties = blob_client.get_blob_properties()
+      print(properties.size)
+      
+      blob_client.set_blob_metadata(metadata={"category": "logs", "year": "2024"})
+      blob_client.set_http_headers(
+          content_settings=ContentSettings(content_type="text/plain")
+      )
+
+  # Async upload and download
+  - name: async_upload_download
+    prompt: |
+      Create an async example that uploads and downloads a blob using
+      azure.storage.blob.aio and DefaultAzureCredential from azure.identity.aio.
+    expected_patterns:
+      - "from azure.storage.blob.aio import BlobServiceClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with"
+      - "await blob_client.upload_blob"
+      - "await blob_client.download_blob"
+    forbidden_patterns:
+      - "from azure.storage.blob import BlobServiceClient"
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - async
+      - upload
+      - download
+    mock_response: |
+      import os
+      import asyncio
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.storage.blob.aio import BlobServiceClient
+      
+      async def main():
+          account_url = os.environ["AZURE_STORAGE_ACCOUNT_URL"]
+          credential = DefaultAzureCredential()
+          
+          async with BlobServiceClient(account_url, credential=credential) as client:
+              blob_client = client.get_blob_client("sample-container", "sample.txt")
+              await blob_client.upload_blob(b"hello", overwrite=True)
+              
+              stream = await blob_client.download_blob()
+              data = await stream.readall()
+              print(data)
+      
+      if __name__ == "__main__":
+          asyncio.run(main())
+
+  # Async list blobs
+  - name: async_list_blobs
+    prompt: |
+      List blobs asynchronously using ContainerClient.list_blobs and async for.
+    expected_patterns:
+      - "async for"
+      - "list_blobs"
+      - "azure.storage.blob.aio"
+    forbidden_patterns:
+      # Match sync iteration pattern - note: regex anchored to exclude "async for"
+      - "(?<!async )for blob in"
+    tags:
+      - async
+      - list
+    mock_response: |
+      import os
+      import asyncio
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.storage.blob.aio import BlobServiceClient
+      
+      async def main():
+          account_url = os.environ["AZURE_STORAGE_ACCOUNT_URL"]
+          credential = DefaultAzureCredential()
+          
+          async with BlobServiceClient(account_url, credential=credential) as client:
+              container_client = client.get_container_client("sample-container")
+              async for blob in container_client.list_blobs():
+                  print(blob.name)
+      
+      if __name__ == "__main__":
+          asyncio.run(main())

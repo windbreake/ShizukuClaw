@@ -1,0 +1,6 @@
+plugin_name: "astrbot_plugin_helloworld"
+display_name: "Hello World 示例插件"
+author: "ShizukuClaw Team"
+version: "1.0.0"
+description: "AstrBot插件兼容层的Hello World示例"
+repo: ""

@@ -1,0 +1,449 @@
+# Test scenarios for azure-ai-ml-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # MLClient Setup
+  - name: mlclient_creation_with_env_vars
+    prompt: |
+      Create an MLClient instance using environment variables for authentication.
+      Include proper DefaultAzureCredential usage, and context manager pattern
+      for resource cleanup.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "MLClient"
+      - "subscription_id"
+      - "resource_group_name"
+      - "workspace_name"
+    forbidden_patterns:
+      - "hardcoded"  # No hardcoded values
+      - "api_key"  # Don't use API keys directly
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import os
+      from azure.ai.ml import MLClient
+      from azure.identity import DefaultAzureCredential
+      
+      ml_client = MLClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
+          resource_group_name=os.environ["AZURE_RESOURCE_GROUP"],
+          workspace_name=os.environ["AZURE_ML_WORKSPACE_NAME"]
+      )
+      
+      # Use client for ML operations
+      workspace = ml_client.workspaces.get(os.environ["AZURE_ML_WORKSPACE_NAME"])
+      print(f"Connected to workspace: {workspace.name}")
+
+  # Workspace Management
+  - name: create_and_list_workspaces
+    prompt: |
+      Create a new Azure ML workspace with proper configuration, then list
+      all workspaces in the resource group. Include proper error handling.
+    expected_patterns:
+      - "Workspace"
+      - "begin_create"
+      - ".result()"
+      - "workspaces.list"
+    forbidden_patterns:
+      - "create_or_update"  # Workspaces use begin_create
+      - "Workspace()" # Must assign to variable first
+    tags:
+      - workspace
+      - basic
+    mock_response: |
+      import os
+      from azure.ai.ml import MLClient
+      from azure.ai.ml.entities import Workspace
+      from azure.identity import DefaultAzureCredential
+      
+      ml_client = MLClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
+          resource_group_name=os.environ["AZURE_RESOURCE_GROUP"],
+          workspace_name=os.environ["AZURE_ML_WORKSPACE_NAME"]
+      )
+      
+      # Create new workspace
+      ws = Workspace(
+          name="my-workspace",
+          location="eastus",
+          display_name="My ML Workspace",
+          description="Production ML workspace",
+          tags={"purpose": "training", "environment": "prod"}
+      )
+      
+      created_ws = ml_client.workspaces.begin_create(ws).result()
+      print(f"Created workspace: {created_ws.name}")
+      
+      # List all workspaces
+      workspaces = ml_client.workspaces.list()
+      for workspace in workspaces:
+          print(f"  {workspace.name}: {workspace.location}")
+
+  # Data Asset Registration
+  - name: register_data_assets
+    prompt: |
+      Register data assets (both files and folders) to an Azure ML workspace.
+      Use proper AssetTypes and azureml:// URI format for data paths.
+    expected_patterns:
+      - "Data"
+      - "AssetTypes"
+      - "azureml://"
+      - "create_or_update"
+      - "URI_FILE"
+      - "URI_FOLDER"
+    forbidden_patterns:
+      - "type=\"uri_file\""  # Must use AssetTypes.URI_FILE
+      - "./local/"  # Must use azureml:// URIs
+    tags:
+      - data
+      - assets
+    mock_response: |
+      import os
+      from azure.ai.ml import MLClient
+      from azure.ai.ml.entities import Data
+      from azure.ai.ml.constants import AssetTypes
+      from azure.identity import DefaultAzureCredential
+      
+      ml_client = MLClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
+          resource_group_name=os.environ["AZURE_RESOURCE_GROUP"],
+          workspace_name=os.environ["AZURE_ML_WORKSPACE_NAME"]
+      )
+      
+      # Register file dataset
+      training_data = Data(
+          name="training-dataset",
+          version="1",
+          path="azureml://datastores/workspaceblobstore/paths/data/train.csv",
+          type=AssetTypes.URI_FILE,
+          description="Training data for model"
+      )
+      ml_client.data.create_or_update(training_data)
+      
+      # Register folder dataset
+      validation_data = Data(
+          name="validation-dataset",
+          version="1",
+          path="azureml://datastores/workspaceblobstore/paths/data/validation/",
+          type=AssetTypes.URI_FOLDER,
+          description="Validation data folder"
+      )
+      ml_client.data.create_or_update(validation_data)
+      
+      # List registered data assets
+      data_assets = ml_client.data.list(name="training-dataset")
+      for data in data_assets:
+          print(f"  {data.name} v{data.version}: {data.path}")
+
+  # Model Registry
+  - name: register_and_retrieve_models
+    prompt: |
+      Register trained models to the Azure ML model registry with versioning.
+      Then retrieve and list models using proper SDK operations.
+    expected_patterns:
+      - "Model"
+      - "AssetTypes.CUSTOM_MODEL"
+      - "models.create_or_update"
+      - "models.get"
+      - "models.list"
+    forbidden_patterns:
+      - "type=\"custom_model\""  # Must use AssetTypes
+    tags:
+      - models
+      - registry
+    mock_response: |
+      import os
+      from azure.ai.ml import MLClient
+      from azure.ai.ml.entities import Model
+      from azure.ai.ml.constants import AssetTypes
+      from azure.identity import DefaultAzureCredential
+      
+      ml_client = MLClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
+          resource_group_name=os.environ["AZURE_RESOURCE_GROUP"],
+          workspace_name=os.environ["AZURE_ML_WORKSPACE_NAME"]
+      )
+      
+      # Register model
+      model = Model(
+          name="my-classifier",
+          version="1",
+          path="./models/classifier/",
+          type=AssetTypes.CUSTOM_MODEL,
+          description="Logistic regression classifier"
+      )
+      ml_client.models.create_or_update(model)
+      
+      # Retrieve specific model
+      retrieved_model = ml_client.models.get(name="my-classifier", version="1")
+      print(f"Model path: {retrieved_model.path}")
+      
+      # List all versions
+      models = ml_client.models.list(name="my-classifier")
+      for m in models:
+          print(f"  {m.name} v{m.version}")
+
+  # Compute Cluster Setup
+  - name: create_compute_cluster
+    prompt: |
+      Create an AML compute cluster with auto-scaling enabled.
+      Configure it for efficient training job execution.
+    expected_patterns:
+      - "AmlCompute"
+      - "begin_create_or_update"
+      - ".result()"
+      - "min_instances"
+      - "max_instances"
+    forbidden_patterns:
+      - "compute.create_or_update"
+      - "type=AmlCompute"  # type is string
+    tags:
+      - compute
+      - infrastructure
+    mock_response: |
+      import os
+      from azure.ai.ml import MLClient
+      from azure.ai.ml.entities import AmlCompute
+      from azure.identity import DefaultAzureCredential
+      
+      ml_client = MLClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
+          resource_group_name=os.environ["AZURE_RESOURCE_GROUP"],
+          workspace_name=os.environ["AZURE_ML_WORKSPACE_NAME"]
+      )
+      
+      # Create compute cluster with auto-scaling
+      cluster = AmlCompute(
+          name="training-cluster",
+          type="amlcompute",
+          size="Standard_D2s_v3",
+          min_instances=0,
+          max_instances=4,
+          idle_time_before_scale_down=120,
+          tier="dedicated"
+      )
+      
+      ml_client.compute.begin_create_or_update(cluster).result()
+      print("Compute cluster created")
+
+  # Job Submission and Monitoring
+  - name: submit_command_job
+    prompt: |
+      Submit a command job to Azure ML with inputs/outputs and proper
+      monitoring. Show how to check job status and retrieve results.
+    expected_patterns:
+      - "command"
+      - "Input"
+      - "create_or_update"
+      - "ml_client.jobs.stream"
+      - "job.status"
+    forbidden_patterns:
+      - "\\{\\{inputs"  # Must use ${{inputs.param}} format
+      - "Input(uri_folder"  # Must be quoted string
+    tags:
+      - jobs
+      - training
+    mock_response: |
+      import os
+      from azure.ai.ml import MLClient, command, Input
+      from azure.identity import DefaultAzureCredential
+      
+      ml_client = MLClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
+          resource_group_name=os.environ["AZURE_RESOURCE_GROUP"],
+          workspace_name=os.environ["AZURE_ML_WORKSPACE_NAME"]
+      )
+      
+      # Define training job
+      job = command(
+          code="./training",
+          command="python train.py --data ${{inputs.training_data}} --epochs ${{inputs.epochs}}",
+          inputs={
+              "training_data": Input(
+                  type="uri_folder",
+                  path="azureml:training-dataset:1"
+              ),
+              "epochs": 10
+          },
+          environment="AzureML-sklearn-1.0-ubuntu20.04-py38-cpu@latest",
+          compute="training-cluster",
+          display_name="model-training-job",
+          description="Train classification model"
+      )
+      
+      # Submit job
+      returned_job = ml_client.jobs.create_or_update(job)
+      print(f"Job submitted: {returned_job.name}")
+      
+      # Monitor job
+      ml_client.jobs.stream(returned_job.name)
+      
+      # Check final status
+      job = ml_client.jobs.get(returned_job.name)
+      if job.status == "Completed":
+          print("Job succeeded")
+      else:
+          print(f"Job status: {job.status}")
+
+  # Pipeline Definition and Execution
+  - name: define_ml_pipeline
+    prompt: |
+      Define a multi-step ML pipeline using @dsl.pipeline decorator.
+      Include data preprocessing and model training steps with proper
+      component composition.
+    expected_patterns:
+      - "@dsl.pipeline"
+      - "dsl.pipeline"
+      - "def.*pipeline"
+      - "return {"
+      - "ml_client.jobs.create_or_update"
+    forbidden_patterns:
+      - "return step"  # Must return dict with outputs
+      - "pipeline()"  # Don't call function before submission
+    tags:
+      - pipelines
+      - advanced
+    mock_response: |
+      import os
+      from azure.ai.ml import MLClient, dsl, Input
+      from azure.identity import DefaultAzureCredential
+      
+      ml_client = MLClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
+          resource_group_name=os.environ["AZURE_RESOURCE_GROUP"],
+          workspace_name=os.environ["AZURE_ML_WORKSPACE_NAME"]
+      )
+      
+      # Get registered components
+      prep_component = ml_client.components.get(name="prep", version="1")
+      train_component = ml_client.components.get(name="train", version="1")
+      
+      # Define pipeline
+      @dsl.pipeline(
+          compute="training-cluster",
+          description="End-to-end ML training pipeline"
+      )
+      def training_pipeline(data_input):
+          # Data preprocessing step
+          prep_step = prep_component(raw_data=data_input)
+          
+          # Model training step
+          train_step = train_component(
+              training_data=prep_step.outputs.prepared_data,
+              learning_rate=0.01,
+              epochs=20
+          )
+          
+          return {"trained_model": train_step.outputs.model}
+      
+      # Create pipeline job
+      pipeline = training_pipeline(
+          data_input=Input(
+              type="uri_folder",
+              path="azureml:training-dataset:1"
+          )
+      )
+      
+      # Submit pipeline
+      pipeline_job = ml_client.jobs.create_or_update(pipeline)
+      print(f"Pipeline submitted: {pipeline_job.name}")
+
+  # Environment and Dependencies
+  - name: create_custom_environment
+    prompt: |
+      Create a custom Azure ML environment with conda dependencies
+      and custom Docker image. Use it to run training jobs.
+    expected_patterns:
+      - "Environment"
+      - "environments.create_or_update"
+      - "conda_file"
+      - "mcr.microsoft.com"
+    forbidden_patterns:
+      - "inline_conda"  # Must use conda_file, not inline
+      - "requirements.txt"  # Must use conda or pip in yml
+    tags:
+      - environments
+      - advanced
+    mock_response: |
+      import os
+      from azure.ai.ml import MLClient
+      from azure.ai.ml.entities import Environment
+      from azure.identity import DefaultAzureCredential
+      
+      ml_client = MLClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
+          resource_group_name=os.environ["AZURE_RESOURCE_GROUP"],
+          workspace_name=os.environ["AZURE_ML_WORKSPACE_NAME"]
+      )
+      
+      # Create custom environment
+      env = Environment(
+          name="custom-ml-env",
+          version="1",
+          image="mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04",
+          conda_file="./environment.yml",
+          description="Custom environment for training"
+      )
+      
+      ml_client.environments.create_or_update(env)
+      print("Environment created")
+
+  # List and Query Operations
+  - name: query_ml_resources
+    prompt: |
+      Query and list various ML resources (workspaces, datasets, models,
+      compute) to demonstrate discovery and inventory operations.
+    expected_patterns:
+      - ".list()"
+      - "for .* in"
+      - "workspaces.list"
+      - "data.list"
+      - "models.list"
+    tags:
+      - query
+      - basic
+    mock_response: |
+      import os
+      from azure.ai.ml import MLClient
+      from azure.identity import DefaultAzureCredential
+      
+      ml_client = MLClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
+          resource_group_name=os.environ["AZURE_RESOURCE_GROUP"],
+          workspace_name=os.environ["AZURE_ML_WORKSPACE_NAME"]
+      )
+      
+      # List workspaces
+      print("Workspaces:")
+      for ws in ml_client.workspaces.list():
+          print(f"  {ws.name}")
+      
+      # List data assets
+      print("Data assets:")
+      for data in ml_client.data.list():
+          print(f"  {data.name} v{data.version}")
+      
+      # List models
+      print("Models:")
+      for model in ml_client.models.list():
+          print(f"  {model.name} v{model.version}")
+      
+      # List compute resources
+      print("Compute:")
+      for compute in ml_client.compute.list():
+          print(f"  {compute.name}: {compute.type}")

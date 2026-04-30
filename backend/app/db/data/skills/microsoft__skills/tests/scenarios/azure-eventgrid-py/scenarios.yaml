@@ -1,0 +1,232 @@
+# Test scenarios for azure-eventgrid-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+type: skill_scenarios
+name: azure-eventgrid-py
+leakspeed: ""
+description: ""
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: basic_cloudevent_publish
+    prompt: |
+      Publish a single CloudEvent to an Event Grid custom topic.
+      Use DefaultAzureCredential, environment variables, and proper imports.
+    expected_patterns:
+      - "CloudEvent"
+      - "EventGridPublisherClient"
+      - "DefaultAzureCredential"
+      - "EVENTGRID_TOPIC_ENDPOINT"
+      - "client.send(event)"
+    forbidden_patterns:
+      - "AzureKeyCredential"
+      - "eventType"
+    tags:
+      - basic
+      - cloudevent
+    mock_response: |
+      import os
+      from azure.eventgrid import EventGridPublisherClient, CloudEvent
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["EVENTGRID_TOPIC_ENDPOINT"]
+      credential = DefaultAzureCredential()
+      
+      with EventGridPublisherClient(endpoint, credential) as client:
+          event = CloudEvent(
+              type="MyApp.Events.ItemCreated",
+              source="/myapp/items",
+              data={"item_id": "123"},
+          )
+          client.send(event)
+
+  - name: batch_cloudevent_publish
+    prompt: |
+      Send a batch of CloudEvents to Event Grid using a list.
+      Use DefaultAzureCredential and a topic endpoint from env.
+    expected_patterns:
+      - "client.send(events)"
+      - "CloudEvent"
+      - "for i in range"
+    forbidden_patterns:
+      - "send_event"
+    tags:
+      - batch
+      - cloudevent
+    mock_response: |
+      import os
+      from azure.eventgrid import EventGridPublisherClient, CloudEvent
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["EVENTGRID_TOPIC_ENDPOINT"]
+      client = EventGridPublisherClient(endpoint, DefaultAzureCredential())
+      
+      events = [
+          CloudEvent(
+              type="MyApp.Events.OrderCreated",
+              source="/myapp/orders",
+              data={"order_id": f"order-{i}"},
+          )
+          for i in range(3)
+      ]
+      client.send(events)
+      client.close()
+
+  - name: eventgridevent_publish
+    prompt: |
+      Publish an EventGridEvent with required fields and data_version.
+      Use DefaultAzureCredential and the EventGridPublisherClient.
+    expected_patterns:
+      - "EventGridEvent"
+      - "data_version"
+      - "event_type"
+    forbidden_patterns:
+      - "eventType"
+    tags:
+      - eventgridevent
+      - basic
+    mock_response: |
+      import os
+      from azure.eventgrid import EventGridPublisherClient, EventGridEvent
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["EVENTGRID_TOPIC_ENDPOINT"]
+      client = EventGridPublisherClient(endpoint, DefaultAzureCredential())
+      
+      event = EventGridEvent(
+          subject="/myapp/items/123",
+          event_type="MyApp.Events.ItemCreated",
+          data={"item_id": "123"},
+          data_version="1.0",
+      )
+      client.send(event)
+      client.close()
+
+  - name: cloudevent_optional_properties
+    prompt: |
+      Create a CloudEvent with optional properties like subject and dataschema
+      and send it to Event Grid.
+    expected_patterns:
+      - "datacontenttype"
+      - "dataschema"
+      - "extensions"
+    tags:
+      - cloudevent
+      - properties
+    mock_response: |
+      import os
+      from datetime import datetime, timezone
+      from azure.eventgrid import EventGridPublisherClient, CloudEvent
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["EVENTGRID_TOPIC_ENDPOINT"]
+      client = EventGridPublisherClient(endpoint, DefaultAzureCredential())
+      
+      event = CloudEvent(
+          type="MyApp.Events.ItemUpdated",
+          source="/myapp/items",
+          data={"item_id": "123"},
+          subject="items/123",
+          datacontenttype="application/json",
+          dataschema="https://schema.example/items.json",
+          time=datetime.now(timezone.utc),
+          extensions={"traceId": "abc"},
+      )
+      client.send(event)
+      client.close()
+
+  - name: async_cloudevent_publish
+    prompt: |
+      Publish a CloudEvent using the async EventGridPublisherClient.
+      Use async with and await client.send.
+    expected_patterns:
+      - "from azure.eventgrid.aio import EventGridPublisherClient"
+      - "async with"
+      - "await client.send"
+      - "from azure.identity.aio import DefaultAzureCredential"
+    forbidden_patterns:
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - async
+      - cloudevent
+    mock_response: |
+      import os
+      import asyncio
+      from azure.eventgrid.aio import EventGridPublisherClient
+      from azure.eventgrid import CloudEvent
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def main():
+          endpoint = os.environ["EVENTGRID_TOPIC_ENDPOINT"]
+          async with EventGridPublisherClient(endpoint, DefaultAzureCredential()) as client:
+              event = CloudEvent(
+                  type="MyApp.Events.Test",
+                  source="/myapp",
+                  data={"message": "hello"},
+              )
+              await client.send(event)
+      
+      asyncio.run(main())
+
+  - name: namespace_topic_publish
+    prompt: |
+      Publish to an Event Grid namespace topic using the namespace endpoint.
+      Use the async client and namespace_topic parameter.
+    expected_patterns:
+      - "EVENTGRID_NAMESPACE_ENDPOINT"
+      - "namespace_topic"
+      - "async with EventGridPublisherClient"
+    tags:
+      - namespace
+      - async
+    mock_response: |
+      import os
+      import asyncio
+      from azure.eventgrid.aio import EventGridPublisherClient
+      from azure.eventgrid import CloudEvent
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def main():
+          namespace_endpoint = os.environ["EVENTGRID_NAMESPACE_ENDPOINT"]
+          topic_name = "my-topic"
+          async with EventGridPublisherClient(namespace_endpoint, DefaultAzureCredential()) as client:
+              event = CloudEvent(
+                  type="MyApp.Events.Created",
+                  source="/myapp/items",
+                  data={"id": "123"},
+              )
+              await client.send(event, namespace_topic=topic_name)
+      
+      asyncio.run(main())
+
+  - name: context_manager_client_usage
+    prompt: |
+      Show using EventGridPublisherClient with a context manager to ensure cleanup.
+    expected_patterns:
+      - "with EventGridPublisherClient"
+      - "client.send"
+    forbidden_patterns:
+      - "client = EventGridPublisherClient("
+      - "client.close()"
+    tags:
+      - cleanup
+      - basic
+    mock_response: |
+      import os
+      from azure.eventgrid import EventGridPublisherClient, CloudEvent
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["EVENTGRID_TOPIC_ENDPOINT"]
+      credential = DefaultAzureCredential()
+      
+      with EventGridPublisherClient(endpoint, credential) as client:
+          event = CloudEvent(
+              type="MyApp.Events.ItemDeleted",
+              source="/myapp/items",
+              data={"item_id": "999"},
+          )
+          client.send(event)

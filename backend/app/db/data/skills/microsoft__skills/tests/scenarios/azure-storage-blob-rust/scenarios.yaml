@@ -1,0 +1,104 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-storage-blob-rust skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: create_blob_client
+    prompt: |
+      Create a BlobClient in Rust using DeveloperToolsCredential for 
+      Microsoft Entra ID authentication.
+    expected_patterns:
+      - "DeveloperToolsCredential"
+      - "BlobClient"
+      - "blob.core.windows.net"
+    forbidden_patterns:
+      - "connection_string"
+      - "account_key"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      use azure_identity::DeveloperToolsCredential;
+      use azure_storage_blob::{BlobClient, BlobClientOptions};
+
+      let credential = DeveloperToolsCredential::new(None)?;
+      let blob_client = BlobClient::new(
+          "https://<account>.blob.core.windows.net/",
+          "container-name",
+          "blob-name",
+          Some(credential),
+          Some(BlobClientOptions::default()),
+      )?;
+
+  - name: upload_blob
+    prompt: |
+      Upload data to a blob in Azure Storage using Rust.
+    expected_patterns:
+      - "upload"
+      - "RequestContent"
+      - "overwrite"
+    forbidden_patterns:
+      - "download"
+    tags:
+      - upload
+      - write
+    mock_response: |
+      use azure_core::http::RequestContent;
+
+      let data = b"hello world";
+      blob_client
+          .upload(
+              RequestContent::from(data.to_vec()),
+              false,  // overwrite
+              u64::try_from(data.len())?,
+              None,
+          )
+          .await?;
+
+  - name: download_blob
+    prompt: |
+      Download a blob from Azure Storage and get its content as bytes.
+    expected_patterns:
+      - "download"
+      - "into_body"
+      - "collect"
+    forbidden_patterns:
+      - "upload"
+    tags:
+      - download
+      - read
+    mock_response: |
+      let response = blob_client.download(None).await?;
+      let content = response.into_body().collect_bytes().await?;
+      println!("Content: {:?}", content);
+
+  - name: get_blob_properties
+    prompt: |
+      Get the properties of a blob in Azure Storage using Rust.
+    expected_patterns:
+      - "get_properties"
+    forbidden_patterns:
+      - "set_properties"
+    tags:
+      - properties
+      - metadata
+    mock_response: |
+      let properties = blob_client.get_properties(None).await?;
+      println!("Content-Length: {:?}", properties.content_length);
+
+  - name: delete_blob
+    prompt: |
+      Delete a blob from Azure Storage using the Rust SDK.
+    expected_patterns:
+      - "delete"
+    forbidden_patterns:
+      - "create"
+    tags:
+      - delete
+    mock_response: |
+      blob_client.delete(None).await?;

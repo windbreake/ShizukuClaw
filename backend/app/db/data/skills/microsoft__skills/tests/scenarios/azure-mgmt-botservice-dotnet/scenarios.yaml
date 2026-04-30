@@ -1,0 +1,385 @@
+# Test scenarios for azure-mgmt-botservice-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Create Bot Resource
+  - name: create_bot_resource
+    prompt: |
+      Create an Azure Bot resource in C# using the Azure.ResourceManager.BotService SDK
+      with proper authentication and MSA App configuration.
+    expected_patterns:
+      - "ArmClient"
+      - "DefaultAzureCredential"
+      - "GetBots"
+      - "BotData"
+      - "BotServiceKind"
+      - "BotServiceSku"
+      - "BotProperties"
+      - "msaAppId"
+      - "CreateOrUpdateAsync"
+    tags:
+      - basic
+      - bot
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.BotService;
+      using Azure.ResourceManager.BotService.Models;
+
+      var credential = new DefaultAzureCredential();
+      ArmClient armClient = new ArmClient(credential);
+
+      SubscriptionResource subscription = await armClient.GetDefaultSubscriptionAsync();
+      ResourceGroupResource resourceGroup = await subscription.GetResourceGroups().GetAsync("myResourceGroup");
+
+      BotCollection botCollection = resourceGroup.GetBots();
+
+      var botData = new BotData(AzureLocation.WestUS2)
+      {
+          Kind = BotServiceKind.Azurebot,
+          Sku = new BotServiceSku(BotServiceSkuName.F0),
+          Properties = new BotProperties(
+              displayName: "MyBot",
+              endpoint: new Uri("https://mybot.azurewebsites.net/api/messages"),
+              msaAppId: "<your-msa-app-id>")
+          {
+              Description = "My Azure Bot",
+              MsaAppType = BotMsaAppType.MultiTenant
+          }
+      };
+
+      ArmOperation<BotResource> operation = await botCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "myBotName",
+          botData);
+
+      BotResource bot = operation.Value;
+      Console.WriteLine($"Bot created: {bot.Data.Name}");
+
+  # Configure DirectLine Channel
+  - name: configure_directline_channel
+    prompt: |
+      Configure a DirectLine channel for an Azure Bot with secure site enabled.
+    expected_patterns:
+      - "GetBotChannels"
+      - "BotChannelData"
+      - "DirectLineChannel"
+      - "DirectLineChannelProperties"
+      - "DirectLineSite"
+      - "BotChannelName.DirectLineChannel"
+      - "IsSecureSiteEnabled"
+    tags:
+      - channel
+      - directline
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.BotService;
+      using Azure.ResourceManager.BotService.Models;
+
+      var credential = new DefaultAzureCredential();
+      ArmClient armClient = new ArmClient(credential);
+
+      var subscription = await armClient.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroups().GetAsync("myResourceGroup");
+      BotResource bot = await resourceGroup.GetBots().GetAsync("myBotName");
+
+      BotChannelCollection channels = bot.GetBotChannels();
+
+      var channelData = new BotChannelData(AzureLocation.WestUS2)
+      {
+          Properties = new DirectLineChannel()
+          {
+              Properties = new DirectLineChannelProperties()
+              {
+                  Sites =
+                  {
+                      new DirectLineSite("Default Site")
+                      {
+                          IsEnabled = true,
+                          IsV1Enabled = false,
+                          IsV3Enabled = true,
+                          IsSecureSiteEnabled = true
+                      }
+                  }
+              }
+          }
+      };
+
+      ArmOperation<BotChannelResource> channelOp = await channels.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          BotChannelName.DirectLineChannel,
+          channelData);
+
+      Console.WriteLine("DirectLine channel configured");
+
+  # Configure Teams Channel
+  - name: configure_teams_channel
+    prompt: |
+      Configure a Microsoft Teams channel for an Azure Bot.
+    expected_patterns:
+      - "MsTeamsChannel"
+      - "MsTeamsChannelProperties"
+      - "BotChannelName.MsTeamsChannel"
+      - "IsEnabled"
+    tags:
+      - channel
+      - teams
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.BotService;
+      using Azure.ResourceManager.BotService.Models;
+
+      var credential = new DefaultAzureCredential();
+      ArmClient armClient = new ArmClient(credential);
+
+      var subscription = await armClient.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroups().GetAsync("myResourceGroup");
+      BotResource bot = await resourceGroup.GetBots().GetAsync("myBotName");
+
+      BotChannelCollection channels = bot.GetBotChannels();
+
+      var teamsChannelData = new BotChannelData(AzureLocation.WestUS2)
+      {
+          Properties = new MsTeamsChannel()
+          {
+              Properties = new MsTeamsChannelProperties()
+              {
+                  IsEnabled = true,
+                  EnableCalling = false
+              }
+          }
+      };
+
+      await channels.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          BotChannelName.MsTeamsChannel,
+          teamsChannelData);
+
+      Console.WriteLine("Teams channel configured");
+
+  # Configure Web Chat Channel
+  - name: configure_webchat_channel
+    prompt: |
+      Configure a Web Chat channel for an Azure Bot.
+    expected_patterns:
+      - "WebChatChannel"
+      - "WebChatChannelProperties"
+      - "WebChatSite"
+      - "BotChannelName.WebChatChannel"
+    tags:
+      - channel
+      - webchat
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.BotService;
+      using Azure.ResourceManager.BotService.Models;
+
+      var credential = new DefaultAzureCredential();
+      ArmClient armClient = new ArmClient(credential);
+
+      var subscription = await armClient.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroups().GetAsync("myResourceGroup");
+      BotResource bot = await resourceGroup.GetBots().GetAsync("myBotName");
+
+      BotChannelCollection channels = bot.GetBotChannels();
+
+      var webChatChannelData = new BotChannelData(AzureLocation.WestUS2)
+      {
+          Properties = new WebChatChannel()
+          {
+              Properties = new WebChatChannelProperties()
+              {
+                  Sites =
+                  {
+                      new WebChatSite("Default Site")
+                      {
+                          IsEnabled = true
+                      }
+                  }
+              }
+          }
+      };
+
+      await channels.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          BotChannelName.WebChatChannel,
+          webChatChannelData);
+
+      Console.WriteLine("Web Chat channel configured");
+
+  # List Bots and Channels
+  - name: list_bots_channels
+    prompt: |
+      List all bots in a resource group and their configured channels.
+    expected_patterns:
+      - "GetBots"
+      - "await foreach"
+      - "GetBotChannels"
+      - "GetAllAsync"
+    tags:
+      - list
+      - management
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.BotService;
+      using Azure.ResourceManager.BotService.Models;
+
+      var credential = new DefaultAzureCredential();
+      ArmClient armClient = new ArmClient(credential);
+
+      var subscription = await armClient.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroups().GetAsync("myResourceGroup");
+
+      BotCollection botCollection = resourceGroup.GetBots();
+
+      // List all bots
+      await foreach (BotResource bot in botCollection.GetAllAsync())
+      {
+          Console.WriteLine($"Bot: {bot.Data.Properties.DisplayName}");
+          Console.WriteLine($"  Endpoint: {bot.Data.Properties.Endpoint}");
+
+          // List channels
+          await foreach (BotChannelResource channel in bot.GetBotChannels().GetAllAsync())
+          {
+              Console.WriteLine($"  Channel: {channel.Data.Name}");
+          }
+      }
+
+  # Update Bot
+  - name: update_bot
+    prompt: |
+      Update an existing Azure Bot's display name and description.
+    expected_patterns:
+      - "GetBots"
+      - "GetAsync"
+      - "UpdateAsync"
+      - "BotData"
+      - "DisplayName"
+    tags:
+      - update
+      - management
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.BotService;
+      using Azure.ResourceManager.BotService.Models;
+
+      var credential = new DefaultAzureCredential();
+      ArmClient armClient = new ArmClient(credential);
+
+      var subscription = await armClient.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroups().GetAsync("myResourceGroup");
+
+      BotResource bot = await resourceGroup.GetBots().GetAsync("myBotName");
+
+      var updateData = new BotData(bot.Data.Location)
+      {
+          Properties = new BotProperties(
+              displayName: "Updated Bot Name",
+              endpoint: bot.Data.Properties.Endpoint,
+              msaAppId: bot.Data.Properties.MsaAppId)
+          {
+              Description = "Updated description"
+          }
+      };
+
+      await bot.UpdateAsync(updateData);
+      Console.WriteLine("Bot updated");
+
+  # Delete Bot
+  - name: delete_bot
+    prompt: |
+      Delete an Azure Bot resource.
+    expected_patterns:
+      - "DeleteAsync"
+      - "WaitUntil.Completed"
+    tags:
+      - delete
+      - cleanup
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.BotService;
+
+      var credential = new DefaultAzureCredential();
+      ArmClient armClient = new ArmClient(credential);
+
+      var subscription = await armClient.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroups().GetAsync("myResourceGroup");
+
+      BotResource bot = await resourceGroup.GetBots().GetAsync("myBotName");
+      await bot.DeleteAsync(WaitUntil.Completed);
+
+      Console.WriteLine("Bot deleted");
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Implement proper error handling for Azure Bot Service operations.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status"
+      - "catch"
+      - "when"
+    tags:
+      - error-handling
+      - best-practice
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.BotService;
+      using Azure.ResourceManager.BotService.Models;
+
+      var credential = new DefaultAzureCredential();
+      ArmClient armClient = new ArmClient(credential);
+
+      try
+      {
+          var subscription = await armClient.GetDefaultSubscriptionAsync();
+          var resourceGroup = await subscription.GetResourceGroups().GetAsync("myResourceGroup");
+          var botCollection = resourceGroup.GetBots();
+
+          var botData = new BotData(AzureLocation.WestUS2)
+          {
+              Kind = BotServiceKind.Azurebot,
+              Sku = new BotServiceSku(BotServiceSkuName.F0),
+              Properties = new BotProperties(
+                  displayName: "MyBot",
+                  endpoint: new Uri("https://mybot.azurewebsites.net/api/messages"),
+                  msaAppId: "<msa-app-id>")
+          };
+
+          var operation = await botCollection.CreateOrUpdateAsync(
+              WaitUntil.Completed,
+              "myBotName",
+              botData);
+      }
+      catch (RequestFailedException ex) when (ex.Status == 409)
+      {
+          Console.WriteLine("Bot already exists");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 400)
+      {
+          Console.WriteLine($"Bad request: {ex.Message}");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"ARM Error: {ex.Status} - {ex.ErrorCode}: {ex.Message}");
+      }

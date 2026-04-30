@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "dgSpecHash": "dXk3bdDW+Qw=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\win11\\Desktop\\ShizukuClaw-alpha1.0debugging\\backend\\app\\agent_datas\\workspace\\NekoPixelArtGenerator\\PixelArtGenerator.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\win11\\.nuget\\packages\\microsoft.win32.systemevents\\6.0.0\\microsoft.win32.systemevents.6.0.0.nupkg.sha512",
+    "C:\\Users\\win11\\.nuget\\packages\\system.drawing.common\\6.0.0\\system.drawing.common.6.0.0.nupkg.sha512",
+    "C:\\Users\\win11\\.nuget\\packages\\microsoft.netcore.app.ref\\6.0.36\\microsoft.netcore.app.ref.6.0.36.nupkg.sha512",
+    "C:\\Users\\win11\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\6.0.36\\microsoft.windowsdesktop.app.ref.6.0.36.nupkg.sha512",
+    "C:\\Users\\win11\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\6.0.36\\microsoft.aspnetcore.app.ref.6.0.36.nupkg.sha512",
+    "C:\\Users\\win11\\.nuget\\packages\\microsoft.netcore.app.host.win-x64\\6.0.36\\microsoft.netcore.app.host.win-x64.6.0.36.nupkg.sha512"
+  ],
+  "logs": []
+}

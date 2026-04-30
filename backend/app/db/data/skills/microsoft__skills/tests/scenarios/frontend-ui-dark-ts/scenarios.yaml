@@ -1,0 +1,491 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for frontend-ui-dark-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Glass Card Component
+  - name: glass_card_component
+    prompt: |
+      Create a React TypeScript glass card component with dark theme
+      styling using Tailwind CSS utility classes.
+    expected_patterns:
+      - "glass-card"
+      - "text-text-primary"
+      - "text-text-secondary"
+      - "motion"
+    forbidden_patterns:
+      - "bg-white"
+      - "bg-gray-100"
+    tags:
+      - components
+      - glass
+    mock_response: |
+      import { motion } from 'framer-motion';
+      import clsx from 'clsx';
+
+      interface CardProps {
+        children: React.ReactNode;
+        className?: string;
+      }
+
+      export function Card({ children, className }: CardProps) {
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={clsx('glass-card p-6', className)}
+          >
+            {children}
+          </motion.div>
+        );
+      }
+
+      // Usage
+      <Card>
+        <h2 className="text-lg font-semibold text-text-primary">Card Title</h2>
+        <p className="text-text-secondary mt-2">Card content goes here.</p>
+      </Card>
+
+  # Button Component with Variants
+  - name: button_component_variants
+    prompt: |
+      Create a React TypeScript button component with primary, secondary,
+      and ghost variants using Tailwind CSS and Framer Motion.
+    expected_patterns:
+      - "bg-brand"
+      - "hover:bg-brand-hover"
+      - "whileHover"
+      - "whileTap"
+      - "clsx"
+    forbidden_patterns:
+      - "bg-blue-500"
+      - "hover:bg-blue-600"
+    tags:
+      - components
+      - buttons
+    mock_response: |
+      import { motion } from 'framer-motion';
+      import clsx from 'clsx';
+
+      interface ButtonProps {
+        variant?: 'primary' | 'secondary' | 'ghost';
+        size?: 'sm' | 'md' | 'lg';
+        children: React.ReactNode;
+        onClick?: () => void;
+      }
+
+      export function Button({ variant = 'primary', size = 'md', children, onClick }: ButtonProps) {
+        return (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={clsx(
+              'rounded-lg font-medium transition-colors',
+              variant === 'primary' && 'bg-brand hover:bg-brand-hover text-white',
+              variant === 'secondary' && 'bg-neutral-bg3 hover:bg-neutral-bg4 text-text-primary',
+              variant === 'ghost' && 'hover:bg-neutral-bg3 text-text-secondary',
+              size === 'sm' && 'px-3 py-1.5 text-sm',
+              size === 'md' && 'px-4 py-2 text-sm',
+              size === 'lg' && 'px-6 py-3 text-base',
+            )}
+            onClick={onClick}
+          >
+            {children}
+          </motion.button>
+        );
+      }
+
+  # Page Transition Wrapper
+  - name: page_transition_wrapper
+    prompt: |
+      Create a React TypeScript page transition wrapper component using
+      Framer Motion with fade and slide animations.
+    expected_patterns:
+      - "motion.div"
+      - "initial"
+      - "animate"
+      - "exit"
+      - "transition"
+    forbidden_patterns:
+      - "CSS transitions"
+    tags:
+      - animations
+      - transitions
+    mock_response: |
+      import { motion } from 'framer-motion';
+      import { ReactNode } from 'react';
+
+      interface PageTransitionProps {
+        children: ReactNode;
+      }
+
+      export function PageTransition({ children }: PageTransitionProps) {
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+          >
+            {children}
+          </motion.div>
+        );
+      }
+
+  # Stagger Animation List
+  - name: stagger_animation_list
+    prompt: |
+      Create a React TypeScript list component that staggers the animation
+      of its children using Framer Motion variants.
+    expected_patterns:
+      - "staggerChildren"
+      - "delayChildren"
+      - "variants"
+      - "motion.ul"
+      - "motion.li"
+    forbidden_patterns:
+      - "setTimeout"
+    tags:
+      - animations
+      - lists
+    mock_response: |
+      import { motion } from 'framer-motion';
+
+      const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: {
+          opacity: 1,
+          transition: {
+            staggerChildren: 0.05,
+            delayChildren: 0.1,
+          },
+        },
+      };
+
+      const itemVariants = {
+        hidden: { opacity: 0, y: 10 },
+        visible: {
+          opacity: 1,
+          y: 0,
+          transition: { duration: 0.2, ease: 'easeOut' },
+        },
+      };
+
+      interface StaggerListProps {
+        items: string[];
+      }
+
+      export function StaggerList({ items }: StaggerListProps) {
+        return (
+          <motion.ul
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="space-y-2"
+          >
+            {items.map((item, index) => (
+              <motion.li
+                key={index}
+                variants={itemVariants}
+                className="glass-card p-4 text-text-primary"
+              >
+                {item}
+              </motion.li>
+            ))}
+          </motion.ul>
+        );
+      }
+
+  # Modal with Glass Overlay
+  - name: modal_glass_overlay
+    prompt: |
+      Create a React TypeScript modal component with glass overlay effect
+      and Framer Motion animations.
+    expected_patterns:
+      - "glass-overlay"
+      - "glass-card"
+      - "AnimatePresence"
+      - "motion.div"
+      - "fixed inset-0"
+    forbidden_patterns:
+      - "bg-black opacity-50"
+    tags:
+      - components
+      - modal
+      - glass
+    mock_response: |
+      import { motion, AnimatePresence } from 'framer-motion';
+
+      interface ModalProps {
+        isOpen: boolean;
+        onClose: () => void;
+        children: React.ReactNode;
+      }
+
+      export function Modal({ isOpen, onClose, children }: ModalProps) {
+        return (
+          <AnimatePresence>
+            {isOpen && (
+              <motion.div
+                className="fixed inset-0 glass-overlay flex items-center justify-center z-50"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+              >
+                <motion.div
+                  className="glass-card p-6 max-w-md w-full mx-4"
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {children}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        );
+      }
+
+  # App Shell Layout
+  - name: app_shell_layout
+    prompt: |
+      Create a React TypeScript app shell layout with a sidebar and
+      main content area using dark theme styling.
+    expected_patterns:
+      - "min-h-screen"
+      - "bg-neutral-bg1"
+      - "flex"
+      - "glass-panel"
+    forbidden_patterns:
+      - "bg-white"
+      - "bg-gray-50"
+    tags:
+      - layout
+      - shell
+    mock_response: |
+      import { ReactNode } from 'react';
+
+      interface AppShellProps {
+        children: ReactNode;
+      }
+
+      export function AppShell({ children }: AppShellProps) {
+        return (
+          <div className="min-h-screen bg-neutral-bg1 flex">
+            <aside className="glass-panel w-64 h-screen p-4 flex flex-col">
+              <div className="text-text-primary font-semibold text-lg mb-6">
+                App Logo
+              </div>
+              <nav className="space-y-2 flex-1">
+                <a href="/" className="block px-4 py-2 rounded-lg bg-brand-subtle text-text-primary">
+                  Dashboard
+                </a>
+                <a href="/settings" className="block px-4 py-2 rounded-lg hover:bg-neutral-bg3 text-text-secondary">
+                  Settings
+                </a>
+              </nav>
+            </aside>
+            <main className="flex-1 p-6">
+              {children}
+            </main>
+          </div>
+        );
+      }
+
+  # Input Component
+  - name: input_component
+    prompt: |
+      Create a React TypeScript input component with dark theme styling
+      using the glass-input utility class.
+    expected_patterns:
+      - "glass-input"
+      - "text-text-primary"
+      - "placeholder"
+      - "focus:border-brand"
+    forbidden_patterns:
+      - "bg-white"
+      - "border-gray-300"
+    tags:
+      - components
+      - forms
+    mock_response: |
+      import clsx from 'clsx';
+
+      interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+        label?: string;
+        error?: string;
+      }
+
+      export function Input({ label, error, className, ...props }: InputProps) {
+        return (
+          <div className="space-y-1">
+            {label && (
+              <label className="text-sm font-medium text-text-secondary">
+                {label}
+              </label>
+            )}
+            <input
+              className={clsx(
+                'glass-input px-4 py-2 rounded-lg w-full text-text-primary',
+                'placeholder:text-text-muted',
+                error && 'border-status-error',
+                className
+              )}
+              {...props}
+            />
+            {error && (
+              <p className="text-xs text-status-error">{error}</p>
+            )}
+          </div>
+        );
+      }
+
+  # Tailwind Config
+  - name: tailwind_config
+    prompt: |
+      Create a Tailwind CSS configuration file with custom colors for
+      a dark theme including brand, neutral, text, and status colors.
+    expected_patterns:
+      - "brand"
+      - "#8251EE"
+      - "neutral"
+      - "bg1"
+      - "text-primary"
+      - "hsl"
+    forbidden_patterns:
+      - "gray-50"
+      - "white"
+    tags:
+      - configuration
+      - tailwind
+    mock_response: |
+      /** @type {import('tailwindcss').Config} */
+      export default {
+        content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Segoe UI', 'system-ui', 'sans-serif'],
+            },
+            colors: {
+              brand: {
+                DEFAULT: '#8251EE',
+                hover: '#9366F5',
+                light: '#A37EF5',
+                subtle: 'rgba(130, 81, 238, 0.15)',
+              },
+              neutral: {
+                bg1: 'hsl(240, 6%, 10%)',
+                bg2: 'hsl(240, 5%, 12%)',
+                bg3: 'hsl(240, 5%, 14%)',
+                bg4: 'hsl(240, 4%, 18%)',
+                bg5: 'hsl(240, 4%, 22%)',
+                bg6: 'hsl(240, 4%, 26%)',
+              },
+              text: {
+                primary: '#FFFFFF',
+                secondary: '#A1A1AA',
+                muted: '#71717A',
+              },
+              border: {
+                subtle: 'hsla(0, 0%, 100%, 0.08)',
+                DEFAULT: 'hsla(0, 0%, 100%, 0.12)',
+                strong: 'hsla(0, 0%, 100%, 0.20)',
+              },
+              status: {
+                success: '#10B981',
+                warning: '#F59E0B',
+                error: '#EF4444',
+                info: '#3B82F6',
+              },
+            },
+          },
+        },
+        plugins: [],
+      };
+
+  # App Entry Point
+  - name: app_entry_point
+    prompt: |
+      Create the main App.tsx entry point with React Router and
+      AnimatePresence for page transitions.
+    expected_patterns:
+      - "Routes"
+      - "Route"
+      - "AnimatePresence"
+      - "mode=\"wait\""
+    forbidden_patterns:
+      - "Switch"
+      - "component="
+    tags:
+      - app
+      - routing
+    mock_response: |
+      import { Routes, Route, useLocation } from 'react-router-dom';
+      import { AnimatePresence } from 'framer-motion';
+      import { AppShell } from './components/layout/AppShell';
+      import { Dashboard } from './pages/Dashboard';
+      import { Settings } from './pages/Settings';
+
+      export default function App() {
+        const location = useLocation();
+
+        return (
+          <AppShell>
+            <AnimatePresence mode="wait">
+              <Routes location={location} key={location.pathname}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/settings" element={<Settings />} />
+              </Routes>
+            </AnimatePresence>
+          </AppShell>
+        );
+      }
+
+  # Status Badge Component
+  - name: status_badge_component
+    prompt: |
+      Create a React TypeScript badge component with status variants
+      (success, warning, error, info) using dark theme colors.
+    expected_patterns:
+      - "status-success"
+      - "status-warning"
+      - "status-error"
+      - "status-info"
+      - "clsx"
+    forbidden_patterns:
+      - "bg-green-100"
+      - "text-green-800"
+    tags:
+      - components
+      - status
+    mock_response: |
+      import clsx from 'clsx';
+
+      interface BadgeProps {
+        variant: 'success' | 'warning' | 'error' | 'info';
+        children: React.ReactNode;
+      }
+
+      export function Badge({ variant, children }: BadgeProps) {
+        return (
+          <span
+            className={clsx(
+              'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+              variant === 'success' && 'bg-status-success/20 text-status-success',
+              variant === 'warning' && 'bg-status-warning/20 text-status-warning',
+              variant === 'error' && 'bg-status-error/20 text-status-error',
+              variant === 'info' && 'bg-status-info/20 text-status-info',
+            )}
+          >
+            {children}
+          </span>
+        );
+      }

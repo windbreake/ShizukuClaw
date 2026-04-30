@@ -1,0 +1,223 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-security-keyvault-keys-java skill evaluation
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: client_creation
+    prompt: |
+      Create Java code to set up the Azure Key Vault KeyClient and
+      CryptographyClient using DefaultAzureCredential.
+    expected_patterns:
+      - "KeyClientBuilder"
+      - "CryptographyClientBuilder"
+      - "DefaultAzureCredentialBuilder"
+      - "vaultUrl"
+      - "buildClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'vaultUrl\("https://'
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import com.azure.security.keyvault.keys.KeyClient;
+      import com.azure.security.keyvault.keys.KeyClientBuilder;
+      import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
+      import com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String vaultUrl = System.getenv("AZURE_KEYVAULT_URL");
+              
+              KeyClient keyClient = new KeyClientBuilder()
+                  .vaultUrl(vaultUrl)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              CryptographyClient cryptoClient = new CryptographyClientBuilder()
+                  .keyIdentifier(vaultUrl + "/keys/my-key")
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              System.out.println("Clients initialized successfully");
+          }
+      }
+
+  - name: create_keys
+    prompt: |
+      Create a Java example that creates RSA and EC keys in Key Vault
+      with key operations configured.
+    expected_patterns:
+      - "createRsaKey"
+      - "createEcKey"
+      - "CreateRsaKeyOptions"
+      - "CreateEcKeyOptions"
+      - "setKeySize"
+      - "setCurveName"
+      - "KeyVaultKey"
+    tags:
+      - keys
+      - create
+    mock_response: |
+      import com.azure.security.keyvault.keys.KeyClient;
+      import com.azure.security.keyvault.keys.KeyClientBuilder;
+      import com.azure.security.keyvault.keys.models.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class CreateKeys {
+          public static void main(String[] args) {
+              String vaultUrl = System.getenv("AZURE_KEYVAULT_URL");
+              
+              KeyClient keyClient = new KeyClientBuilder()
+                  .vaultUrl(vaultUrl)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              // Create RSA key
+              KeyVaultKey rsaKey = keyClient.createRsaKey(new CreateRsaKeyOptions("my-rsa-key")
+                  .setKeySize(2048)
+                  .setKeyOperations(KeyOperation.ENCRYPT, KeyOperation.DECRYPT));
+              System.out.println("RSA Key created: " + rsaKey.getName());
+              
+              // Create EC key
+              KeyVaultKey ecKey = keyClient.createEcKey(new CreateEcKeyOptions("my-ec-key")
+                  .setCurveName(KeyCurveName.P_256));
+              System.out.println("EC Key created: " + ecKey.getName());
+          }
+      }
+
+  - name: encrypt_decrypt
+    prompt: |
+      Create a Java example that encrypts and decrypts data using
+      the CryptographyClient with RSA-OAEP algorithm.
+    expected_patterns:
+      - "CryptographyClient"
+      - "encrypt"
+      - "decrypt"
+      - "EncryptionAlgorithm.RSA_OAEP"
+      - "EncryptResult"
+      - "DecryptResult"
+      - "getCipherText"
+      - "getPlainText"
+    tags:
+      - cryptography
+      - encrypt
+    mock_response: |
+      import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
+      import com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder;
+      import com.azure.security.keyvault.keys.cryptography.models.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.nio.charset.StandardCharsets;
+
+      public class EncryptDecrypt {
+          public static void main(String[] args) {
+              String vaultUrl = System.getenv("AZURE_KEYVAULT_URL");
+              
+              CryptographyClient cryptoClient = new CryptographyClientBuilder()
+                  .keyIdentifier(vaultUrl + "/keys/my-rsa-key")
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              byte[] plaintext = "Hello, World!".getBytes(StandardCharsets.UTF_8);
+              
+              // Encrypt
+              EncryptResult encryptResult = cryptoClient.encrypt(EncryptionAlgorithm.RSA_OAEP, plaintext);
+              byte[] ciphertext = encryptResult.getCipherText();
+              System.out.println("Encrypted, ciphertext length: " + ciphertext.length);
+              
+              // Decrypt
+              DecryptResult decryptResult = cryptoClient.decrypt(EncryptionAlgorithm.RSA_OAEP, ciphertext);
+              String decrypted = new String(decryptResult.getPlainText(), StandardCharsets.UTF_8);
+              System.out.println("Decrypted: " + decrypted);
+          }
+      }
+
+  - name: sign_verify
+    prompt: |
+      Create a Java example that signs and verifies data using
+      the CryptographyClient with RS256 algorithm.
+    expected_patterns:
+      - "sign"
+      - "verify"
+      - "SignatureAlgorithm.RS256"
+      - "SignResult"
+      - "VerifyResult"
+      - "isValid"
+      - "MessageDigest"
+    tags:
+      - cryptography
+      - signing
+    mock_response: |
+      import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
+      import com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder;
+      import com.azure.security.keyvault.keys.cryptography.models.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.security.MessageDigest;
+      import java.nio.charset.StandardCharsets;
+
+      public class SignVerify {
+          public static void main(String[] args) throws Exception {
+              String vaultUrl = System.getenv("AZURE_KEYVAULT_URL");
+              
+              CryptographyClient cryptoClient = new CryptographyClientBuilder()
+                  .keyIdentifier(vaultUrl + "/keys/my-rsa-key")
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              byte[] data = "Data to sign".getBytes(StandardCharsets.UTF_8);
+              MessageDigest md = MessageDigest.getInstance("SHA-256");
+              byte[] digest = md.digest(data);
+              
+              // Sign
+              SignResult signResult = cryptoClient.sign(SignatureAlgorithm.RS256, digest);
+              byte[] signature = signResult.getSignature();
+              System.out.println("Signed, signature length: " + signature.length);
+              
+              // Verify
+              VerifyResult verifyResult = cryptoClient.verify(SignatureAlgorithm.RS256, digest, signature);
+              System.out.println("Valid signature: " + verifyResult.isValid());
+          }
+      }
+
+  - name: error_handling
+    prompt: |
+      Create a Java example showing proper error handling for
+      Key Vault key operations.
+    expected_patterns:
+      - "ResourceNotFoundException"
+      - "HttpResponseException"
+      - "try"
+      - "catch"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.security.keyvault.keys.KeyClient;
+      import com.azure.security.keyvault.keys.KeyClientBuilder;
+      import com.azure.security.keyvault.keys.models.KeyVaultKey;
+      import com.azure.core.exception.HttpResponseException;
+      import com.azure.core.exception.ResourceNotFoundException;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ErrorHandling {
+          public static void main(String[] args) {
+              String vaultUrl = System.getenv("AZURE_KEYVAULT_URL");
+              
+              KeyClient keyClient = new KeyClientBuilder()
+                  .vaultUrl(vaultUrl)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              try {
+                  KeyVaultKey key = keyClient.getKey("non-existent-key");
+              } catch (ResourceNotFoundException e) {
+                  System.err.println("Key not found: " + e.getMessage());
+              } catch (HttpResponseException e) {
+                  System.err.println("HTTP error " + e.getResponse().getStatusCode());
+              }
+          }
+      }

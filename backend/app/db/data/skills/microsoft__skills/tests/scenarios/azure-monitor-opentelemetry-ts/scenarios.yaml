@@ -1,0 +1,336 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-monitor-opentelemetry-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Auto-Instrumentation
+  - name: basic_auto_instrumentation
+    prompt: |
+      Create a TypeScript example that sets up Azure Monitor auto-instrumentation
+      for a Node.js application using useAzureMonitor.
+    expected_patterns:
+      - "useAzureMonitor"
+      - "@azure/monitor-opentelemetry"
+      - "APPLICATIONINSIGHTS_CONNECTION_STRING"
+      - "azureMonitorExporterOptions"
+    forbidden_patterns:
+      - "InstrumentationKey=abc"
+      - "InstrumentationKey=12345"
+    tags:
+      - basic
+      - auto-instrumentation
+    mock_response: |
+      import { useAzureMonitor } from "@azure/monitor-opentelemetry";
+
+      useAzureMonitor({
+        azureMonitorExporterOptions: {
+          connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING
+        }
+      });
+
+      // Import application AFTER useAzureMonitor
+      import express from "express";
+      const app = express();
+
+      app.get("/", (req, res) => {
+        res.send("Hello World!");
+      });
+
+      app.listen(3000, () => {
+        console.log("Server running on port 3000");
+      });
+
+  # Full Configuration
+  - name: full_configuration
+    prompt: |
+      Create a TypeScript example with complete Azure Monitor configuration
+      including sampling, live metrics, and instrumentation options.
+    expected_patterns:
+      - "useAzureMonitor"
+      - "AzureMonitorOpenTelemetryOptions"
+      - "samplingRatio"
+      - "enableLiveMetrics"
+      - "instrumentationOptions"
+    forbidden_patterns:
+      - "InstrumentationKey=abc"
+    tags:
+      - advanced
+      - configuration
+    mock_response: |
+      import { useAzureMonitor, AzureMonitorOpenTelemetryOptions } from "@azure/monitor-opentelemetry";
+      import { resourceFromAttributes } from "@opentelemetry/resources";
+
+      const options: AzureMonitorOpenTelemetryOptions = {
+        azureMonitorExporterOptions: {
+          connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING,
+          storageDirectory: "/path/to/offline/storage",
+          disableOfflineStorage: false
+        },
+        samplingRatio: 1.0,
+        enableLiveMetrics: true,
+        enableStandardMetrics: true,
+        enablePerformanceCounters: true,
+        instrumentationOptions: {
+          azureSdk: { enabled: true },
+          http: { enabled: true },
+          mongoDb: { enabled: true },
+          mySql: { enabled: true },
+          postgreSql: { enabled: true },
+          redis: { enabled: true },
+          bunyan: { enabled: false },
+          winston: { enabled: false }
+        },
+        resource: resourceFromAttributes({ "service.name": "my-service" })
+      };
+
+      useAzureMonitor(options);
+
+  # Custom Traces
+  - name: custom_traces
+    prompt: |
+      Create a TypeScript example that creates custom spans with attributes,
+      events, and error handling using OpenTelemetry API.
+    expected_patterns:
+      - "trace.getTracer"
+      - "startSpan"
+      - "setAttribute"
+      - "recordException"
+      - "span.end"
+    forbidden_patterns:
+      - "span.finish"
+    tags:
+      - traces
+      - custom
+    mock_response: |
+      import { useAzureMonitor } from "@azure/monitor-opentelemetry";
+      import { trace } from "@opentelemetry/api";
+
+      useAzureMonitor({
+        azureMonitorExporterOptions: {
+          connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING
+        }
+      });
+
+      const tracer = trace.getTracer("my-tracer");
+
+      async function doWork(): Promise<void> {
+        const span = tracer.startSpan("doWork");
+        try {
+          span.setAttribute("component", "worker");
+          span.setAttribute("operation.id", "42");
+          span.addEvent("processing started");
+
+          // Simulate work
+          await new Promise((resolve) => setTimeout(resolve, 100));
+
+          span.addEvent("processing completed");
+        } catch (error) {
+          span.recordException(error as Error);
+          span.setStatus({ code: 2, message: (error as Error).message });
+        } finally {
+          span.end();
+        }
+      }
+
+      doWork();
+
+  # Custom Metrics
+  - name: custom_metrics
+    prompt: |
+      Create a TypeScript example that creates custom metrics including
+      counters, histograms, and observable gauges.
+    expected_patterns:
+      - "metrics.getMeter"
+      - "createCounter"
+      - "createHistogram"
+      - "createObservableGauge"
+      - "addCallback"
+    forbidden_patterns:
+      - "metrics.setMeter"
+    tags:
+      - metrics
+      - custom
+    mock_response: |
+      import { useAzureMonitor } from "@azure/monitor-opentelemetry";
+      import { metrics } from "@opentelemetry/api";
+
+      useAzureMonitor({
+        azureMonitorExporterOptions: {
+          connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING
+        }
+      });
+
+      const meter = metrics.getMeter("my-meter");
+
+      // Counter
+      const counter = meter.createCounter("requests_total");
+      counter.add(1, { route: "/api/users", method: "GET" });
+
+      // Histogram
+      const histogram = meter.createHistogram("request_duration_ms");
+      histogram.record(150, { route: "/api/users" });
+
+      // Observable Gauge
+      let activeConnections = 0;
+      const gauge = meter.createObservableGauge("active_connections");
+      gauge.addCallback((result) => {
+        result.observe(activeConnections, { pool: "main" });
+      });
+
+  # Manual Trace Exporter Setup
+  - name: manual_trace_exporter
+    prompt: |
+      Create a TypeScript example that manually sets up the Azure Monitor
+      trace exporter with NodeTracerProvider.
+    expected_patterns:
+      - "AzureMonitorTraceExporter"
+      - "NodeTracerProvider"
+      - "BatchSpanProcessor"
+      - "register"
+    forbidden_patterns:
+      - "useAzureMonitor"
+    tags:
+      - exporter
+      - manual
+    mock_response: |
+      import { AzureMonitorTraceExporter } from "@azure/monitor-opentelemetry-exporter";
+      import { NodeTracerProvider, BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
+
+      const exporter = new AzureMonitorTraceExporter({
+        connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING
+      });
+
+      const provider = new NodeTracerProvider({
+        spanProcessors: [new BatchSpanProcessor(exporter)]
+      });
+
+      provider.register();
+
+      console.log("Trace exporter configured");
+
+  # Manual Metric Exporter Setup
+  - name: manual_metric_exporter
+    prompt: |
+      Create a TypeScript example that manually sets up the Azure Monitor
+      metric exporter with MeterProvider.
+    expected_patterns:
+      - "AzureMonitorMetricExporter"
+      - "MeterProvider"
+      - "PeriodicExportingMetricReader"
+      - "setGlobalMeterProvider"
+    forbidden_patterns:
+      - "useAzureMonitor"
+    tags:
+      - exporter
+      - manual
+    mock_response: |
+      import { AzureMonitorMetricExporter } from "@azure/monitor-opentelemetry-exporter";
+      import { PeriodicExportingMetricReader, MeterProvider } from "@opentelemetry/sdk-metrics";
+      import { metrics } from "@opentelemetry/api";
+
+      const exporter = new AzureMonitorMetricExporter({
+        connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING
+      });
+
+      const meterProvider = new MeterProvider({
+        readers: [new PeriodicExportingMetricReader({ exporter })]
+      });
+
+      metrics.setGlobalMeterProvider(meterProvider);
+
+      console.log("Metric exporter configured");
+
+  # Manual Log Exporter Setup
+  - name: manual_log_exporter
+    prompt: |
+      Create a TypeScript example that manually sets up the Azure Monitor
+      log exporter with LoggerProvider.
+    expected_patterns:
+      - "AzureMonitorLogExporter"
+      - "LoggerProvider"
+      - "BatchLogRecordProcessor"
+      - "setGlobalLoggerProvider"
+    forbidden_patterns:
+      - "useAzureMonitor"
+    tags:
+      - exporter
+      - manual
+      - logs
+    mock_response: |
+      import { AzureMonitorLogExporter } from "@azure/monitor-opentelemetry-exporter";
+      import { BatchLogRecordProcessor, LoggerProvider } from "@opentelemetry/sdk-logs";
+      import { logs } from "@opentelemetry/api-logs";
+
+      const exporter = new AzureMonitorLogExporter({
+        connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING
+      });
+
+      const loggerProvider = new LoggerProvider();
+      loggerProvider.addLogRecordProcessor(new BatchLogRecordProcessor(exporter));
+
+      logs.setGlobalLoggerProvider(loggerProvider);
+
+      console.log("Log exporter configured");
+
+  # Graceful Shutdown
+  - name: graceful_shutdown
+    prompt: |
+      Create a TypeScript example that properly shuts down Azure Monitor
+      on application exit to ensure all telemetry is flushed.
+    expected_patterns:
+      - "useAzureMonitor"
+      - "shutdownAzureMonitor"
+      - "SIGTERM"
+      - "await"
+    forbidden_patterns: []
+    tags:
+      - shutdown
+      - lifecycle
+    mock_response: |
+      import { useAzureMonitor, shutdownAzureMonitor } from "@azure/monitor-opentelemetry";
+
+      useAzureMonitor({
+        azureMonitorExporterOptions: {
+          connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING
+        }
+      });
+
+      // Application code here
+
+      process.on("SIGTERM", async () => {
+        console.log("Shutting down...");
+        await shutdownAzureMonitor();
+        console.log("Telemetry flushed, exiting");
+        process.exit(0);
+      });
+
+  # Sampling Configuration
+  - name: sampling_configuration
+    prompt: |
+      Create a TypeScript example that configures sampling to only
+      send 50% of traces to Azure Monitor.
+    expected_patterns:
+      - "samplingRatio"
+      - "useAzureMonitor"
+      - "0.5"
+    forbidden_patterns:
+      - "samplingRatio: 1"
+    tags:
+      - sampling
+      - configuration
+    mock_response: |
+      import { useAzureMonitor } from "@azure/monitor-opentelemetry";
+
+      useAzureMonitor({
+        azureMonitorExporterOptions: {
+          connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING
+        },
+        samplingRatio: 0.5  // 50% of traces
+      });
+
+      console.log("Azure Monitor configured with 50% sampling");

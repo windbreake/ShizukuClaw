@@ -1,0 +1,72 @@
+{
+  "server": {
+    "port": 8888
+  },
+  "launcher": {
+    "startup_self_check": true,
+    "open_browser": true,
+    "startup_page": "/control_panel"
+  },
+  "unified_api": {
+    "host": "0.0.0.0",
+    "port": 3001,
+    "access_token": "114514"
+  },
+  "onebot": {
+    "access_token": "114514",
+    "host": "127.0.0.1",
+    "http": {
+      "enable": false,
+      "host": "127.0.0.1",
+      "port": 6199
+    },
+    "port": 6199,
+    "ws": {
+      "enable": false,
+      "host": "127.0.0.1",
+      "port": 6199
+    },
+    "ws_reverse": {
+      "enable": true,
+      "url": "ws://127.0.0.1:6199/ws"
+    }
+  },
+  "work_mode": {
+    "enabled": false,
+    "password_hash": "73011b56941c1e4bd9675f2c4082fba8d7f8ee20b0dbaab8a55ca730eb5acd0c",
+    "sandbox_enabled": true,
+    "features": {
+      "allow_file_write": true,
+      "allow_code_exec": true,
+      "allow_plan_update": true,
+      "allow_coder_tool": true,
+      "plugin_command_requires_work_mode": false,
+      "plugin_dev_tools_require_work_mode": true,
+      "allow_external_access": false,
+      "require_external_approval": true
+    },
+    "allowed_databases": [
+      "catgirl_db"
+    ],
+    "reply_policy": {
+      "enabled": true,
+      "group_mode": "mention_only",
+      "private_mode": "always",
+      "cooldown_seconds": 1,
+      "keywords": [],
+      "bot_qq": ""
+    },
+    "chat_settings": {
+      "bothub_enabled": true,
+      "sandbox_show_agent_trace": true,
+      "sandbox_trace_collapsed": true,
+      "sandbox_show_back_to_top": true,
+      "sandbox_use_docker_runtime": true,
+      "sandbox_agent_autonomous": true,
+      "sandbox_trace_retention_days": 7,
+      "deepseek_thinking_mode": true,
+      "deepseek_reasoning_effort": "high"
+    }
+  },
+  "comm_protocol": "onebot"
+}

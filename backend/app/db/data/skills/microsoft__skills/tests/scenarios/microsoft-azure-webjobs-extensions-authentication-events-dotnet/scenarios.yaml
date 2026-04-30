@@ -1,0 +1,415 @@
+# Test scenarios for microsoft-azure-webjobs-extensions-authentication-events-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Token Enrichment
+  - name: token_enrichment
+    prompt: |
+      Create an Azure Function that adds custom claims to tokens during sign-in
+      using the Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents SDK.
+    expected_patterns:
+      - "WebJobsAuthenticationEventsTrigger"
+      - "WebJobsTokenIssuanceStartRequest"
+      - "WebJobsTokenIssuanceStartResponse"
+      - "WebJobsProvideClaimsForToken"
+      - "Claims"
+      - "Dictionary"
+    forbidden_patterns:
+      - "HttpTrigger"
+    tags:
+      - token
+      - claims
+      - basic
+    mock_response: |
+      using Microsoft.Azure.WebJobs;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents.TokenIssuanceStart;
+      using Microsoft.Extensions.Logging;
+
+      public static class TokenEnrichmentFunction
+      {
+          [FunctionName("OnTokenIssuanceStart")]
+          public static WebJobsAuthenticationEventResponse Run(
+              [WebJobsAuthenticationEventsTrigger] WebJobsTokenIssuanceStartRequest request,
+              ILogger log)
+          {
+              log.LogInformation("Token issuance event for user: {UserId}",
+                  request.Data?.AuthenticationContext?.User?.Id);
+
+              var response = new WebJobsTokenIssuanceStartResponse();
+
+              response.Actions.Add(new WebJobsProvideClaimsForToken
+              {
+                  Claims = new Dictionary<string, string>
+                  {
+                      { "customClaim1", "customValue1" },
+                      { "department", "Engineering" },
+                      { "costCenter", "CC-12345" },
+                      { "apiVersion", "v2" }
+                  }
+              });
+
+              return response;
+          }
+      }
+
+  # Token Enrichment with External Data
+  - name: token_enrichment_external_data
+    prompt: |
+      Create an Azure Function that fetches user data from an external API
+      and adds it as custom claims to tokens.
+    expected_patterns:
+      - "WebJobsAuthenticationEventsTrigger"
+      - "WebJobsTokenIssuanceStartRequest"
+      - "WebJobsProvideClaimsForToken"
+      - "HttpClient"
+      - "async"
+    tags:
+      - token
+      - external
+      - async
+    mock_response: |
+      using Microsoft.Azure.WebJobs;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents.TokenIssuanceStart;
+      using Microsoft.Extensions.Logging;
+      using System.Net.Http;
+      using System.Text.Json;
+
+      public static class TokenEnrichmentWithExternalData
+      {
+          private static readonly HttpClient _httpClient = new();
+
+          [FunctionName("OnTokenIssuanceStartExternal")]
+          public static async Task<WebJobsAuthenticationEventResponse> Run(
+              [WebJobsAuthenticationEventsTrigger] WebJobsTokenIssuanceStartRequest request,
+              ILogger log)
+          {
+              string? userId = request.Data?.AuthenticationContext?.User?.Id;
+
+              if (string.IsNullOrEmpty(userId))
+              {
+                  log.LogWarning("No user ID in request");
+                  return new WebJobsTokenIssuanceStartResponse();
+              }
+
+              // Fetch user data from external API
+              var userProfile = await GetUserProfileAsync(userId);
+
+              var response = new WebJobsTokenIssuanceStartResponse();
+              response.Actions.Add(new WebJobsProvideClaimsForToken
+              {
+                  Claims = new Dictionary<string, string>
+                  {
+                      { "employeeId", userProfile.EmployeeId },
+                      { "department", userProfile.Department },
+                      { "roles", string.Join(",", userProfile.Roles) }
+                  }
+              });
+
+              return response;
+          }
+
+          private static async Task<UserProfile> GetUserProfileAsync(string userId)
+          {
+              var response = await _httpClient.GetAsync($"https://api.example.com/users/{userId}");
+              response.EnsureSuccessStatusCode();
+              var json = await response.Content.ReadAsStringAsync();
+              return JsonSerializer.Deserialize<UserProfile>(json)!;
+          }
+      }
+
+      public record UserProfile(string EmployeeId, string Department, string[] Roles);
+
+  # Attribute Collection Start
+  - name: attribute_collection_start
+    prompt: |
+      Create an Azure Function that customizes the attribute collection page
+      during user sign-up, including prefilling values.
+    expected_patterns:
+      - "WebJobsAuthenticationEventsTrigger"
+      - "WebJobsAttributeCollectionStartRequest"
+      - "WebJobsAttributeCollectionStartResponse"
+      - "WebJobsContinueWithDefaultBehavior"
+      - "WebJobsSetPrefillValues"
+    tags:
+      - attribute
+      - signup
+    mock_response: |
+      using Microsoft.Azure.WebJobs;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents.Framework;
+      using Microsoft.Extensions.Logging;
+
+      public static class AttributeCollectionStartFunction
+      {
+          [FunctionName("OnAttributeCollectionStart")]
+          public static WebJobsAuthenticationEventResponse Run(
+              [WebJobsAuthenticationEventsTrigger] WebJobsAttributeCollectionStartRequest request,
+              ILogger log)
+          {
+              log.LogInformation("Attribute collection start for correlation: {CorrelationId}",
+                  request.Data?.AuthenticationContext?.CorrelationId);
+
+              var response = new WebJobsAttributeCollectionStartResponse();
+
+              // Option 1: Continue with default behavior
+              response.Actions.Add(new WebJobsContinueWithDefaultBehavior());
+
+              // Option 2: Prefill attributes (uncomment to use)
+              // response.Actions.Add(new WebJobsSetPrefillValues
+              // {
+              //     Attributes = new Dictionary<string, string>
+              //     {
+              //         { "city", "Seattle" },
+              //         { "country", "USA" }
+              //     }
+              // });
+
+              return response;
+          }
+      }
+
+  # Attribute Collection Submit Validation
+  - name: attribute_collection_submit_validation
+    prompt: |
+      Create an Azure Function that validates submitted attributes during
+      user sign-up and can block users or show validation errors.
+    expected_patterns:
+      - "WebJobsAuthenticationEventsTrigger"
+      - "WebJobsAttributeCollectionSubmitRequest"
+      - "WebJobsAttributeCollectionSubmitResponse"
+      - "WebJobsShowBlockPage"
+      - "WebJobsShowValidationError"
+      - "WebJobsModifyAttributeValues"
+    tags:
+      - attribute
+      - validation
+      - submit
+    mock_response: |
+      using Microsoft.Azure.WebJobs;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents.Framework;
+      using Microsoft.Extensions.Logging;
+
+      public static class AttributeCollectionSubmitFunction
+      {
+          [FunctionName("OnAttributeCollectionSubmit")]
+          public static WebJobsAuthenticationEventResponse Run(
+              [WebJobsAuthenticationEventsTrigger] WebJobsAttributeCollectionSubmitRequest request,
+              ILogger log)
+          {
+              var response = new WebJobsAttributeCollectionSubmitResponse();
+
+              var attributes = request.Data?.UserSignUpInfo?.Attributes;
+
+              string? email = attributes?["email"]?.ToString();
+              string? displayName = attributes?["displayName"]?.ToString();
+
+              // Block certain email domains
+              if (email?.EndsWith("@blocked.com") == true)
+              {
+                  response.Actions.Add(new WebJobsShowBlockPage
+                  {
+                      Message = "Sign-up from this email domain is not allowed."
+                  });
+                  return response;
+              }
+
+              // Show validation error
+              if (string.IsNullOrEmpty(displayName) || displayName.Length < 3)
+              {
+                  response.Actions.Add(new WebJobsShowValidationError
+                  {
+                      Message = "Display name must be at least 3 characters.",
+                      AttributeErrors = new Dictionary<string, string>
+                      {
+                          { "displayName", "Name is too short" }
+                      }
+                  });
+                  return response;
+              }
+
+              // Modify attributes before saving
+              response.Actions.Add(new WebJobsModifyAttributeValues
+              {
+                  Attributes = new Dictionary<string, string>
+                  {
+                      { "displayName", displayName.Trim() },
+                      { "city", attributes?["city"]?.ToString()?.ToUpperInvariant() ?? "" }
+                  }
+              });
+
+              return response;
+          }
+      }
+
+  # Custom OTP Delivery
+  - name: custom_otp_delivery
+    prompt: |
+      Create an Azure Function that handles custom OTP delivery via SMS
+      or other channels.
+    expected_patterns:
+      - "WebJobsAuthenticationEventsTrigger"
+      - "WebJobsOnOtpSendRequest"
+      - "WebJobsOnOtpSendResponse"
+      - "WebJobsOnOtpSendSuccess"
+      - "WebJobsOnOtpSendFailed"
+      - "OtpContext"
+      - "OneTimeCode"
+    tags:
+      - otp
+      - sms
+    mock_response: |
+      using Microsoft.Azure.WebJobs;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents.Framework;
+      using Microsoft.Extensions.Logging;
+
+      public static class CustomOtpFunction
+      {
+          [FunctionName("OnOtpSend")]
+          public static async Task<WebJobsAuthenticationEventResponse> Run(
+              [WebJobsAuthenticationEventsTrigger] WebJobsOnOtpSendRequest request,
+              ILogger log)
+          {
+              var response = new WebJobsOnOtpSendResponse();
+
+              string? phoneNumber = request.Data?.OtpContext?.Identifier;
+              string? otp = request.Data?.OtpContext?.OneTimeCode;
+
+              if (string.IsNullOrEmpty(phoneNumber) || string.IsNullOrEmpty(otp))
+              {
+                  log.LogError("Missing phone number or OTP");
+                  response.Actions.Add(new WebJobsOnOtpSendFailed
+                  {
+                      Error = "Missing required data"
+                  });
+                  return response;
+              }
+
+              try
+              {
+                  // Send OTP via your SMS provider
+                  await SendSmsAsync(phoneNumber, $"Your verification code is: {otp}");
+
+                  response.Actions.Add(new WebJobsOnOtpSendSuccess());
+                  log.LogInformation("OTP sent successfully to {PhoneNumber}", phoneNumber);
+              }
+              catch (Exception ex)
+              {
+                  log.LogError(ex, "Failed to send OTP");
+                  response.Actions.Add(new WebJobsOnOtpSendFailed
+                  {
+                      Error = "Failed to send verification code"
+                  });
+              }
+
+              return response;
+          }
+
+          private static async Task SendSmsAsync(string phoneNumber, string message)
+          {
+              // Implement your SMS provider integration
+              await Task.CompletedTask;
+          }
+      }
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Implement proper error handling for authentication events that gracefully
+      handles failures without breaking the authentication flow.
+    expected_patterns:
+      - "try"
+      - "catch"
+      - "LogError"
+      - "WebJobsTokenIssuanceStartResponse"
+      - "Exception"
+    tags:
+      - error-handling
+      - best-practice
+    mock_response: |
+      using Microsoft.Azure.WebJobs;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents.TokenIssuanceStart;
+      using Microsoft.Extensions.Logging;
+
+      public static class ErrorHandlingFunction
+      {
+          [FunctionName("OnTokenIssuanceStart")]
+          public static WebJobsAuthenticationEventResponse Run(
+              [WebJobsAuthenticationEventsTrigger] WebJobsTokenIssuanceStartRequest request,
+              ILogger log)
+          {
+              try
+              {
+                  // Your logic here
+                  var response = new WebJobsTokenIssuanceStartResponse();
+                  response.Actions.Add(new WebJobsProvideClaimsForToken
+                  {
+                      Claims = new Dictionary<string, string> { { "claim", "value" } }
+                  });
+                  return response;
+              }
+              catch (Exception ex)
+              {
+                  log.LogError(ex, "Error processing token issuance event");
+
+                  // Return empty response - authentication continues without custom claims
+                  // Do NOT throw - this would fail the authentication
+                  return new WebJobsTokenIssuanceStartResponse();
+              }
+          }
+      }
+
+  # Show Block Page
+  - name: show_block_page
+    prompt: |
+      Create an Azure Function that blocks user sign-up based on certain
+      conditions and shows a custom message.
+    expected_patterns:
+      - "WebJobsAuthenticationEventsTrigger"
+      - "WebJobsAttributeCollectionStartResponse"
+      - "WebJobsShowBlockPage"
+      - "Message"
+    tags:
+      - block
+      - security
+    mock_response: |
+      using Microsoft.Azure.WebJobs;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents;
+      using Microsoft.Azure.WebJobs.Extensions.AuthenticationEvents.Framework;
+      using Microsoft.Extensions.Logging;
+
+      public static class BlockUserFunction
+      {
+          [FunctionName("OnAttributeCollectionStart")]
+          public static WebJobsAuthenticationEventResponse Run(
+              [WebJobsAuthenticationEventsTrigger] WebJobsAttributeCollectionStartRequest request,
+              ILogger log)
+          {
+              var response = new WebJobsAttributeCollectionStartResponse();
+
+              // Check if sign-up is temporarily disabled
+              bool signUpDisabled = Environment.GetEnvironmentVariable("SIGNUP_DISABLED") == "true";
+
+              if (signUpDisabled)
+              {
+                  response.Actions.Add(new WebJobsShowBlockPage
+                  {
+                      Message = "Sign-up is currently disabled. Please contact support."
+                  });
+                  return response;
+              }
+
+              // Continue with default behavior
+              response.Actions.Add(new WebJobsContinueWithDefaultBehavior());
+              return response;
+          }
+      }

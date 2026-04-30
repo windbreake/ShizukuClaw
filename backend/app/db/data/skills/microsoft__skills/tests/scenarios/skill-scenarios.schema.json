@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["config", "scenarios"],
+  "properties": {
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "max_tokens", "temperature"],
+      "properties": {
+        "model": {"type": "string"},
+        "max_tokens": {"type": "integer"},
+        "temperature": {"type": "number"}
+      }
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "prompt", "mock_response"],
+        "properties": {
+          "name": {"type": "string"},
+          "prompt": {"type": "string"},
+          "expected_patterns": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "forbidden_patterns": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "tags": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "mock_response": {"type": "string"}
+        }
+      }
+    }
+  }
+}

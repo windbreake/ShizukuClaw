@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-communication-callingserver-java skill evaluation
+# NOTE: This SDK is deprecated - use azure-communication-callautomation instead
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: migration_guidance
+    prompt: |
+      Create Java code showing how to migrate from the deprecated CallingServer
+      SDK to the new CallAutomation SDK.
+    expected_patterns:
+      - "CallAutomationClient"
+      - "CallAutomationClientBuilder"
+    forbidden_patterns:
+      - "CallingServerClient"
+      - "CallingServerClientBuilder"
+    tags:
+      - migration
+      - deprecated
+    mock_response: |
+      // Migration example: Use CallAutomation SDK (the new SDK) instead of the deprecated SDK
+      import com.azure.communication.callautomation.CallAutomationClient;
+      import com.azure.communication.callautomation.CallAutomationClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class MigrationExample {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              
+              // Use the new CallAutomation SDK
+              CallAutomationClient client = new CallAutomationClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              System.out.println("Successfully migrated to CallAutomation SDK");
+          }
+      }

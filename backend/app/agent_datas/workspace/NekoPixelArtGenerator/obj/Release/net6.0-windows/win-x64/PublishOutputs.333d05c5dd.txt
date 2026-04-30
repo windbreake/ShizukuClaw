@@ -1,0 +1,8 @@
+C:\Users\win11\Desktop\AgentPix\DMEO\bin\Release\net6.0-windows\win-x64\publish\PixelArtGenerator.exe
+C:\Users\win11\Desktop\AgentPix\DMEO\bin\Release\net6.0-windows\win-x64\publish\PythonScripts\pixelate.py
+C:\Users\win11\Desktop\AgentPix\DMEO\bin\Release\net6.0-windows\win-x64\publish\PythonScripts\palettes.py
+C:\Users\win11\Desktop\AgentPix\DMEO\bin\Release\net6.0-windows\win-x64\publish\PythonScripts\requirements.txt
+C:\Users\win11\Desktop\AgentPix\DMEO\bin\Release\net6.0-windows\win-x64\publish\PixelArtGenerator.dll
+C:\Users\win11\Desktop\AgentPix\DMEO\bin\Release\net6.0-windows\win-x64\publish\PixelArtGenerator.deps.json
+C:\Users\win11\Desktop\AgentPix\DMEO\bin\Release\net6.0-windows\win-x64\publish\PixelArtGenerator.runtimeconfig.json
+C:\Users\win11\Desktop\AgentPix\DMEO\bin\Release\net6.0-windows\win-x64\publish\PixelArtGenerator.pdb

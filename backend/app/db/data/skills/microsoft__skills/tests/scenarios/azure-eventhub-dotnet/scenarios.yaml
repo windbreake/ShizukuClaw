@@ -1,0 +1,485 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+# Test scenarios for azure-eventhub-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: producer_default_credential
+    prompt: |
+      Create an EventHubProducerClient in .NET using DefaultAzureCredential for authentication.
+    expected_patterns:
+      - "using Azure.Identity"
+      - "using Azure.Messaging.EventHubs.Producer"
+      - "DefaultAzureCredential"
+      - "EventHubProducerClient"
+    forbidden_patterns:
+      - "connection string"
+      - "SharedAccessKey"
+    tags:
+      - authentication
+      - basic
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.EventHubs.Producer;
+
+      var credential = new DefaultAzureCredential();
+      var fullyQualifiedNamespace = Environment.GetEnvironmentVariable("EVENTHUB_FULLY_QUALIFIED_NAMESPACE");
+      var eventHubName = Environment.GetEnvironmentVariable("EVENTHUB_NAME");
+
+      await using var producer = new EventHubProducerClient(
+          fullyQualifiedNamespace,
+          eventHubName,
+          credential);
+
+  - name: send_events_batch
+    prompt: |
+      Send multiple events to Event Hubs using proper batching that respects size limits.
+    expected_patterns:
+      - "CreateBatchAsync"
+      - "TryAdd"
+      - "EventDataBatch"
+      - "SendAsync"
+    forbidden_patterns:
+      - "SendAsync(new[]"
+    tags:
+      - sending
+      - batching
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.EventHubs;
+      using Azure.Messaging.EventHubs.Producer;
+
+      await using var producer = new EventHubProducerClient(
+          fullyQualifiedNamespace,
+          eventHubName,
+          new DefaultAzureCredential());
+
+      // Create a batch (respects size limits automatically)
+      using EventDataBatch batch = await producer.CreateBatchAsync();
+
+      var events = new[]
+      {
+          new EventData(BinaryData.FromString("{\"id\": 1, \"message\": \"Hello\"}")),
+          new EventData(BinaryData.FromString("{\"id\": 2, \"message\": \"World\"}"))
+      };
+
+      foreach (var eventData in events)
+      {
+          if (!batch.TryAdd(eventData))
+          {
+              // Batch is full - send it and create a new one
+              await producer.SendAsync(batch);
+              batch = await producer.CreateBatchAsync();
+              
+              if (!batch.TryAdd(eventData))
+              {
+                  throw new Exception("Event too large for empty batch");
+              }
+          }
+      }
+
+      // Send remaining events
+      if (batch.Count > 0)
+      {
+          await producer.SendAsync(batch);
+      }
+
+  - name: buffered_producer_high_volume
+    prompt: |
+      Use EventHubBufferedProducerClient for high-volume event sending with automatic batching.
+    expected_patterns:
+      - "EventHubBufferedProducerClient"
+      - "EnqueueEventAsync"
+      - "FlushAsync"
+      - "SendEventBatchSucceededAsync"
+      - "SendEventBatchFailedAsync"
+    forbidden_patterns:
+      - "EventHubProducerClient"
+      - "CreateBatchAsync"
+    tags:
+      - sending
+      - high-volume
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.EventHubs;
+      using Azure.Messaging.EventHubs.Producer;
+
+      var options = new EventHubBufferedProducerClientOptions
+      {
+          MaximumWaitTime = TimeSpan.FromSeconds(1)
+      };
+
+      await using var producer = new EventHubBufferedProducerClient(
+          fullyQualifiedNamespace,
+          eventHubName,
+          new DefaultAzureCredential(),
+          options);
+
+      // Handle send success/failure
+      producer.SendEventBatchSucceededAsync += args =>
+      {
+          Console.WriteLine($"Batch sent: {args.EventBatch.Count} events to partition {args.PartitionId}");
+          return Task.CompletedTask;
+      };
+
+      producer.SendEventBatchFailedAsync += args =>
+      {
+          Console.WriteLine($"Batch failed: {args.Exception.Message}");
+          return Task.CompletedTask;
+      };
+
+      // Enqueue events (sent automatically in background)
+      for (int i = 0; i < 1000; i++)
+      {
+          await producer.EnqueueEventAsync(new EventData($"Event {i}"));
+      }
+
+      // Flush remaining events before disposing
+      await producer.FlushAsync();
+
+  - name: processor_with_checkpointing
+    prompt: |
+      Create an EventProcessorClient for production event receiving with checkpointing.
+    expected_patterns:
+      - "EventProcessorClient"
+      - "BlobContainerClient"
+      - "ProcessEventAsync"
+      - "ProcessErrorAsync"
+      - "UpdateCheckpointAsync"
+      - "StartProcessingAsync"
+      - "StopProcessingAsync"
+    forbidden_patterns:
+      - "new EventHubConsumerClient"
+      - "ReadEventsAsync"
+    tags:
+      - receiving
+      - production
+      - checkpointing
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.EventHubs;
+      using Azure.Messaging.EventHubs.Consumer;
+      using Azure.Messaging.EventHubs.Processor;
+      using Azure.Storage.Blobs;
+
+      // Blob container for checkpointing
+      var blobClient = new BlobContainerClient(
+          Environment.GetEnvironmentVariable("BLOB_STORAGE_CONNECTION_STRING"),
+          Environment.GetEnvironmentVariable("BLOB_CONTAINER_NAME"));
+
+      await blobClient.CreateIfNotExistsAsync();
+
+      // Create processor
+      var processor = new EventProcessorClient(
+          blobClient,
+          EventHubConsumerClient.DefaultConsumerGroup,
+          fullyQualifiedNamespace,
+          eventHubName,
+          new DefaultAzureCredential());
+
+      // Handle events
+      processor.ProcessEventAsync += async args =>
+      {
+          Console.WriteLine($"Partition: {args.Partition.PartitionId}");
+          Console.WriteLine($"Data: {args.Data.EventBody}");
+          
+          // Checkpoint after processing
+          await args.UpdateCheckpointAsync();
+      };
+
+      // Handle errors
+      processor.ProcessErrorAsync += args =>
+      {
+          Console.WriteLine($"Error: {args.Exception.Message}");
+          Console.WriteLine($"Partition: {args.PartitionId}");
+          return Task.CompletedTask;
+      };
+
+      // Start processing
+      await processor.StartProcessingAsync();
+
+      Console.WriteLine("Processing events. Press any key to stop...");
+      Console.ReadKey();
+
+      // Stop gracefully
+      await processor.StopProcessingAsync();
+
+  - name: checkpoint_every_n_events
+    prompt: |
+      Implement a checkpointing strategy that checkpoints every 100 events.
+    expected_patterns:
+      - "ProcessEventAsync"
+      - "UpdateCheckpointAsync"
+      - "_eventCount"
+      - ">= 100"
+    forbidden_patterns:
+      - "EventHubConsumerClient"
+    tags:
+      - checkpointing
+      - strategy
+    mock_response: |
+      using Azure.Messaging.EventHubs.Processor;
+
+      private int _eventCount = 0;
+
+      processor.ProcessEventAsync += async args =>
+      {
+          // Process the event
+          Console.WriteLine($"Received: {args.Data.EventBody}");
+          
+          // Increment counter
+          _eventCount++;
+          
+          // Checkpoint every 100 events
+          if (_eventCount >= 100)
+          {
+              await args.UpdateCheckpointAsync();
+              _eventCount = 0;
+              Console.WriteLine("Checkpoint created");
+          }
+      };
+
+  - name: partition_key_for_ordering
+    prompt: |
+      Send events with a partition key to ensure ordering for related events.
+    expected_patterns:
+      - "CreateBatchOptions"
+      - "PartitionKey"
+      - "CreateBatchAsync"
+    forbidden_patterns:
+      - "PartitionId"
+    tags:
+      - partitioning
+      - ordering
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.EventHubs;
+      using Azure.Messaging.EventHubs.Producer;
+
+      await using var producer = new EventHubProducerClient(
+          fullyQualifiedNamespace,
+          eventHubName,
+          new DefaultAzureCredential());
+
+      // Events with same partition key go to same partition
+      var batchOptions = new CreateBatchOptions
+      {
+          PartitionKey = "customer-123"
+      };
+
+      using var batch = await producer.CreateBatchAsync(batchOptions);
+
+      batch.TryAdd(new EventData("Order created"));
+      batch.TryAdd(new EventData("Order updated"));
+      batch.TryAdd(new EventData("Order completed"));
+
+      // All events for customer-123 will be in the same partition
+      // Guaranteeing FIFO ordering
+      await producer.SendAsync(batch);
+
+  - name: get_partition_ids
+    prompt: |
+      Get all partition IDs from an Event Hub.
+    expected_patterns:
+      - "GetPartitionIdsAsync"
+      - "partitionIds"
+    forbidden_patterns:
+      - "EventProcessorClient"
+    tags:
+      - partitioning
+      - metadata
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.EventHubs.Producer;
+
+      await using var producer = new EventHubProducerClient(
+          fullyQualifiedNamespace,
+          eventHubName,
+          new DefaultAzureCredential());
+
+      string[] partitionIds = await producer.GetPartitionIdsAsync();
+
+      Console.WriteLine($"Event Hub has {partitionIds.Length} partitions:");
+      foreach (var partitionId in partitionIds)
+      {
+          Console.WriteLine($"  Partition: {partitionId}");
+      }
+
+  - name: aspnet_core_di
+    prompt: |
+      Configure Event Hubs with dependency injection in ASP.NET Core.
+    expected_patterns:
+      - "AddAzureClients"
+      - "AddEventHubProducerClient"
+      - "UseCredential"
+      - "DefaultAzureCredential"
+    forbidden_patterns:
+      - "new EventHubProducerClient"
+    tags:
+      - dependency-injection
+      - aspnet-core
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.EventHubs.Producer;
+      using Microsoft.Extensions.Azure;
+
+      // In Program.cs
+      builder.Services.AddAzureClients(clientBuilder =>
+      {
+          clientBuilder.AddEventHubProducerClient(
+              builder.Configuration["EventHub:FullyQualifiedNamespace"],
+              builder.Configuration["EventHub:Name"]);
+          
+          clientBuilder.UseCredential(new DefaultAzureCredential());
+      });
+
+      // In a service class
+      public class EventService
+      {
+          private readonly EventHubProducerClient _producer;
+          
+          public EventService(EventHubProducerClient producer)
+          {
+              _producer = producer;
+          }
+          
+          public async Task SendAsync(string message)
+          {
+              using var batch = await _producer.CreateBatchAsync();
+              batch.TryAdd(new EventData(message));
+              await _producer.SendAsync(batch);
+          }
+      }
+
+  - name: error_handling
+    prompt: |
+      Show proper error handling for Event Hubs operations.
+    expected_patterns:
+      - "EventHubsException"
+      - "ex.Reason"
+      - "ex.IsTransient"
+      - "ServiceBusy"
+    forbidden_patterns:
+      - "catch (Exception ex)"
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure.Messaging.EventHubs;
+
+      try
+      {
+          await producer.SendAsync(batch);
+      }
+      catch (EventHubsException ex) when (ex.Reason == EventHubsException.FailureReason.ServiceBusy)
+      {
+          // Retry with backoff
+          Console.WriteLine("Service is busy, retrying...");
+          await Task.Delay(TimeSpan.FromSeconds(5));
+      }
+      catch (EventHubsException ex) when (ex.Reason == EventHubsException.FailureReason.QuotaExceeded)
+      {
+          Console.WriteLine("Quota exceeded - check throughput units");
+      }
+      catch (EventHubsException ex) when (ex.IsTransient)
+      {
+          // Transient error - safe to retry
+          Console.WriteLine($"Transient error: {ex.Message}");
+      }
+      catch (EventHubsException ex)
+      {
+          // Non-transient error
+          Console.WriteLine($"Error: {ex.Reason} - {ex.Message}");
+      }
+
+  - name: event_position_options
+    prompt: |
+      Show different EventPosition options for starting to read events.
+    expected_patterns:
+      - "EventPosition.Earliest"
+      - "EventPosition.Latest"
+      - "EventPosition.FromOffset"
+      - "EventPosition.FromSequenceNumber"
+      - "EventPosition.FromEnqueuedTime"
+    forbidden_patterns:
+      - "EventHubConsumerClient"
+    tags:
+      - event-position
+    mock_response: |
+      using Azure.Messaging.EventHubs;
+      using Azure.Messaging.EventHubs.Consumer;
+
+      // Start from beginning of the event stream
+      var fromBeginning = EventPosition.Earliest;
+
+      // Start from end (new events only)
+      var fromEnd = EventPosition.Latest;
+
+      // Start from specific offset
+      var fromOffset = EventPosition.FromOffset(12345);
+
+      // Start from specific sequence number
+      var fromSequence = EventPosition.FromSequenceNumber(100);
+
+      // Start from specific time (e.g., 1 hour ago)
+      var fromTime = EventPosition.FromEnqueuedTime(DateTimeOffset.UtcNow.AddHours(-1));
+
+      // Use in EventProcessorClientOptions
+      var processorOptions = new EventProcessorClientOptions
+      {
+          DefaultStartingPosition = EventPosition.Earliest
+      };
+
+  - name: processor_with_blob_managed_identity
+    prompt: |
+      Create an EventProcessorClient using managed identity for both Event Hubs and Blob Storage.
+    expected_patterns:
+      - "EventProcessorClient"
+      - "BlobContainerClient"
+      - "DefaultAzureCredential"
+    forbidden_patterns:
+      - "ConnectionString"
+      - "SharedAccessKey"
+    tags:
+      - authentication
+      - managed-identity
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.EventHubs;
+      using Azure.Messaging.EventHubs.Consumer;
+      using Azure.Messaging.EventHubs.Processor;
+      using Azure.Storage.Blobs;
+
+      var credential = new DefaultAzureCredential();
+
+      // Blob container for checkpointing (using managed identity)
+      var blobClient = new BlobContainerClient(
+          new Uri("https://mystorageaccount.blob.core.windows.net/checkpoints"),
+          credential);
+
+      await blobClient.CreateIfNotExistsAsync();
+
+      // Create processor (using managed identity)
+      var processor = new EventProcessorClient(
+          blobClient,
+          EventHubConsumerClient.DefaultConsumerGroup,
+          Environment.GetEnvironmentVariable("EVENTHUB_FULLY_QUALIFIED_NAMESPACE"),
+          Environment.GetEnvironmentVariable("EVENTHUB_NAME"),
+          credential);
+
+      processor.ProcessEventAsync += async args =>
+      {
+          Console.WriteLine($"Data: {args.Data.EventBody}");
+          await args.UpdateCheckpointAsync();
+      };
+
+      processor.ProcessErrorAsync += args =>
+      {
+          Console.WriteLine($"Error: {args.Exception.Message}");
+          return Task.CompletedTask;
+      };
+
+      await processor.StartProcessingAsync();

@@ -1,0 +1,577 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for react-flow-node-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Node Component
+  - name: basic_node_component
+    prompt: |
+      Create a React Flow custom node component in TypeScript with proper
+      types, handles, and memo wrapper.
+    expected_patterns:
+      - "memo"
+      - "Handle"
+      - "Position"
+      - "NodeProps"
+      - "@xyflow/react"
+      - "Record<string, unknown>"
+    forbidden_patterns:
+      - "reactflow"
+      - "react-flow-renderer"
+    tags:
+      - basic
+      - nodes
+    mock_response: |
+      import { memo } from 'react';
+      import { Handle, Position, NodeProps, Node } from '@xyflow/react';
+
+      export interface TextNodeData extends Record<string, unknown> {
+        title: string;
+        description?: string;
+      }
+
+      export type TextNode = Node<TextNodeData, 'text-node'>;
+      export type TextNodeProps = NodeProps<TextNode>;
+
+      export const TextNode = memo(function TextNode({ id, data, selected }: TextNodeProps) {
+        return (
+          <div className="node-container">
+            <Handle type="target" position={Position.Top} />
+            <div className="node-content">
+              <h3 className="text-text-primary font-medium">{data.title}</h3>
+              {data.description && (
+                <p className="text-text-secondary text-sm">{data.description}</p>
+              )}
+            </div>
+            <Handle type="source" position={Position.Bottom} />
+          </div>
+        );
+      });
+
+  # Resizable Node Component
+  - name: resizable_node_component
+    prompt: |
+      Create a React Flow custom node that can be resized using NodeResizer
+      component with minimum size constraints.
+    expected_patterns:
+      - "NodeResizer"
+      - "isVisible"
+      - "selected"
+      - "minWidth"
+      - "minHeight"
+      - "width"
+      - "height"
+    forbidden_patterns:
+      - "reactflow"
+    tags:
+      - resizing
+      - nodes
+    mock_response: |
+      import { memo } from 'react';
+      import { Handle, Position, NodeProps, Node, NodeResizer } from '@xyflow/react';
+
+      export interface ResizableNodeData extends Record<string, unknown> {
+        title: string;
+        content: string;
+      }
+
+      export type ResizableNode = Node<ResizableNodeData, 'resizable-node'>;
+      export type ResizableNodeProps = NodeProps<ResizableNode>;
+
+      export const ResizableNode = memo(function ResizableNode({
+        id,
+        data,
+        selected,
+        width,
+        height,
+      }: ResizableNodeProps) {
+        return (
+          <>
+            <NodeResizer isVisible={selected} minWidth={150} minHeight={100} />
+            <div
+              className="node-container"
+              style={{ width: width ?? 200, height: height ?? 150 }}
+            >
+              <Handle type="target" position={Position.Top} />
+              <div className="node-content p-4">
+                <h3 className="text-text-primary font-medium">{data.title}</h3>
+                <p className="text-text-secondary text-sm mt-2">{data.content}</p>
+              </div>
+              <Handle type="source" position={Position.Bottom} />
+            </div>
+          </>
+        );
+      });
+
+  # Multiple Handles Node
+  - name: multiple_handles_node
+    prompt: |
+      Create a React Flow node with multiple input and output handles
+      with unique IDs for each handle.
+    expected_patterns:
+      - "Handle"
+      - 'id="'
+      - "Position.Top"
+      - "Position.Bottom"
+      - "Position.Left"
+      - "Position.Right"
+    forbidden_patterns:
+      - "reactflow"
+    tags:
+      - handles
+      - nodes
+    mock_response: |
+      import { memo } from 'react';
+      import { Handle, Position, NodeProps, Node } from '@xyflow/react';
+
+      export interface RouterNodeData extends Record<string, unknown> {
+        title: string;
+      }
+
+      export type RouterNode = Node<RouterNodeData, 'router-node'>;
+      export type RouterNodeProps = NodeProps<RouterNode>;
+
+      export const RouterNode = memo(function RouterNode({ id, data, selected }: RouterNodeProps) {
+        return (
+          <div className="node-container p-4">
+            {/* Input handles */}
+            <Handle type="target" position={Position.Top} id="input-top" />
+            <Handle type="target" position={Position.Left} id="input-left" />
+            
+            <div className="node-content text-center">
+              <h3 className="text-text-primary font-medium">{data.title}</h3>
+            </div>
+            
+            {/* Output handles */}
+            <Handle type="source" position={Position.Bottom} id="output-bottom" />
+            <Handle type="source" position={Position.Right} id="output-right" />
+          </div>
+        );
+      });
+
+  # Editable Node with useReactFlow
+  - name: editable_node_react_flow
+    prompt: |
+      Create a React Flow node with editable content that updates the
+      node data using useReactFlow hook.
+    expected_patterns:
+      - "useReactFlow"
+      - "setNodes"
+      - "useCallback"
+      - "onChange"
+    forbidden_patterns:
+      - "reactflow"
+    tags:
+      - editable
+      - hooks
+    mock_response: |
+      import { memo, useCallback } from 'react';
+      import { Handle, Position, NodeProps, Node, useReactFlow } from '@xyflow/react';
+
+      export interface EditableNodeData extends Record<string, unknown> {
+        title: string;
+      }
+
+      export type EditableNode = Node<EditableNodeData, 'editable-node'>;
+      export type EditableNodeProps = NodeProps<EditableNode>;
+
+      export const EditableNode = memo(function EditableNode({
+        id,
+        data,
+        selected,
+      }: EditableNodeProps) {
+        const { setNodes } = useReactFlow();
+
+        const handleTitleChange = useCallback(
+          (e: React.ChangeEvent<HTMLInputElement>) => {
+            setNodes((nodes) =>
+              nodes.map((node) =>
+                node.id === id
+                  ? { ...node, data: { ...node.data, title: e.target.value } }
+                  : node
+              )
+            );
+          },
+          [id, setNodes]
+        );
+
+        return (
+          <div className="node-container p-4">
+            <Handle type="target" position={Position.Top} />
+            <input
+              value={data.title}
+              onChange={handleTitleChange}
+              className="glass-input px-2 py-1 text-text-primary w-full"
+              placeholder="Enter title"
+            />
+            <Handle type="source" position={Position.Bottom} />
+          </div>
+        );
+      });
+
+  # Node Types Registration
+  - name: node_types_registration
+    prompt: |
+      Create a node types export file that registers multiple custom
+      nodes for use with ReactFlow.
+    expected_patterns:
+      - "nodeTypes"
+      - "export const"
+      - "export {"
+    forbidden_patterns:
+      - "reactflow"
+      - "inline nodeTypes"
+    tags:
+      - registration
+      - exports
+    mock_response: |
+      // components/nodes/index.ts
+      import { TextNode } from './TextNode';
+      import { ResizableNode } from './ResizableNode';
+      import { RouterNode } from './RouterNode';
+      import { EditableNode } from './EditableNode';
+
+      // Re-export components
+      export { TextNode } from './TextNode';
+      export { ResizableNode } from './ResizableNode';
+      export { RouterNode } from './RouterNode';
+      export { EditableNode } from './EditableNode';
+
+      // Re-export types
+      export type { TextNodeData, TextNode as TextNodeType } from './TextNode';
+      export type { ResizableNodeData, ResizableNode as ResizableNodeType } from './ResizableNode';
+      export type { RouterNodeData, RouterNode as RouterNodeType } from './RouterNode';
+      export type { EditableNodeData, EditableNode as EditableNodeType } from './EditableNode';
+
+      // Node types map - define OUTSIDE component to prevent re-renders
+      export const nodeTypes = {
+        'text-node': TextNode,
+        'resizable-node': ResizableNode,
+        'router-node': RouterNode,
+        'editable-node': EditableNode,
+      } as const;
+
+  # Node Default Factory
+  - name: node_default_factory
+    prompt: |
+      Create a factory function that generates new nodes with default
+      data and unique IDs.
+    expected_patterns:
+      - "defaultTaskNodeData"
+      - "createTaskNode"
+      - "position"
+      - "Date.now"
+      - "type"
+    forbidden_patterns:
+      - "reactflow"
+    tags:
+      - factory
+      - defaults
+    mock_response: |
+      import { Node } from '@xyflow/react';
+
+      export interface TaskNodeData extends Record<string, unknown> {
+        title: string;
+        status: 'pending' | 'in-progress' | 'completed';
+        priority: 'low' | 'medium' | 'high';
+      }
+
+      export type TaskNode = Node<TaskNodeData, 'task-node'>;
+
+      export const defaultTaskNodeData: TaskNodeData = {
+        title: 'New Task',
+        status: 'pending',
+        priority: 'medium',
+      };
+
+      export function createTaskNode(
+        position: { x: number; y: number },
+        data?: Partial<TaskNodeData>
+      ): TaskNode {
+        return {
+          id: `task-node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          type: 'task-node',
+          position,
+          data: { ...defaultTaskNodeData, ...data },
+        };
+      }
+
+  # Node with Zustand Store
+  - name: node_with_zustand
+    prompt: |
+      Create a React Flow node that reads and updates state through
+      a Zustand store using individual selectors.
+    expected_patterns:
+      - "useAppStore"
+      - "updateNode"
+      - "useCallback"
+      - "(state) =>"
+    forbidden_patterns:
+      - "reactflow"
+    tags:
+      - zustand
+      - state
+    mock_response: |
+      import { memo, useCallback } from 'react';
+      import { Handle, Position, NodeProps, Node } from '@xyflow/react';
+      import { useAppStore } from '../store/app-store';
+
+      export interface CounterNodeData extends Record<string, unknown> {
+        count: number;
+      }
+
+      export type CounterNode = Node<CounterNodeData, 'counter-node'>;
+      export type CounterNodeProps = NodeProps<CounterNode>;
+
+      export const CounterNode = memo(function CounterNode({
+        id,
+        data,
+        selected,
+      }: CounterNodeProps) {
+        const updateNode = useAppStore((state) => state.updateNode);
+        const canvasMode = useAppStore((state) => state.canvasMode);
+
+        const handleIncrement = useCallback(() => {
+          updateNode(id, { count: data.count + 1 });
+        }, [id, data.count, updateNode]);
+
+        const handleDecrement = useCallback(() => {
+          updateNode(id, { count: data.count - 1 });
+        }, [id, data.count, updateNode]);
+
+        return (
+          <div className="node-container p-4">
+            <Handle type="target" position={Position.Top} />
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleDecrement}
+                disabled={canvasMode !== 'editing'}
+                className="px-2 py-1 bg-neutral-bg3 rounded"
+              >
+                -
+              </button>
+              <span className="text-text-primary text-lg font-bold">{data.count}</span>
+              <button
+                onClick={handleIncrement}
+                disabled={canvasMode !== 'editing'}
+                className="px-2 py-1 bg-neutral-bg3 rounded"
+              >
+                +
+              </button>
+            </div>
+            <Handle type="source" position={Position.Bottom} />
+          </div>
+        );
+      });
+
+  # Conditional Node Rendering
+  - name: conditional_node_rendering
+    prompt: |
+      Create a React Flow node that renders differently based on canvas
+      mode (editing vs presentation).
+    expected_patterns:
+      - "canvasMode"
+      - "editing"
+      - "presentation"
+      - "NodeResizer"
+      - "isVisible"
+    forbidden_patterns:
+      - "reactflow"
+    tags:
+      - conditional
+      - modes
+    mock_response: |
+      import { memo } from 'react';
+      import { Handle, Position, NodeProps, Node, NodeResizer } from '@xyflow/react';
+      import { useAppStore } from '../store/app-store';
+
+      export interface CardNodeData extends Record<string, unknown> {
+        title: string;
+        content: string;
+      }
+
+      export type CardNode = Node<CardNodeData, 'card-node'>;
+      export type CardNodeProps = NodeProps<CardNode>;
+
+      export const CardNode = memo(function CardNode({
+        id,
+        data,
+        selected,
+      }: CardNodeProps) {
+        const canvasMode = useAppStore((state) => state.canvasMode);
+        const updateNode = useAppStore((state) => state.updateNode);
+
+        const isEditing = canvasMode === 'editing';
+
+        return (
+          <>
+            <NodeResizer isVisible={selected && isEditing} minWidth={200} minHeight={100} />
+            <div className="node-container p-4">
+              <Handle type="target" position={Position.Top} />
+              <div className="node-content">
+                {isEditing ? (
+                  <>
+                    <input
+                      value={data.title}
+                      onChange={(e) => updateNode(id, { title: e.target.value })}
+                      className="glass-input w-full mb-2"
+                      placeholder="Title"
+                    />
+                    <textarea
+                      value={data.content}
+                      onChange={(e) => updateNode(id, { content: e.target.value })}
+                      className="glass-input w-full"
+                      placeholder="Content"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-text-primary font-medium">{data.title}</h3>
+                    <p className="text-text-secondary mt-2">{data.content}</p>
+                  </>
+                )}
+              </div>
+              <Handle type="source" position={Position.Bottom} />
+            </div>
+          </>
+        );
+      });
+
+  # Handle with Validation
+  - name: handle_with_validation
+    prompt: |
+      Create a React Flow node with handles that include connection
+      validation logic.
+    expected_patterns:
+      - "isValidConnection"
+      - "Handle"
+      - "connection"
+      - "sourceHandle"
+      - "targetHandle"
+    forbidden_patterns:
+      - "reactflow"
+    tags:
+      - handles
+      - validation
+    mock_response: |
+      import { memo, useCallback } from 'react';
+      import { Handle, Position, NodeProps, Node, Connection } from '@xyflow/react';
+
+      export interface TypedNodeData extends Record<string, unknown> {
+        inputType: 'string' | 'number' | 'boolean';
+        outputType: 'string' | 'number' | 'boolean';
+      }
+
+      export type TypedNode = Node<TypedNodeData, 'typed-node'>;
+      export type TypedNodeProps = NodeProps<TypedNode>;
+
+      export const TypedNode = memo(function TypedNode({
+        id,
+        data,
+        selected,
+      }: TypedNodeProps) {
+        const isValidConnection = useCallback(
+          (connection: Connection) => {
+            // Prevent self-connections
+            if (connection.source === connection.target) {
+              return false;
+            }
+            // Add type checking logic here if needed
+            return true;
+          },
+          []
+        );
+
+        return (
+          <div className="node-container p-4">
+            <Handle
+              type="target"
+              position={Position.Top}
+              id={`input-${data.inputType}`}
+              isValidConnection={isValidConnection}
+              className="w-3 h-3 bg-blue-500"
+            />
+            <div className="node-content text-center">
+              <span className="text-text-secondary text-xs">
+                {data.inputType} → {data.outputType}
+              </span>
+            </div>
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id={`output-${data.outputType}`}
+              isValidConnection={isValidConnection}
+              className="w-3 h-3 bg-green-500"
+            />
+          </div>
+        );
+      });
+
+  # Node Data Type Definition
+  - name: node_data_type_definition
+    prompt: |
+      Create comprehensive TypeScript type definitions for a custom
+      React Flow node including data interface and node type.
+    expected_patterns:
+      - "interface"
+      - "Record<string, unknown>"
+      - "Node<"
+      - "NodeProps<"
+      - "type"
+    forbidden_patterns:
+      - "reactflow"
+      - "any"
+    tags:
+      - types
+      - typescript
+    mock_response: |
+      import { Node, NodeProps } from '@xyflow/react';
+
+      /**
+       * Data interface for the Video node
+       * Must extend Record<string, unknown> for React Flow compatibility
+       */
+      export interface VideoNodeData extends Record<string, unknown> {
+        /** Video URL or source */
+        src: string;
+        /** Video title for display */
+        title: string;
+        /** Playback state */
+        isPlaying: boolean;
+        /** Current playback time in seconds */
+        currentTime: number;
+        /** Total duration in seconds */
+        duration: number;
+        /** Volume level (0-1) */
+        volume: number;
+        /** Whether video is muted */
+        isMuted: boolean;
+      }
+
+      /**
+       * Video node type with specific type identifier
+       */
+      export type VideoNode = Node<VideoNodeData, 'video-node'>;
+
+      /**
+       * Props type for the VideoNode component
+       */
+      export type VideoNodeProps = NodeProps<VideoNode>;
+
+      /**
+       * Default data for creating new video nodes
+       */
+      export const defaultVideoNodeData: VideoNodeData = {
+        src: '',
+        title: 'New Video',
+        isPlaying: false,
+        currentTime: 0,
+        duration: 0,
+        volume: 1,
+        isMuted: false,
+      };

@@ -1,0 +1,106 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-eventhub-rust skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: create_producer_client
+    prompt: |
+      Create an Event Hubs ProducerClient in Rust using DeveloperToolsCredential.
+    expected_patterns:
+      - "DeveloperToolsCredential"
+      - "ProducerClient"
+      - "builder"
+      - "open"
+      - "servicebus.windows.net"
+    forbidden_patterns:
+      - "connection_string"
+    tags:
+      - basic
+      - producer
+    mock_response: |
+      use azure_identity::DeveloperToolsCredential;
+      use azure_messaging_eventhubs::ProducerClient;
+
+      let credential = DeveloperToolsCredential::new(None)?;
+      let producer = ProducerClient::builder()
+          .open("<namespace>.servicebus.windows.net", "eventhub-name", credential.clone())
+          .await?;
+
+  - name: send_single_event
+    prompt: |
+      Send a single event to an Event Hub using ProducerClient in Rust.
+    expected_patterns:
+      - "send_event"
+      - "vec!"
+    forbidden_patterns:
+      - "send_batch"
+    tags:
+      - send
+      - producer
+    mock_response: |
+      producer.send_event(vec![1, 2, 3, 4], None).await?;
+
+  - name: send_batch
+    prompt: |
+      Create and send a batch of events to an Event Hub in Rust.
+    expected_patterns:
+      - "create_batch"
+      - "try_add_event_data"
+      - "send_batch"
+    forbidden_patterns:
+      - "send_event"
+    tags:
+      - batch
+      - producer
+    mock_response: |
+      let batch = producer.create_batch(None).await?;
+      batch.try_add_event_data(b"event 1".to_vec(), None)?;
+      batch.try_add_event_data(b"event 2".to_vec(), None)?;
+
+      producer.send_batch(batch, None).await?;
+
+  - name: create_consumer_client
+    prompt: |
+      Create an Event Hubs ConsumerClient in Rust for receiving events.
+    expected_patterns:
+      - "ConsumerClient"
+      - "builder"
+      - "open"
+    forbidden_patterns:
+      - "ProducerClient"
+    tags:
+      - consumer
+      - receive
+    mock_response: |
+      use azure_identity::DeveloperToolsCredential;
+      use azure_messaging_eventhubs::ConsumerClient;
+
+      let credential = DeveloperToolsCredential::new(None)?;
+      let consumer = ConsumerClient::builder()
+          .open("<namespace>.servicebus.windows.net", "eventhub-name", credential.clone())
+          .await?;
+
+  - name: receive_events
+    prompt: |
+      Receive events from a specific partition using the ConsumerClient in Rust.
+    expected_patterns:
+      - "open_partition_receiver"
+      - "receive_events"
+      - "partition"
+    forbidden_patterns:
+      - "send"
+    tags:
+      - consumer
+      - receive
+    mock_response: |
+      let receiver = consumer.open_partition_receiver("0", None).await?;
+
+      let events = receiver.receive_events(100, None).await?;
+      for event in events {
+          println!("Event data: {:?}", event.body());
+      }

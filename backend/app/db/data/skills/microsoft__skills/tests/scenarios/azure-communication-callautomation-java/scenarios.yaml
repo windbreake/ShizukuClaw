@@ -1,0 +1,225 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-communication-callautomation-java skill evaluation
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: client_creation
+    prompt: |
+      Create Java code to set up the Azure Communication Call Automation client
+      using DefaultAzureCredential authentication.
+    expected_patterns:
+      - "CallAutomationClientBuilder"
+      - "DefaultAzureCredentialBuilder"
+      - "buildClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'connectionString\("endpoint='
+      - 'endpoint\("https://'
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import com.azure.communication.callautomation.CallAutomationClient;
+      import com.azure.communication.callautomation.CallAutomationClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              
+              CallAutomationClient client = new CallAutomationClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              System.out.println("Client initialized successfully");
+          }
+      }
+
+  - name: create_outbound_call
+    prompt: |
+      Create a Java example that creates an outbound call to a phone number
+      using Azure Communication Call Automation.
+    expected_patterns:
+      - "CreateCallOptions"
+      - "PhoneNumberIdentifier"
+      - "createCall"
+      - "CreateCallResult"
+      - "setCallbackUrl"
+      - "getCallConnectionId"
+    tags:
+      - calls
+      - outbound
+    mock_response: |
+      import com.azure.communication.callautomation.CallAutomationClient;
+      import com.azure.communication.callautomation.CallAutomationClientBuilder;
+      import com.azure.communication.callautomation.models.*;
+      import com.azure.communication.common.CommunicationUserIdentifier;
+      import com.azure.communication.common.PhoneNumberIdentifier;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.List;
+
+      public class CreateOutboundCall {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String callbackUrl = System.getenv("CALLBACK_BASE_URL") + "/api/callbacks";
+              
+              CallAutomationClient client = new CallAutomationClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              PhoneNumberIdentifier target = new PhoneNumberIdentifier("+14255551234");
+              PhoneNumberIdentifier caller = new PhoneNumberIdentifier("+14255550100");
+              
+              CreateCallOptions options = new CreateCallOptions(
+                  new CommunicationUserIdentifier("<user-id>"),
+                  List.of(target))
+                  .setSourceCallerId(caller)
+                  .setCallbackUrl(callbackUrl);
+              
+              CreateCallResult result = client.createCall(options);
+              String callConnectionId = result.getCallConnectionProperties().getCallConnectionId();
+              System.out.println("Call started: " + callConnectionId);
+          }
+      }
+
+  - name: play_text_to_speech
+    prompt: |
+      Create a Java example that plays text-to-speech audio on a call
+      using Azure Communication Call Automation.
+    expected_patterns:
+      - "CallConnection"
+      - "CallMedia"
+      - "TextSource"
+      - "PlayOptions"
+      - "play"
+      - "setVoiceName"
+    tags:
+      - media
+      - tts
+    mock_response: |
+      import com.azure.communication.callautomation.CallAutomationClient;
+      import com.azure.communication.callautomation.CallAutomationClientBuilder;
+      import com.azure.communication.callautomation.CallConnection;
+      import com.azure.communication.callautomation.CallMedia;
+      import com.azure.communication.callautomation.models.*;
+      import com.azure.communication.common.CommunicationUserIdentifier;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.util.List;
+
+      public class PlayTextToSpeech {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String callConnectionId = System.getenv("CALL_CONNECTION_ID");
+              
+              CallAutomationClient client = new CallAutomationClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              CallConnection callConnection = client.getCallConnection(callConnectionId);
+              CallMedia callMedia = callConnection.getCallMedia();
+              
+              TextSource textSource = new TextSource()
+                  .setText("Welcome to Contoso. Press 1 for sales, 2 for support.")
+                  .setVoiceName("en-US-JennyNeural");
+              
+              PlayOptions playOptions = new PlayOptions(
+                  List.of(textSource),
+                  List.of(new CommunicationUserIdentifier("<target-user>")));
+              
+              callMedia.play(playOptions);
+              System.out.println("Playing audio");
+          }
+      }
+
+  - name: start_recording
+    prompt: |
+      Create a Java example that starts recording a call using
+      Azure Communication Call Automation.
+    expected_patterns:
+      - "CallRecording"
+      - "StartRecordingOptions"
+      - "ServerCallLocator"
+      - "RecordingChannel"
+      - "RecordingFormat"
+      - "getRecordingId"
+    tags:
+      - recording
+    mock_response: |
+      import com.azure.communication.callautomation.CallAutomationClient;
+      import com.azure.communication.callautomation.CallAutomationClientBuilder;
+      import com.azure.communication.callautomation.CallRecording;
+      import com.azure.communication.callautomation.models.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class StartRecording {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              String serverCallId = System.getenv("SERVER_CALL_ID");
+              
+              CallAutomationClient client = new CallAutomationClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              CallRecording callRecording = client.getCallRecording();
+              
+              StartRecordingOptions recordingOptions = new StartRecordingOptions(
+                  new ServerCallLocator(serverCallId))
+                  .setRecordingChannel(RecordingChannel.MIXED)
+                  .setRecordingContent(RecordingContent.AUDIO_VIDEO)
+                  .setRecordingFormat(RecordingFormat.MP4);
+              
+              RecordingStateResult result = callRecording.start(recordingOptions);
+              String recordingId = result.getRecordingId();
+              System.out.println("Recording started: " + recordingId);
+          }
+      }
+
+  - name: error_handling
+    prompt: |
+      Create a Java example showing proper error handling for call automation
+      operations with HttpResponseException handling.
+    expected_patterns:
+      - "HttpResponseException"
+      - "try"
+      - "catch"
+      - "getResponse().getStatusCode()"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.communication.callautomation.CallAutomationClient;
+      import com.azure.communication.callautomation.CallAutomationClientBuilder;
+      import com.azure.communication.callautomation.models.*;
+      import com.azure.core.exception.HttpResponseException;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ErrorHandling {
+          public static void main(String[] args) {
+              String endpoint = System.getenv("AZURE_COMMUNICATION_ENDPOINT");
+              
+              CallAutomationClient client = new CallAutomationClientBuilder()
+                  .endpoint(endpoint)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              try {
+                  AnswerCallOptions options = new AnswerCallOptions(
+                      "invalid-context",
+                      "https://example.com/callbacks");
+                  client.answerCall(options);
+              } catch (HttpResponseException e) {
+                  if (e.getResponse().getStatusCode() == 404) {
+                      System.err.println("Call not found or already ended");
+                  } else {
+                      System.err.println("Error: " + e.getMessage());
+                  }
+              }
+          }
+      }

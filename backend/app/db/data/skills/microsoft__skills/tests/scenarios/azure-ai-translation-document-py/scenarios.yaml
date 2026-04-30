@@ -1,0 +1,522 @@
+# Test scenarios for azure-ai-translation-document-py skill
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Batch Translation
+  - name: basic_batch_translation
+    prompt: |
+      Create a script that submits a batch of documents for translation from a
+      source Azure Storage container to a target container. Show proper client
+      initialization and job submission.
+    expected_patterns:
+      - "DocumentTranslationClient"
+      - "begin_translation"
+      - "DocumentTranslationInput"
+      - "TranslationTarget"
+      - "poller.result()"
+    forbidden_patterns:
+      - "hardcoded.*endpoint"
+    tags:
+      - batch-translation
+      - basic
+    mock_response: |
+      import os
+      from azure.ai.translation.document import (
+          DocumentTranslationClient,
+          DocumentTranslationInput,
+          TranslationTarget,
+      )
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["AZURE_DOCUMENT_TRANSLATION_ENDPOINT"]
+      source_url = os.environ["AZURE_SOURCE_CONTAINER_URL"]
+      target_url = os.environ["AZURE_TARGET_CONTAINER_URL"]
+      
+      client = DocumentTranslationClient(endpoint, DefaultAzureCredential())
+      
+      with client:
+          poller = client.begin_translation(
+              inputs=[
+                  DocumentTranslationInput(
+                      source_url=source_url,
+                      targets=[
+                          TranslationTarget(target_url=target_url, language="es")
+                      ]
+                  )
+              ]
+          )
+          
+          result = poller.result()
+          print(f"Status: {poller.status()}")
+          print(f"Succeeded: {poller.details.documents_succeeded_count}")
+          print(f"Failed: {poller.details.documents_failed_count}")
+
+  # Multiple Target Languages
+  - name: multiple_target_languages
+    prompt: |
+      Create a script that translates a batch of documents to multiple languages
+      (Spanish, French, German) in a single translation job. Show how to specify
+      different target containers for each language.
+    expected_patterns:
+      - "TranslationTarget"
+      - "language="
+      - "target_url"
+      - "targets=\\["
+    forbidden_patterns:
+      - 'language="en"'
+    tags:
+      - batch-translation
+      - multilingual
+    mock_response: |
+      import os
+      from azure.ai.translation.document import (
+          DocumentTranslationClient,
+          DocumentTranslationInput,
+          TranslationTarget,
+      )
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["AZURE_DOCUMENT_TRANSLATION_ENDPOINT"]
+      source_url = os.environ["AZURE_SOURCE_CONTAINER_URL"]
+      target_urls = {
+          "es": os.environ["AZURE_TARGET_ES_URL"],
+          "fr": os.environ["AZURE_TARGET_FR_URL"],
+          "de": os.environ["AZURE_TARGET_DE_URL"],
+      }
+      
+      client = DocumentTranslationClient(endpoint, DefaultAzureCredential())
+      
+      with client:
+          poller = client.begin_translation(
+              inputs=[
+                  DocumentTranslationInput(
+                      source_url=source_url,
+                      targets=[
+                          TranslationTarget(target_url=target_urls["es"], language="es"),
+                          TranslationTarget(target_url=target_urls["fr"], language="fr"),
+                          TranslationTarget(target_url=target_urls["de"], language="de"),
+                      ]
+                  )
+              ]
+          )
+          
+          result = poller.result()
+          print("Translation submitted to multiple languages")
+
+  # Single Document Translation
+  - name: single_document_translation
+    prompt: |
+      Create a script using SingleDocumentTranslationClient to translate a single
+      document (a .docx file) to Spanish. Show how to read the file and write the
+      translated result back to disk.
+    expected_patterns:
+       - "SingleDocumentTranslationClient"
+       - "translate"
+       - "open.*rb"
+       - "open.*wb"
+       - "\\.docx"
+    forbidden_patterns:
+      - "begin_translation"
+    tags:
+      - single-document
+      - file-io
+    mock_response: |
+      import os
+      from azure.ai.translation.document import SingleDocumentTranslationClient
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["AZURE_DOCUMENT_TRANSLATION_ENDPOINT"]
+      client = SingleDocumentTranslationClient(endpoint, DefaultAzureCredential())
+      
+      with client:
+          with open("document.docx", "rb") as f:
+              result = client.translate(
+                  document=f,
+                  target_language="es",
+                  content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              )
+          
+          with open("document_es.docx", "wb") as f:
+              f.write(result)
+          
+          print("Document translated successfully")
+
+  # Format Preservation & Supported Formats
+  - name: format_preservation_validation
+    prompt: |
+      Create a script that checks supported document formats and languages before
+      translating. Display the formats and language codes, then translate a PDF
+      to ensure format is preserved.
+    expected_patterns:
+      - "get_supported_document_formats"
+      - "get_supported_languages"
+      - "fmt.format"
+      - "lang.code"
+      - "pdf"
+    forbidden_patterns:
+      - "hardcoded.*format"
+    tags:
+      - format-preservation
+      - metadata
+    mock_response: |
+      import os
+      from azure.ai.translation.document import (
+          DocumentTranslationClient,
+          DocumentTranslationInput,
+          TranslationTarget,
+      )
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["AZURE_DOCUMENT_TRANSLATION_ENDPOINT"]
+      client = DocumentTranslationClient(endpoint, DefaultAzureCredential())
+      
+      with client:
+          formats = client.get_supported_document_formats()
+          print("Supported formats:")
+          for fmt in formats:
+              print(f"  {fmt.format}")
+          
+          languages = client.get_supported_languages()
+          print("Supported languages:")
+          for lang in languages:
+              print(f"  {lang.code}: {lang.name}")
+          
+          source_url = os.environ["AZURE_SOURCE_CONTAINER_URL"]
+          target_url = os.environ["AZURE_TARGET_CONTAINER_URL"]
+          
+          poller = client.begin_translation(
+              inputs=[
+                  DocumentTranslationInput(
+                      source_url=source_url,
+                      targets=[
+                          TranslationTarget(
+                              target_url=target_url,
+                              language="es"
+                          )
+                      ]
+                  )
+              ]
+          )
+          
+          result = poller.result()
+          print("PDF translated with format preserved")
+
+  # Status Polling & Error Handling
+  - name: status_polling_and_errors
+    prompt: |
+      Create a script that monitors translation job status, iterates through
+      document-level statuses, and handles any failed documents with error details.
+      Show how to check for errors at both job and document levels.
+    expected_patterns:
+      - "list_translation_statuses"
+      - "list_document_statuses"
+      - "doc.status"
+      - "doc.error"
+      - "documents_failed_count"
+    forbidden_patterns:
+      - "except.*pass"
+    tags:
+      - error-handling
+      - status-polling
+      - advanced
+    mock_response: |
+      import os
+      from azure.ai.translation.document import (
+          DocumentTranslationClient,
+          DocumentTranslationInput,
+          TranslationTarget,
+      )
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["AZURE_DOCUMENT_TRANSLATION_ENDPOINT"]
+      source_url = os.environ["AZURE_SOURCE_CONTAINER_URL"]
+      target_url = os.environ["AZURE_TARGET_CONTAINER_URL"]
+      
+      client = DocumentTranslationClient(endpoint, DefaultAzureCredential())
+      
+      with client:
+          poller = client.begin_translation(
+              inputs=[
+                  DocumentTranslationInput(
+                      source_url=source_url,
+                      targets=[
+                          TranslationTarget(target_url=target_url, language="es")
+                      ]
+                  )
+              ]
+          )
+          
+          result = poller.result()
+          print(f"Job status: {poller.status()}")
+          print(f"Succeeded: {poller.details.documents_succeeded_count}")
+          print(f"Failed: {poller.details.documents_failed_count}")
+          
+          operation_id = poller.id
+          document_statuses = client.list_document_statuses(operation_id)
+          
+          failed_docs = []
+          for doc in document_statuses:
+              if doc.status == "failed":
+                  failed_docs.append({
+                      "url": doc.source_document_url,
+                      "error": doc.error.message if doc.error else "Unknown"
+                  })
+          
+          if failed_docs:
+              print(f"Failed documents ({len(failed_docs)}):")
+              for doc in failed_docs:
+                  print(f"  - {doc['url']}: {doc['error']}")
+
+  # Glossary Usage for Domain-Specific Terms
+  - name: glossary_for_terminology
+    prompt: |
+      Create a script that uses a glossary file to ensure domain-specific
+      terminology is translated consistently. Show how to reference the glossary
+      in the translation request.
+    expected_patterns:
+      - "Glossary"
+      - "glossary_url"
+      - "target_url"
+      - "TranslationGlossary"
+    forbidden_patterns:
+      - "glossary_id"
+    tags:
+      - glossary
+      - terminology
+      - advanced
+    mock_response: |
+      import os
+      from azure.ai.translation.document import (
+          DocumentTranslationClient,
+          DocumentTranslationInput,
+          TranslationTarget,
+          TranslationGlossary,
+      )
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["AZURE_DOCUMENT_TRANSLATION_ENDPOINT"]
+      source_url = os.environ["AZURE_SOURCE_CONTAINER_URL"]
+      target_url = os.environ["AZURE_TARGET_CONTAINER_URL"]
+      glossary_url = os.environ["AZURE_GLOSSARY_URL"]
+      
+      client = DocumentTranslationClient(endpoint, DefaultAzureCredential())
+      
+      with client:
+          poller = client.begin_translation(
+              inputs=[
+                  DocumentTranslationInput(
+                      source_url=source_url,
+                      targets=[
+                          TranslationTarget(
+                              target_url=target_url,
+                              language="es",
+                              glossaries=[
+                                  TranslationGlossary(glossary_url=glossary_url)
+                              ]
+                          )
+                      ]
+                  )
+              ]
+          )
+          
+          result = poller.result()
+          print("Translation with glossary completed")
+
+  # Async Batch Translation
+  - name: async_batch_translation
+    prompt: |
+      Create an async script using the aio module to submit and monitor a batch
+      translation job. Use async/await syntax and an async context manager.
+    expected_patterns:
+      - "from azure.ai.translation.document.aio import"
+      - "async with"
+      - "await"
+      - "AsyncDocumentTranslationClient"
+    forbidden_patterns:
+      - "from azure.ai.translation.document import.*aio"
+    tags:
+      - async
+      - batch-translation
+    mock_response: |
+      import os
+      import asyncio
+      from azure.ai.translation.document.aio import DocumentTranslationClient
+      from azure.ai.translation.document import (
+          DocumentTranslationInput,
+          TranslationTarget,
+      )
+      from azure.identity import DefaultAzureCredential
+      
+      async def translate_documents():
+          endpoint = os.environ["AZURE_DOCUMENT_TRANSLATION_ENDPOINT"]
+          source_url = os.environ["AZURE_SOURCE_CONTAINER_URL"]
+          target_url = os.environ["AZURE_TARGET_CONTAINER_URL"]
+          
+          async with DocumentTranslationClient(
+              endpoint, DefaultAzureCredential()
+          ) as client:
+              poller = await client.begin_translation(
+                  inputs=[
+                      DocumentTranslationInput(
+                          source_url=source_url,
+                          targets=[
+                              TranslationTarget(target_url=target_url, language="es")
+                          ]
+                      )
+                  ]
+              )
+              
+              result = await poller.result()
+              print(f"Status: {poller.status()}")
+      
+      asyncio.run(translate_documents())
+
+  # Monitor Multiple Operations
+  - name: monitor_multiple_operations
+    prompt: |
+      Create a script that lists and monitors multiple translation operations.
+      Show how to iterate through all active translation jobs and their status.
+    expected_patterns:
+      - "list_translation_statuses"
+      - "for.*in.*list_translation"
+      - "operation"
+      - "status"
+    forbidden_patterns:
+      - "get_translation_status"
+    tags:
+      - monitoring
+      - advanced
+    mock_response: |
+      import os
+      from azure.ai.translation.document import DocumentTranslationClient
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["AZURE_DOCUMENT_TRANSLATION_ENDPOINT"]
+      client = DocumentTranslationClient(endpoint, DefaultAzureCredential())
+      
+      with client:
+          operations = client.list_translation_statuses()
+          
+          for operation in operations:
+              print(f"Operation ID: {operation.id}")
+              print(f"Status: {operation.status}")
+              print(f"Documents: {operation.documents_succeeded_count} succeeded, "
+                    f"{operation.documents_failed_count} failed")
+              print()
+
+  # Error Recovery Pattern
+  - name: error_recovery_pattern
+    prompt: |
+      Create a script that implements retry logic for failed translation operations.
+      Show how to check document-level errors and retry specific failed documents.
+    expected_patterns:
+      - "for.*in.*range"
+      - "try"
+      - "except"
+      - "list_document_statuses"
+      - "if.*failed"
+    forbidden_patterns:
+      - "except.*:"
+    tags:
+      - error-handling
+      - retry
+      - advanced
+    mock_response: |
+      import os
+      import time
+      from azure.ai.translation.document import (
+          DocumentTranslationClient,
+          DocumentTranslationInput,
+          TranslationTarget,
+      )
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["AZURE_DOCUMENT_TRANSLATION_ENDPOINT"]
+      source_url = os.environ["AZURE_SOURCE_CONTAINER_URL"]
+      target_url = os.environ["AZURE_TARGET_CONTAINER_URL"]
+      
+      client = DocumentTranslationClient(endpoint, DefaultAzureCredential())
+      max_retries = 3
+      
+      with client:
+          for attempt in range(max_retries):
+              try:
+                  poller = client.begin_translation(
+                      inputs=[
+                          DocumentTranslationInput(
+                              source_url=source_url,
+                              targets=[
+                                  TranslationTarget(target_url=target_url, language="es")
+                              ]
+                          )
+                      ]
+                  )
+                  
+                  result = poller.result()
+                  operation_id = poller.id
+                  docs = client.list_document_statuses(operation_id)
+                  
+                  failed = [d for d in docs if d.status == "failed"]
+                  if not failed:
+                      print("All documents translated successfully")
+                      break
+                  else:
+                      print(f"Attempt {attempt + 1}: {len(failed)} documents failed")
+                      if attempt < max_retries - 1:
+                          time.sleep(2 ** attempt)
+              except Exception as e:
+                  print(f"Error during translation: {e}")
+                  if attempt < max_retries - 1:
+                      time.sleep(2 ** attempt)
+
+  # Content Type Handling
+  - name: content_type_handling
+    prompt: |
+      Create a script that handles different document content types (DOCX, PDF, XLSX)
+      when translating single documents. Show how to specify the correct content type
+      for each file format.
+    expected_patterns:
+      - "SingleDocumentTranslationClient"
+      - "content_type="
+      - "application/vnd"
+      - "translate"
+    forbidden_patterns:
+      - 'content_type="text/plain"'
+    tags:
+      - single-document
+      - content-types
+    mock_response: |
+      import os
+      from azure.ai.translation.document import SingleDocumentTranslationClient
+      from azure.identity import DefaultAzureCredential
+      
+      endpoint = os.environ["AZURE_DOCUMENT_TRANSLATION_ENDPOINT"]
+      client = SingleDocumentTranslationClient(endpoint, DefaultAzureCredential())
+      
+      content_types = {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf",
+          "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }
+      
+      with client:
+          for file_ext, content_type in content_types.items():
+              filename = f"document.{file_ext}"
+              if os.path.exists(filename):
+                  with open(filename, "rb") as f:
+                      result = client.translate(
+                          document=f,
+                          target_language="es",
+                          content_type=content_type
+                      )
+                  
+                  output_file = f"document_es.{file_ext}"
+                  with open(output_file, "wb") as f:
+                      f.write(result)
+                  
+                  print(f"Translated {filename} to {output_file}")

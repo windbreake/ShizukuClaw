@@ -1,0 +1,445 @@
+# Test scenarios for agents-v2-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Client and Agent Creation
+  - name: basic_hosted_agent_creation
+    prompt: |
+      Create a hosted agent using ImageBasedHostedAgentDefinition with AIProjectClient.
+      Use DefaultAzureCredential for authentication and environment variables for configuration.
+      The agent should use a container image from Azure Container Registry.
+    expected_patterns:
+      - "from azure.ai.projects import AIProjectClient"
+      - "from azure.identity import DefaultAzureCredential"
+      - "from azure.ai.projects.models import"
+      - "ImageBasedHostedAgentDefinition"
+      - "ProtocolVersionRecord"
+      - "AgentProtocol"
+      - "create_version"
+      - "agent_name="
+      - "container_protocol_versions"
+      - "image="
+    forbidden_patterns:
+      - "from azure.ai.agents.models import ImageBasedHostedAgentDefinition"
+      - "from azure.ai.agents import AgentsClient"
+      - "create_agent("
+    tags:
+      - basic
+      - client
+      - hosted-agent
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.ai.projects import AIProjectClient
+      from azure.ai.projects.models import (
+          ImageBasedHostedAgentDefinition,
+          ProtocolVersionRecord,
+          AgentProtocol,
+      )
+      
+      client = AIProjectClient(
+          endpoint=os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+          credential=DefaultAzureCredential()
+      )
+      
+      agent = client.agents.create_version(
+          agent_name="my-hosted-agent",
+          definition=ImageBasedHostedAgentDefinition(
+              container_protocol_versions=[
+                  ProtocolVersionRecord(protocol=AgentProtocol.RESPONSES, version="v1")
+              ],
+              image="myregistry.azurecr.io/my-agent:latest"
+          )
+      )
+      
+      print(f"Created agent: {agent.name} (version: {agent.version})")
+
+  # Protocol Version Configuration
+  - name: protocol_version_configuration
+    prompt: |
+      Create a hosted agent with properly configured container_protocol_versions.
+      Use ProtocolVersionRecord with AgentProtocol.RESPONSES and version "v1".
+    expected_patterns:
+      - "ProtocolVersionRecord"
+      - "AgentProtocol.RESPONSES"
+      - 'version="v1"'
+      - "container_protocol_versions="
+    forbidden_patterns:
+      - 'protocol="RESPONSES"'
+      - 'protocol="responses"'
+      - "container_protocol_versions=[]"
+    tags:
+      - protocol
+      - configuration
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.ai.projects import AIProjectClient
+      from azure.ai.projects.models import (
+          ImageBasedHostedAgentDefinition,
+          ProtocolVersionRecord,
+          AgentProtocol,
+      )
+      
+      client = AIProjectClient(
+          endpoint=os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+          credential=DefaultAzureCredential()
+      )
+      
+      agent = client.agents.create_version(
+          agent_name="protocol-agent",
+          definition=ImageBasedHostedAgentDefinition(
+              container_protocol_versions=[
+                  ProtocolVersionRecord(protocol=AgentProtocol.RESPONSES, version="v1")
+              ],
+              image="myregistry.azurecr.io/agent:v1"
+          )
+      )
+
+  # Resource Allocation
+  - name: resource_allocation
+    prompt: |
+      Create a hosted agent with custom CPU and memory allocation.
+      Use 2 CPU cores and 4Gi of memory. CPU and memory should be string values.
+    expected_patterns:
+      - 'cpu="2"'
+      - 'memory="4Gi"'
+      - "ImageBasedHostedAgentDefinition"
+    forbidden_patterns:
+      - "cpu=2"
+      - "memory=4"
+      - 'memory="4"'
+    tags:
+      - resources
+      - configuration
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.ai.projects import AIProjectClient
+      from azure.ai.projects.models import (
+          ImageBasedHostedAgentDefinition,
+          ProtocolVersionRecord,
+          AgentProtocol,
+      )
+      
+      client = AIProjectClient(
+          endpoint=os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+          credential=DefaultAzureCredential()
+      )
+      
+      agent = client.agents.create_version(
+          agent_name="resource-agent",
+          definition=ImageBasedHostedAgentDefinition(
+              container_protocol_versions=[
+                  ProtocolVersionRecord(protocol=AgentProtocol.RESPONSES, version="v1")
+              ],
+              image="myregistry.azurecr.io/agent:latest",
+              cpu="2",
+              memory="4Gi"
+          )
+      )
+
+  # Tools Configuration
+  - name: tools_configuration
+    prompt: |
+      Create a hosted agent with code_interpreter tool enabled.
+      Tools should be specified as a list of dictionaries with "type" key.
+    expected_patterns:
+      - "tools="
+      - '{"type": "code_interpreter"}'
+      - "ImageBasedHostedAgentDefinition"
+    forbidden_patterns:
+      - "CodeInterpreterTool()"
+      - "from azure.ai.agents.models import CodeInterpreterTool"
+      - 'tools=["code_interpreter"]'
+    tags:
+      - tools
+      - code-interpreter
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.ai.projects import AIProjectClient
+      from azure.ai.projects.models import (
+          ImageBasedHostedAgentDefinition,
+          ProtocolVersionRecord,
+          AgentProtocol,
+      )
+      
+      client = AIProjectClient(
+          endpoint=os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+          credential=DefaultAzureCredential()
+      )
+      
+      agent = client.agents.create_version(
+          agent_name="tools-agent",
+          definition=ImageBasedHostedAgentDefinition(
+              container_protocol_versions=[
+                  ProtocolVersionRecord(protocol=AgentProtocol.RESPONSES, version="v1")
+              ],
+              image="myregistry.azurecr.io/agent:latest",
+              tools=[{"type": "code_interpreter"}]
+          )
+      )
+
+  # Environment Variables
+  - name: environment_variables
+    prompt: |
+      Create a hosted agent with environment variables for configuration.
+      Include AZURE_AI_PROJECT_ENDPOINT and MODEL_NAME. Use os.environ for sensitive values.
+    expected_patterns:
+      - "environment_variables="
+      - "AZURE_AI_PROJECT_ENDPOINT"
+      - "MODEL_NAME"
+      - "os.environ"
+    forbidden_patterns:
+      - 'API_KEY": "sk-'
+      - '"https://myresource'
+    tags:
+      - environment
+      - configuration
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.ai.projects import AIProjectClient
+      from azure.ai.projects.models import (
+          ImageBasedHostedAgentDefinition,
+          ProtocolVersionRecord,
+          AgentProtocol,
+      )
+      
+      client = AIProjectClient(
+          endpoint=os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+          credential=DefaultAzureCredential()
+      )
+      
+      agent = client.agents.create_version(
+          agent_name="env-agent",
+          definition=ImageBasedHostedAgentDefinition(
+              container_protocol_versions=[
+                  ProtocolVersionRecord(protocol=AgentProtocol.RESPONSES, version="v1")
+              ],
+              image="myregistry.azurecr.io/agent:latest",
+              environment_variables={
+                  "AZURE_AI_PROJECT_ENDPOINT": os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+                  "MODEL_NAME": "gpt-4o-mini"
+              }
+          )
+      )
+
+  # Complete Example with All Options
+  - name: complete_hosted_agent
+    prompt: |
+      Create a complete hosted agent with all configuration options:
+      - Custom CPU and memory
+      - Code interpreter and file_search tools
+      - Environment variables
+      - Proper protocol version configuration
+    expected_patterns:
+      - "ImageBasedHostedAgentDefinition"
+      - "ProtocolVersionRecord"
+      - "AgentProtocol.RESPONSES"
+      - "cpu="
+      - "memory="
+      - "tools="
+      - "environment_variables="
+      - "create_version"
+    forbidden_patterns:
+      - "create_agent("
+      - "from azure.ai.agents"
+    tags:
+      - complete
+      - advanced
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.ai.projects import AIProjectClient
+      from azure.ai.projects.models import (
+          ImageBasedHostedAgentDefinition,
+          ProtocolVersionRecord,
+          AgentProtocol,
+      )
+      
+      client = AIProjectClient(
+          endpoint=os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+          credential=DefaultAzureCredential()
+      )
+      
+      agent = client.agents.create_version(
+          agent_name="complete-agent",
+          definition=ImageBasedHostedAgentDefinition(
+              container_protocol_versions=[
+                  ProtocolVersionRecord(protocol=AgentProtocol.RESPONSES, version="v1")
+              ],
+              image="myregistry.azurecr.io/complete-agent:v1.0",
+              cpu="2",
+              memory="4Gi",
+              tools=[
+                  {"type": "code_interpreter"},
+                  {"type": "file_search"}
+              ],
+              environment_variables={
+                  "AZURE_AI_PROJECT_ENDPOINT": os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+                  "MODEL_NAME": "gpt-4o-mini",
+                  "LOG_LEVEL": "INFO"
+              }
+          )
+      )
+      
+      print(f"Created agent: {agent.name} (version: {agent.version})")
+
+  # Async Pattern
+  - name: async_hosted_agent
+    prompt: |
+      Create a hosted agent using async/await pattern with proper context managers.
+      Use azure.ai.projects.aio for the async client and azure.identity.aio for credentials.
+    expected_patterns:
+      - "from azure.ai.projects.aio import AIProjectClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with"
+      - "await client.agents.create_version"
+      - "async def"
+    forbidden_patterns:
+      - "from azure.ai.projects import AIProjectClient"
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - async
+      - advanced
+    mock_response: |
+      import os
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.ai.projects.aio import AIProjectClient
+      from azure.ai.projects.models import (
+          ImageBasedHostedAgentDefinition,
+          ProtocolVersionRecord,
+          AgentProtocol,
+      )
+      
+      async def create_hosted_agent_async():
+          """Create a hosted agent asynchronously."""
+          
+          async with DefaultAzureCredential() as credential:
+              async with AIProjectClient(
+                  endpoint=os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+                  credential=credential
+              ) as client:
+                  agent = await client.agents.create_version(
+                      agent_name="async-agent",
+                      definition=ImageBasedHostedAgentDefinition(
+                          container_protocol_versions=[
+                              ProtocolVersionRecord(
+                                  protocol=AgentProtocol.RESPONSES,
+                                  version="v1"
+                              )
+                          ],
+                          image="myregistry.azurecr.io/async-agent:latest",
+                          cpu="1",
+                          memory="2Gi"
+                      )
+                  )
+                  return agent
+
+  # Agent Lifecycle Management
+  - name: agent_lifecycle
+    prompt: |
+      Show how to manage hosted agent lifecycle: list versions and delete a version.
+      Use list_versions and delete_version methods.
+    expected_patterns:
+      - "list_versions"
+      - "agent_name="
+      - "delete_version"
+      - "version="
+    forbidden_patterns:
+      - "delete_agent("
+    tags:
+      - lifecycle
+      - management
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.ai.projects import AIProjectClient
+      from azure.ai.projects.models import (
+          ImageBasedHostedAgentDefinition,
+          ProtocolVersionRecord,
+          AgentProtocol,
+      )
+      
+      client = AIProjectClient(
+          endpoint=os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+          credential=DefaultAzureCredential()
+      )
+      
+      # Create agent
+      agent = client.agents.create_version(
+          agent_name="lifecycle-agent",
+          definition=ImageBasedHostedAgentDefinition(
+              container_protocol_versions=[
+                  ProtocolVersionRecord(protocol=AgentProtocol.RESPONSES, version="v1")
+              ],
+              image="myregistry.azurecr.io/agent:latest"
+          )
+      )
+      
+      # List all versions
+      versions = client.agents.list_versions(agent_name="lifecycle-agent")
+      for version in versions:
+          print(f"Version: {version.version}, State: {version.state}")
+      
+      # Delete specific version
+      client.agents.delete_version(
+          agent_name="lifecycle-agent",
+          version=agent.version
+      )
+
+  # MCP Tool Configuration
+  - name: mcp_tool_configuration
+    prompt: |
+      Create a hosted agent with MCP tool configured for external service integration.
+      Include server_label and server_url in the MCP tool configuration.
+    expected_patterns:
+      - '"type": "mcp"'
+      - "server_label"
+      - "server_url"
+      - "tools="
+    forbidden_patterns:
+      - "project_connection_id"
+    tags:
+      - tools
+      - mcp
+      - advanced
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.ai.projects import AIProjectClient
+      from azure.ai.projects.models import (
+          ImageBasedHostedAgentDefinition,
+          ProtocolVersionRecord,
+          AgentProtocol,
+      )
+      
+      client = AIProjectClient(
+          endpoint=os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+          credential=DefaultAzureCredential()
+      )
+      
+      agent = client.agents.create_version(
+          agent_name="mcp-agent",
+          definition=ImageBasedHostedAgentDefinition(
+              container_protocol_versions=[
+                  ProtocolVersionRecord(protocol=AgentProtocol.RESPONSES, version="v1")
+              ],
+              image="myregistry.azurecr.io/mcp-agent:latest",
+              tools=[
+                  {"type": "code_interpreter"},
+                  {
+                      "type": "mcp",
+                      "server_label": "my-mcp-server",
+                      "server_url": "https://my-mcp-server.example.com"
+                  }
+              ]
+          )
+      )

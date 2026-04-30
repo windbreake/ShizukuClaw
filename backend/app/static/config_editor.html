@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="UTF-8">
+  <title>配置编辑器</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { 
+      font-family: 'Microsoft YaHei', sans-serif; 
+      background-color: #f8f9fa;
+      padding: 20px;
+    }
+    .card {
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+      border: none;
+    }
+    .card-header {
+      background-color: #fff;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+      font-weight: bold;
+    }
+    .btn-primary {
+      background-color: #6f42c1;
+      border-color: #6f42c1;
+    }
+    .btn-primary:hover {
+      background-color: #5a32a3;
+      border-color: #5a32a3;
+    }
+    .navbar-brand {
+      font-weight: bold;
+    }
+    h1 {
+      color: #6f42c1;
+    }
+    .form-control:focus {
+      border-color: #6f42c1;
+      box-shadow: 0 0 0 0.2rem rgba(111, 66, 193, 0.25);
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">⚙️ 配置编辑器</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div id="status"></div>
+    
+    <form id="configForm">
+      <div class="card">
+        <div class="card-header">
+          数据库配置
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="db_host" class="form-label">主机地址</label>
+                <input type="text" class="form-control" id="db_host" name="db_host">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="db_user" class="form-label">用户名</label>
+                <input type="text" class="form-control" id="db_user" name="db_user">
+              </div>
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="db_password" class="form-label">密码</label>
+                <input type="password" class="form-control" id="db_password" name="db_password">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="db_name" class="form-label">数据库名</label>
+                <input type="text" class="form-control" id="db_name" name="db_name">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header">
+          API密钥配置
+        </div>
+        <div class="card-body">
+          <div class="card mb-3">
+            <div class="card-header">
+              DeepSeek Chat API
+            </div>
+            <div class="card-body">
+              <div class="mb-3">
+                <label for="deepseek_key" class="form-label">API Key</label>
+                <input type="password" class="form-control" id="deepseek_key" name="deepseek_key">
+              </div>
+              <div class="mb-3">
+                <label for="deepseek_url" class="form-label">Base URL</label>
+                <input type="text" class="form-control" id="deepseek_url" name="deepseek_url">
+              </div>
+            </div>
+          </div>
+          
+          <div class="card mb-3">
+            <div class="card-header">
+              搜索API
+            </div>
+            <div class="card-body">
+              <div class="mb-3">
+                <label for="search_key" class="form-label">API Key</label>
+                <input type="password" class="form-control" id="search_key" name="search_key">
+              </div>
+              <div class="mb-3">
+                <label for="search_url" class="form-label">Base URL</label>
+                <input type="text" class="form-control" id="search_url" name="search_url">
+              </div>
+            </div>
+          </div>
+          
+          <div class="card mb-3">
+            <div class="card-header">
+              图像识别API
+            </div>
+            <div class="card-body">
+              <div class="mb-3">
+                <label for="image_recognition_key" class="form-label">API Key</label>
+                <input type="password" class="form-control" id="image_recognition_key" name="image_recognition_key">
+              </div>
+              <div class="mb-3">
+                <label for="image_recognition_url" class="form-label">Base URL</label>
+                <input type="text" class="form-control" id="image_recognition_url" name="image_recognition_url">
+              </div>
+            </div>
+          </div>
+          
+          <div class="card mb-3">
+            <div class="card-header">
+              图像生成API
+            </div>
+            <div class="card-body">
+              <div class="mb-3">
+                <label for="image_generation_key" class="form-label">API Key</label>
+                <input type="password" class="form-control" id="image_generation_key" name="image_generation_key">
+              </div>
+              <div class="mb-3">
+                <label for="image_generation_url" class="form-label">Base URL</label>
+                <input type="text" class="form-control" id="image_generation_url" name="image_generation_url">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header">
+          角色配置
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="character_name" class="form-label">角色名称</label>
+            <input type="text" class="form-control" id="character_name" name="character_name">
+          </div>
+          
+          <div class="mb-3">
+            <label for="character_personality" class="form-label">角色性格</label>
+            <input type="text" class="form-control" id="character_personality" name="character_personality">
+          </div>
+          
+          <div class="mb-3">
+            <label for="character_brother_qqid" class="form-label">哥哥QQ号</label>
+            <input type="text" class="form-control" id="character_brother_qqid" name="character_brother_qqid">
+          </div>
+          
+          <div class="mb-3">
+            <label for="character_height" class="form-label">身高</label>
+            <input type="text" class="form-control" id="character_height" name="character_height">
+          </div>
+          
+          <div class="mb-3">
+            <label for="character_weight" class="form-label">体重</label>
+            <input type="text" class="form-control" id="character_weight" name="character_weight">
+          </div>
+          
+          <div class="mb-3">
+            <label for="character_catchphrases" class="form-label">口癖 (逗号分隔)</label>
+            <input type="text" class="form-control" id="character_catchphrases" name="character_catchphrases">
+          </div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-body">
+          <button type="submit" class="btn btn-primary">保存配置</button>
+          <button type="button" class="btn btn-secondary" id="resetBtn">重置</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // 页面加载时获取当前配置
+    window.addEventListener('load', function() {
+      loadCurrentConfig();
+    });
+    
+    // 加载当前配置
+    async function loadCurrentConfig() {
+      try {
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        
+        // 填充表单字段，增加安全检查
+        document.getElementById('db_host').value = (config.database && config.database.host) || '';
+        document.getElementById('db_user').value = (config.database && config.database.user) || '';
+        document.getElementById('db_password').value = (config.database && config.database.password) || '';
+        document.getElementById('db_name').value = (config.database && config.database.database) || '';
+        
+        document.getElementById('deepseek_key').value = (config.api_keys && config.api_keys.deepseek_chat && config.api_keys.deepseek_chat.key) || '';
+        document.getElementById('deepseek_url').value = (config.api_keys && config.api_keys.deepseek_chat && config.api_keys.deepseek_chat.base_url) || '';
+        document.getElementById('search_key').value = (config.api_keys && config.api_keys.search && config.api_keys.search.key) || '';
+        document.getElementById('search_url').value = (config.api_keys && config.api_keys.search && config.api_keys.search.base_url) || '';
+        document.getElementById('image_recognition_key').value = (config.api_keys && config.api_keys.image_recognition && config.api_keys.image_recognition.key) || '';
+        document.getElementById('image_recognition_url').value = (config.api_keys && config.api_keys.image_recognition && config.api_keys.image_recognition.base_url) || '';
+        document.getElementById('image_generation_key').value = (config.api_keys && config.api_keys.image_generation && config.api_keys.image_generation.key) || '';
+        document.getElementById('image_generation_url').value = (config.api_keys && config.api_keys.image_generation && config.api_keys.image_generation.base_url) || '';
+        
+        document.getElementById('character_name').value = (config.character && config.character.name) || '';
+        document.getElementById('character_personality').value = (config.character && config.character.personality) || '';
+        document.getElementById('character_brother_qqid').value = (config.character && config.character.brother_qqid) || '';
+        document.getElementById('character_height').value = (config.character && config.character.height) || '';
+        document.getElementById('character_weight').value = (config.character && config.character.weight) || '';
+        document.getElementById('character_catchphrases').value = (config.character && config.character.catchphrases) || '';
+      } catch (error) {
+        showStatus('加载配置失败: ' + error.message, 'error');
+      }
+    }
+    
+    // 重置表单
+    document.getElementById('resetBtn').addEventListener('click', function() {
+      if (confirm('确定要重置所有配置吗？')) {
+        loadCurrentConfig();
+        showStatus('配置已重置', 'success');
+      }
+    });
+    
+    // 提交表单
+    document.getElementById('configForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      // 收集表单数据
+      const configData = {
+        database: {
+          host: document.getElementById('db_host').value,
+          user: document.getElementById('db_user').value,
+          password: document.getElementById('db_password').value,
+          database: document.getElementById('db_name').value
+        },
+        api_keys: {
+          deepseek_chat: {
+            key: document.getElementById('deepseek_key').value,
+            base_url: document.getElementById('deepseek_url').value
+          },
+          search: {
+            key: document.getElementById('search_key').value,
+            base_url: document.getElementById('search_url').value
+          },
+          image_recognition: {
+            key: document.getElementById('image_recognition_key').value,
+            base_url: document.getElementById('image_recognition_url').value
+          },
+          image_generation: {
+            key: document.getElementById('image_generation_key').value,
+            base_url: document.getElementById('image_generation_url').value
+          }
+        },
+        character: {
+          name: document.getElementById('character_name').value,
+          personality: document.getElementById('character_personality').value,
+          brother_qqid: document.getElementById('character_brother_qqid').value,
+          height: document.getElementById('character_height').value,
+          weight: document.getElementById('character_weight').value,
+          catchphrases: document.getElementById('character_catchphrases').value
+        }
+      };
+      
+      try {
+        const response = await fetch('/api/config', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(configData)
+        });
+        
+        if (response.ok) {
+          showStatus('配置保存成功', 'success');
+        } else {
+          const errorData = await response.json();
+          showStatus('保存配置失败: ' + errorData.error, 'error');
+        }
+      } catch (error) {
+        showStatus('保存配置失败: ' + error.message, 'error');
+      }
+    });
+    
+    // 显示状态消息
+    function showStatus(message, type) {
+      const statusDiv = document.getElementById('status');
+      statusDiv.innerHTML = `
+        <div class="alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show" role="alert">
+          ${message}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      `;
+      
+      // 3秒后自动隐藏消息
+      setTimeout(() => {
+        if (statusDiv.firstChild) {
+          statusDiv.firstChild.remove();
+        }
+      }, 3000);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,482 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-security-keyvault-keys-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Key Creation with DefaultAzureCredential
+  - name: basic_key_creation_default_credential
+    prompt: |
+      Create a basic Azure Key Vault key client using DefaultAzureCredential
+      and create an RSA key. Use environment variables for the vault URL.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "KeyClient"
+      - "CreateKey|CreateRsaKey"
+      - 'new Uri\('
+    forbidden_patterns:
+      - 'Microsoft\.Azure\.KeyVault'
+      - '"https://.*\.vault\.azure\.net"'
+    tags:
+      - basic
+      - authentication
+      - key-creation
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Keys;
+      
+      string vaultUrl = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URL")
+          ?? throw new InvalidOperationException("AZURE_KEYVAULT_URL not set");
+      
+      var client = new KeyClient(new Uri(vaultUrl), new DefaultAzureCredential());
+      
+      KeyVaultKey key = client.CreateKey("rsa-key-name", KeyType.Rsa);
+      
+      Console.WriteLine($"Key Name: {key.Name}");
+      Console.WriteLine($"Key Type: {key.KeyType}");
+
+  # RSA Key with Options
+  - name: rsa_key_with_options
+    prompt: |
+      Create an RSA key in Azure Key Vault with specific options:
+      2048-bit key size, expiration in 1 year, and software-protected.
+    expected_patterns:
+      - "CreateRsaKeyOptions"
+      - "KeySize"
+      - "ExpiresOn"
+      - "hardwareProtected.*false"
+    forbidden_patterns:
+      - 'hardwareProtected.*true'
+    tags:
+      - key-creation
+      - rsa
+      - options
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Keys;
+      
+      string vaultUrl = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URL")
+          ?? throw new InvalidOperationException("AZURE_KEYVAULT_URL not set");
+      
+      var client = new KeyClient(new Uri(vaultUrl), new DefaultAzureCredential());
+      
+      var rsaOptions = new CreateRsaKeyOptions("rsa-key-with-options", hardwareProtected: false)
+      {
+          KeySize = 2048,
+          ExpiresOn = DateTimeOffset.UtcNow.AddYears(1)
+      };
+      
+      KeyVaultKey rsaKey = client.CreateRsaKey(rsaOptions);
+      
+      Console.WriteLine($"Key Name: {rsaKey.Name}");
+      Console.WriteLine($"Key Type: {rsaKey.KeyType}");
+      Console.WriteLine($"Expires: {rsaKey.Properties.ExpiresOn}");
+
+  # EC Key Creation
+  - name: ec_key_creation
+    prompt: |
+      Create an Elliptic Curve key in Azure Key Vault using P-256 curve.
+    expected_patterns:
+      - "CreateEcKeyOptions"
+      - "CurveName"
+      - "P256|KeyCurveName.P256"
+    forbidden_patterns:
+      - 'CreateRsaKey'
+    tags:
+      - key-creation
+      - ec
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Keys;
+      
+      string vaultUrl = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URL")
+          ?? throw new InvalidOperationException("AZURE_KEYVAULT_URL not set");
+      
+      var client = new KeyClient(new Uri(vaultUrl), new DefaultAzureCredential());
+      
+      var ecOptions = new CreateEcKeyOptions("ec-key-name", hardwareProtected: false)
+      {
+          CurveName = KeyCurveName.P256
+      };
+      
+      KeyVaultKey ecKey = client.CreateEcKey(ecOptions);
+      
+      Console.WriteLine($"Key Name: {ecKey.Name}");
+      Console.WriteLine($"Key Type: {ecKey.KeyType}");
+      Console.WriteLine($"Curve: {ecKey.Key.CurveName}");
+
+  # Encrypt and Decrypt
+  - name: encrypt_decrypt_data
+    prompt: |
+      Use Azure Key Vault to encrypt and decrypt data using an RSA key
+      with RSA-OAEP-256 algorithm.
+    expected_patterns:
+      - "CryptographyClient"
+      - "Encrypt"
+      - "Decrypt"
+      - "RsaOaep256|EncryptionAlgorithm.RsaOaep256"
+    forbidden_patterns:
+      - 'RSA-OAEP$'
+    tags:
+      - cryptography
+      - encrypt
+      - decrypt
+    mock_response: |
+      using System.Text;
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Keys;
+      using Azure.Security.KeyVault.Keys.Cryptography;
+      
+      string vaultUrl = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URL")
+          ?? throw new InvalidOperationException("AZURE_KEYVAULT_URL not set");
+      
+      var client = new KeyClient(new Uri(vaultUrl), new DefaultAzureCredential());
+      
+      // Create or get an RSA key
+      KeyVaultKey key = client.CreateKey("encryption-key", KeyType.Rsa);
+      
+      // Get CryptographyClient from KeyClient
+      CryptographyClient cryptoClient = client.GetCryptographyClient(key.Name, key.Properties.Version);
+      
+      byte[] plaintext = Encoding.UTF8.GetBytes("Sensitive data to encrypt");
+      
+      // Encrypt
+      EncryptResult encryptResult = cryptoClient.Encrypt(EncryptionAlgorithm.RsaOaep256, plaintext);
+      Console.WriteLine($"Encrypted {encryptResult.Ciphertext.Length} bytes");
+      
+      // Decrypt
+      DecryptResult decryptResult = cryptoClient.Decrypt(EncryptionAlgorithm.RsaOaep256, encryptResult.Ciphertext);
+      string decryptedText = Encoding.UTF8.GetString(decryptResult.Plaintext);
+      Console.WriteLine($"Decrypted: {decryptedText}");
+
+  # Sign and Verify
+  - name: sign_verify_data
+    prompt: |
+      Use Azure Key Vault to sign data using RS256 algorithm and verify
+      the signature. Use SHA-256 to hash the data before signing.
+    expected_patterns:
+      - "CryptographyClient"
+      - "Sign"
+      - "Verify"
+      - "SHA256|sha256"
+      - "SignatureAlgorithm.RS256"
+    forbidden_patterns:
+      - 'SignData'
+    tags:
+      - cryptography
+      - signing
+    mock_response: |
+      using System.Security.Cryptography;
+      using System.Text;
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Keys;
+      using Azure.Security.KeyVault.Keys.Cryptography;
+      
+      string vaultUrl = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URL")
+          ?? throw new InvalidOperationException("AZURE_KEYVAULT_URL not set");
+      
+      var client = new KeyClient(new Uri(vaultUrl), new DefaultAzureCredential());
+      
+      KeyVaultKey key = client.CreateKey("signing-key", KeyType.Rsa);
+      CryptographyClient cryptoClient = client.GetCryptographyClient(key.Name, key.Properties.Version);
+      
+      // Hash the data
+      byte[] data = Encoding.UTF8.GetBytes("Data to sign");
+      using var sha256 = SHA256.Create();
+      byte[] digest = sha256.ComputeHash(data);
+      
+      // Sign the digest
+      SignResult signResult = cryptoClient.Sign(SignatureAlgorithm.RS256, digest);
+      Console.WriteLine($"Signature: {Convert.ToBase64String(signResult.Signature)}");
+      
+      // Verify the signature
+      VerifyResult verifyResult = cryptoClient.Verify(SignatureAlgorithm.RS256, digest, signResult.Signature);
+      Console.WriteLine($"Signature valid: {verifyResult.IsValid}");
+
+  # Wrap and Unwrap Key
+  - name: wrap_unwrap_key
+    prompt: |
+      Use Azure Key Vault to wrap (encrypt) an AES-256 symmetric key and then
+      unwrap (decrypt) it using RSA-OAEP-256 algorithm.
+    expected_patterns:
+      - "CryptographyClient"
+      - "WrapKey"
+      - "UnwrapKey"
+      - "RsaOaep256|KeyWrapAlgorithm.RsaOaep256"
+    forbidden_patterns:
+      - 'Encrypt.*keyToWrap'
+    tags:
+      - cryptography
+      - key-wrapping
+    mock_response: |
+      using System.Security.Cryptography;
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Keys;
+      using Azure.Security.KeyVault.Keys.Cryptography;
+      
+      string vaultUrl = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URL")
+          ?? throw new InvalidOperationException("AZURE_KEYVAULT_URL not set");
+      
+      var client = new KeyClient(new Uri(vaultUrl), new DefaultAzureCredential());
+      
+      KeyVaultKey key = client.CreateKey("wrapping-key", KeyType.Rsa);
+      CryptographyClient cryptoClient = client.GetCryptographyClient(key.Name, key.Properties.Version);
+      
+      // Generate an AES-256 key to wrap
+      byte[] keyToWrap = new byte[32]; // 256 bits
+      RandomNumberGenerator.Fill(keyToWrap);
+      
+      // Wrap the key
+      WrapResult wrapResult = cryptoClient.WrapKey(KeyWrapAlgorithm.RsaOaep256, keyToWrap);
+      Console.WriteLine($"Wrapped key: {wrapResult.EncryptedKey.Length} bytes");
+      
+      // Unwrap the key
+      UnwrapResult unwrapResult = cryptoClient.UnwrapKey(KeyWrapAlgorithm.RsaOaep256, wrapResult.EncryptedKey);
+      Console.WriteLine($"Unwrapped key length: {unwrapResult.Key.Length} bytes");
+      Console.WriteLine($"Keys match: {keyToWrap.SequenceEqual(unwrapResult.Key)}");
+
+  # List Keys
+  - name: list_keys
+    prompt: |
+      List all keys in an Azure Key Vault, displaying each key's name.
+    expected_patterns:
+      - "GetPropertiesOfKeys"
+      - "Pageable<KeyProperties>|foreach"
+      - "KeyProperties"
+    forbidden_patterns:
+      - 'GetKeys\(\)'
+    tags:
+      - list
+      - basic
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Keys;
+      
+      string vaultUrl = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URL")
+          ?? throw new InvalidOperationException("AZURE_KEYVAULT_URL not set");
+      
+      var client = new KeyClient(new Uri(vaultUrl), new DefaultAzureCredential());
+      
+      Pageable<KeyProperties> allKeys = client.GetPropertiesOfKeys();
+      
+      foreach (KeyProperties keyProperties in allKeys)
+      {
+          Console.WriteLine($"Key: {keyProperties.Name}, Enabled: {keyProperties.Enabled}");
+      }
+
+  # Delete and Purge Key
+  - name: delete_purge_key
+    prompt: |
+      Delete a key from Azure Key Vault and wait for the operation to complete,
+      then purge the deleted key permanently.
+    expected_patterns:
+      - "StartDeleteKey"
+      - "WaitForCompletion|HasCompleted"
+      - "PurgeDeletedKey"
+      - "DeleteKeyOperation"
+    forbidden_patterns:
+      - 'DeleteKey\('
+    tags:
+      - delete
+      - purge
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Keys;
+      
+      string vaultUrl = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URL")
+          ?? throw new InvalidOperationException("AZURE_KEYVAULT_URL not set");
+      
+      var client = new KeyClient(new Uri(vaultUrl), new DefaultAzureCredential());
+      
+      // Start the delete operation
+      DeleteKeyOperation operation = client.StartDeleteKey("key-to-delete");
+      
+      // Wait for the delete to complete
+      while (!operation.HasCompleted)
+      {
+          Thread.Sleep(2000);
+          operation.UpdateStatus();
+      }
+      
+      DeletedKey deletedKey = operation.Value;
+      Console.WriteLine($"Deleted: {deletedKey.Name} on {deletedKey.DeletedOn}");
+      
+      // Purge the key permanently (requires soft-delete enabled)
+      client.PurgeDeletedKey(deletedKey.Name);
+      Console.WriteLine("Key purged permanently");
+
+  # Async Key Operations
+  - name: async_key_operations
+    prompt: |
+      Create an async method that creates an RSA key, retrieves it, and lists
+      all keys in Azure Key Vault using async APIs.
+    expected_patterns:
+      - "async"
+      - "await"
+      - "CreateKeyAsync|CreateRsaKeyAsync"
+      - "GetKeyAsync"
+      - "GetPropertiesOfKeysAsync"
+      - "await foreach"
+    forbidden_patterns:
+      - 'CreateKey\('
+      - '\.Result'
+      - '\.Wait\(\)'
+    tags:
+      - async
+      - basic
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Keys;
+      
+      string vaultUrl = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URL")
+          ?? throw new InvalidOperationException("AZURE_KEYVAULT_URL not set");
+      
+      var client = new KeyClient(new Uri(vaultUrl), new DefaultAzureCredential());
+      
+      async Task ManageKeysAsync()
+      {
+          // Create key asynchronously
+          KeyVaultKey key = await client.CreateKeyAsync("async-rsa-key", KeyType.Rsa);
+          Console.WriteLine($"Created key: {key.Name}");
+          
+          // Retrieve key asynchronously
+          key = await client.GetKeyAsync("async-rsa-key");
+          Console.WriteLine($"Retrieved key version: {key.Properties.Version}");
+          
+          // List keys asynchronously
+          AsyncPageable<KeyProperties> allKeys = client.GetPropertiesOfKeysAsync();
+          await foreach (KeyProperties keyProperties in allKeys)
+          {
+              Console.WriteLine($"Key: {keyProperties.Name}");
+          }
+      }
+      
+      await ManageKeysAsync();
+
+  # Async Delete with WaitForCompletion
+  - name: async_delete_key
+    prompt: |
+      Delete a key asynchronously and wait for the operation to complete
+      using WaitForCompletionAsync, then purge the key.
+    expected_patterns:
+      - "StartDeleteKeyAsync"
+      - "WaitForCompletionAsync"
+      - "PurgeDeletedKeyAsync"
+      - "await"
+    forbidden_patterns:
+      - 'StartDeleteKey\('
+      - '\.Wait\(\)'
+    tags:
+      - async
+      - delete
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Keys;
+      
+      string vaultUrl = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URL")
+          ?? throw new InvalidOperationException("AZURE_KEYVAULT_URL not set");
+      
+      var client = new KeyClient(new Uri(vaultUrl), new DefaultAzureCredential());
+      
+      async Task DeleteAndPurgeKeyAsync(string keyName)
+      {
+          // Start the delete operation asynchronously
+          DeleteKeyOperation operation = await client.StartDeleteKeyAsync(keyName);
+          
+          // Wait for completion asynchronously
+          await operation.WaitForCompletionAsync();
+          
+          DeletedKey key = operation.Value;
+          Console.WriteLine($"Deleted: {key.Name}");
+          
+          // Purge the key asynchronously
+          await client.PurgeDeletedKeyAsync(key.Name);
+          Console.WriteLine("Key purged permanently");
+      }
+      
+      await DeleteAndPurgeKeyAsync("key-to-delete");
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Show how to handle errors when getting a key that doesn't exist,
+      catching the RequestFailedException and checking the status code.
+    expected_patterns:
+      - "RequestFailedException"
+      - "catch"
+      - "Status.*404|ex.Status"
+    forbidden_patterns:
+      - 'catch \(Exception\)'
+      - 'catch \{\s*\}'
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Keys;
+      
+      string vaultUrl = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URL")
+          ?? throw new InvalidOperationException("AZURE_KEYVAULT_URL not set");
+      
+      var client = new KeyClient(new Uri(vaultUrl), new DefaultAzureCredential());
+      
+      try
+      {
+          KeyVaultKey key = await client.GetKeyAsync("non-existent-key");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 404)
+      {
+          Console.WriteLine($"Key not found: {ex.Message}");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"Key Vault error ({ex.Status}): {ex.Message}");
+      }
+
+  # Key Versioning
+  - name: key_versioning
+    prompt: |
+      List all versions of a specific key and retrieve a specific version.
+    expected_patterns:
+      - "GetPropertiesOfKeyVersionsAsync|GetPropertiesOfKeyVersions"
+      - "Version"
+      - "GetKeyAsync.*version|GetKey.*version"
+    forbidden_patterns:
+      - 'GetKey\(keyName\)'
+    tags:
+      - versioning
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Security.KeyVault.Keys;
+      
+      string vaultUrl = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URL")
+          ?? throw new InvalidOperationException("AZURE_KEYVAULT_URL not set");
+      
+      var client = new KeyClient(new Uri(vaultUrl), new DefaultAzureCredential());
+      
+      async Task ListAndGetKeyVersionsAsync(string keyName)
+      {
+          // List all versions of the key
+          Console.WriteLine($"Versions of key '{keyName}':");
+          AsyncPageable<KeyProperties> versions = client.GetPropertiesOfKeyVersionsAsync(keyName);
+          
+          string? latestVersion = null;
+          await foreach (KeyProperties version in versions)
+          {
+              Console.WriteLine($"  Version: {version.Version}, Created: {version.CreatedOn}");
+              latestVersion ??= version.Version;
+          }
+          
+          // Get a specific version
+          if (latestVersion != null)
+          {
+              KeyVaultKey specificVersion = await client.GetKeyAsync(keyName, latestVersion);
+              Console.WriteLine($"Retrieved version: {specificVersion.Properties.Version}");
+          }
+      }
+      
+      await ListAndGetKeyVersionsAsync("my-key");

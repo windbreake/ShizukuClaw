@@ -1,0 +1,300 @@
+# Test scenarios for azure-storage-file-share-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # ShareServiceClient with Connection String
+  - name: service_client_connection_string
+    prompt: |
+      Create a ShareServiceClient using a connection string and demonstrate
+      creating a share, listing shares, and deleting the share.
+    expected_patterns:
+      - "ShareServiceClient.from_connection_string"
+      - "create_share"
+      - "list_shares"
+      - "delete_share"
+    forbidden_patterns:
+      - "BlobServiceClient"
+    tags:
+      - basic
+      - authentication
+      - service
+    mock_response: |
+      import os
+      from azure.storage.fileshare import ShareServiceClient
+      
+      service = ShareServiceClient.from_connection_string(
+          os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+      )
+      
+      service.create_share("my-share")
+      for share in service.list_shares():
+          print(share.name)
+      
+      service.delete_share("my-share")
+
+  # ShareServiceClient with DefaultAzureCredential
+  - name: service_client_default_azure_credential
+    prompt: |
+      Use DefaultAzureCredential with a ShareServiceClient and account_url.
+      Create a share client, create a directory, and clean up the share.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "ShareServiceClient"
+      - "account_url"
+      - "get_share_client"
+    forbidden_patterns:
+      - "from azure.identity.aio import DefaultAzureCredential"
+    tags:
+      - authentication
+      - service
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.storage.fileshare import ShareServiceClient
+      
+      service = ShareServiceClient(
+          account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+          credential=DefaultAzureCredential(),
+      )
+      
+      service.create_share("my-share")
+      share_client = service.get_share_client("my-share")
+      share_client.create_directory("logs")
+      service.delete_share("my-share")
+
+  # ShareClient Directory Operations
+  - name: share_client_directory_ops
+    prompt: |
+      Create a ShareClient from a connection string, create a directory,
+      list directories and files, and delete the directory.
+    expected_patterns:
+      - "ShareClient"
+      - "create_directory"
+      - "list_directories_and_files"
+    forbidden_patterns:
+      - "list_files"
+    tags:
+      - share
+      - directory
+    mock_response: |
+      import os
+      from azure.storage.fileshare import ShareClient
+      
+      share_client = ShareClient.from_connection_string(
+          conn_str=os.environ["AZURE_STORAGE_CONNECTION_STRING"],
+          share_name="my-share",
+      )
+      
+      share_client.create_directory("data")
+      directory_client = share_client.get_directory_client("data")
+      
+      for item in directory_client.list_directories_and_files():
+          print(item["name"])
+      
+      share_client.delete_directory("data")
+
+  # ShareDirectoryClient Usage
+  - name: directory_client_list_and_delete
+    prompt: |
+      Use ShareDirectoryClient to list directories and files and then delete
+      the directory using the ShareClient.
+    expected_patterns:
+      - "get_directory_client"
+      - "list_directories_and_files"
+      - "delete_directory"
+    forbidden_patterns:
+      - "share_client.delete_share"
+    tags:
+      - directory
+      - listing
+    mock_response: |
+      import os
+      from azure.storage.fileshare import ShareServiceClient
+      
+      service = ShareServiceClient.from_connection_string(
+          os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+      )
+      
+      service.create_share("my-share")
+      share_client = service.get_share_client("my-share")
+      share_client.create_directory("reports")
+      
+      directory_client = share_client.get_directory_client("reports")
+      for item in directory_client.list_directories_and_files():
+          print(item["name"])
+      
+      share_client.delete_directory("reports")
+      service.delete_share("my-share")
+
+  # ShareFileClient Upload and Download
+  - name: file_client_upload_download
+    prompt: |
+      Upload and download a file using ShareFileClient, then delete it.
+      Use upload_file and download_file patterns.
+    expected_patterns:
+      - "get_file_client"
+      - "upload_file"
+      - "download_file"
+      - "delete_file"
+    forbidden_patterns:
+      - "upload_blob"
+    tags:
+      - file
+      - upload
+      - download
+    mock_response: |
+      import os
+      from azure.storage.fileshare import ShareServiceClient
+      
+      service = ShareServiceClient.from_connection_string(
+          os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+      )
+      
+      service.create_share("my-share")
+      share_client = service.get_share_client("my-share")
+      share_client.create_directory("docs")
+      
+      file_client = share_client.get_file_client("docs/readme.txt")
+      file_client.upload_file("Hello, World!")
+      data = file_client.download_file().readall()
+      print(data)
+      file_client.delete_file()
+      
+      service.delete_share("my-share")
+
+  # Range Operations
+  - name: file_range_operations
+    prompt: |
+      Use upload_range and download_file with offset and length to
+      perform range operations on a ShareFileClient.
+    expected_patterns:
+      - "upload_range"
+      - "download_file"
+      - "offset="
+      - "length="
+    forbidden_patterns:
+      - "download_blob"
+    tags:
+      - file
+      - range
+    mock_response: |
+      import os
+      from azure.storage.fileshare import ShareServiceClient
+      
+      service = ShareServiceClient.from_connection_string(
+          os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+      )
+      
+      service.create_share("my-share")
+      share_client = service.get_share_client("my-share")
+      
+      file_client = share_client.get_file_client("range.bin")
+      file_client.upload_range(data=b"content", offset=0, length=7)
+      data = file_client.download_file(offset=0, length=7).readall()
+      print(data)
+      file_client.delete_file()
+      
+      service.delete_share("my-share")
+
+  # Snapshot Operations
+  - name: share_snapshot_access
+    prompt: |
+      Create a share snapshot and access the snapshot using get_share_client
+      with the snapshot parameter.
+    expected_patterns:
+      - "create_snapshot"
+      - "snapshot="
+      - "get_share_client"
+    forbidden_patterns:
+      - "create_share_snapshot"
+    tags:
+      - share
+      - snapshot
+    mock_response: |
+      import os
+      from azure.storage.fileshare import ShareServiceClient
+      
+      service = ShareServiceClient.from_connection_string(
+          os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+      )
+      
+      service.create_share("my-share")
+      share_client = service.get_share_client("my-share")
+      snapshot = share_client.create_snapshot()
+      
+      snapshot_client = service.get_share_client(
+          "my-share",
+          snapshot=snapshot["snapshot"],
+      )
+      print(snapshot_client.url)
+      
+      service.delete_share("my-share")
+
+  # Async Client Usage
+  - name: async_client_usage
+    prompt: |
+      Create an async ShareServiceClient and upload a file using async APIs.
+      Use async context manager and DefaultAzureCredential from aio.
+    expected_patterns:
+      - "from azure.storage.fileshare.aio import ShareServiceClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "async with"
+      - "await file_client.upload_file"
+    forbidden_patterns:
+      - "from azure.storage.fileshare import ShareServiceClient"
+    tags:
+      - async
+      - file
+    mock_response: |
+      import os
+      import asyncio
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.storage.fileshare.aio import ShareServiceClient
+      
+      async def main():
+          credential = DefaultAzureCredential()
+          async with ShareServiceClient(
+              account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+              credential=credential,
+          ) as service:
+              await service.create_share("my-share")
+              share_client = service.get_share_client("my-share")
+              file_client = share_client.get_file_client("hello.txt")
+              await file_client.upload_file("Hello!")
+              await service.delete_share("my-share")
+          await credential.close()
+      
+      asyncio.run(main())
+
+  # SMB Operations (Mounted Share)
+  - name: smb_file_io
+    prompt: |
+      Show how to use standard Python file I/O after mounting an Azure File
+      share over SMB. Demonstrate reading, writing, and listing files.
+    expected_patterns:
+      - "os.listdir"
+      - "open("
+      - "mounted_share_path"
+    forbidden_patterns:
+      - "ShareServiceClient"
+    tags:
+      - smb
+      - io
+    mock_response: |
+      import os
+      
+      mounted_share_path = "/mnt/azure-share"
+      file_path = os.path.join(mounted_share_path, "notes.txt")
+      
+      with open(file_path, "w") as handle:
+          handle.write("hello")
+      
+      with open(file_path, "r") as handle:
+          print(handle.read())
+      
+      print(os.listdir(mounted_share_path))

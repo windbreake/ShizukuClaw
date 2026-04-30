@@ -1,0 +1,503 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+# Test scenarios for azure-eventgrid-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: publisher_default_credential
+    prompt: |
+      Create an EventGridPublisherClient in .NET using DefaultAzureCredential for authentication.
+    expected_patterns:
+      - "using Azure.Identity"
+      - "using Azure.Messaging.EventGrid"
+      - "DefaultAzureCredential"
+      - "EventGridPublisherClient"
+    forbidden_patterns:
+      - "AzureKeyCredential"
+      - "api-key"
+    tags:
+      - authentication
+      - basic
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.EventGrid;
+
+      EventGridPublisherClient client = new(
+          new Uri(Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_ENDPOINT")),
+          new DefaultAzureCredential());
+
+  - name: publisher_api_key
+    prompt: |
+      Create an EventGridPublisherClient using API key authentication from environment variable.
+    expected_patterns:
+      - "AzureKeyCredential"
+      - "Environment.GetEnvironmentVariable"
+      - "EventGridPublisherClient"
+    forbidden_patterns:
+      - '"my-api-key'
+    tags:
+      - authentication
+    mock_response: |
+      using Azure;
+      using Azure.Messaging.EventGrid;
+
+      EventGridPublisherClient client = new(
+          new Uri(Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_ENDPOINT")),
+          new AzureKeyCredential(Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_KEY")));
+
+  - name: publish_eventgrid_event
+    prompt: |
+      Publish an EventGridEvent to an Event Grid topic.
+    expected_patterns:
+      - "EventGridEvent"
+      - "subject"
+      - "eventType"
+      - "dataVersion"
+      - "SendEventAsync"
+    forbidden_patterns:
+      - "CloudEvent"
+    tags:
+      - publishing
+      - eventgrid-event
+    mock_response: |
+      using Azure;
+      using Azure.Messaging.EventGrid;
+
+      EventGridPublisherClient client = new(
+          new Uri(Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_ENDPOINT")),
+          new AzureKeyCredential(Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_KEY")));
+
+      EventGridEvent egEvent = new(
+          subject: "orders/12345",
+          eventType: "Order.Created",
+          dataVersion: "1.0",
+          data: new { OrderId = "12345", Amount = 99.99, Customer = "John Doe" });
+
+      await client.SendEventAsync(egEvent);
+      Console.WriteLine("Event published successfully");
+
+  - name: publish_eventgrid_events_batch
+    prompt: |
+      Publish a batch of EventGridEvents to an Event Grid topic.
+    expected_patterns:
+      - "List<EventGridEvent>"
+      - "SendEventsAsync"
+      - "EventGridEvent"
+    forbidden_patterns:
+      - "CloudEvent"
+    tags:
+      - publishing
+      - batching
+    mock_response: |
+      using Azure;
+      using Azure.Messaging.EventGrid;
+
+      EventGridPublisherClient client = new(
+          new Uri(Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_ENDPOINT")),
+          new AzureKeyCredential(Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_KEY")));
+
+      List<EventGridEvent> events = new()
+      {
+          new EventGridEvent(
+              subject: "orders/12345",
+              eventType: "Order.Created",
+              dataVersion: "1.0",
+              data: new { OrderId = "12345", Amount = 99.99 }),
+          new EventGridEvent(
+              subject: "orders/12346",
+              eventType: "Order.Created",
+              dataVersion: "1.0",
+              data: new { OrderId = "12346", Amount = 149.99 })
+      };
+
+      await client.SendEventsAsync(events);
+      Console.WriteLine($"Published {events.Count} events");
+
+  - name: publish_cloud_event
+    prompt: |
+      Publish a CloudEvent to an Event Grid topic.
+    expected_patterns:
+      - "CloudEvent"
+      - "source"
+      - "type"
+      - "SendEventAsync"
+    forbidden_patterns:
+      - "EventGridEvent"
+      - "dataVersion"
+    tags:
+      - publishing
+      - cloud-event
+    mock_response: |
+      using Azure;
+      using Azure.Messaging;
+      using Azure.Messaging.EventGrid;
+
+      EventGridPublisherClient client = new(
+          new Uri(Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_ENDPOINT")),
+          new AzureKeyCredential(Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_KEY")));
+
+      CloudEvent cloudEvent = new(
+          source: "/orders/system",
+          type: "Order.Created",
+          data: new { OrderId = "12345", Amount = 99.99 });
+
+      cloudEvent.Subject = "orders/12345";
+      cloudEvent.Id = Guid.NewGuid().ToString();
+      cloudEvent.Time = DateTimeOffset.UtcNow;
+
+      await client.SendEventAsync(cloudEvent);
+      Console.WriteLine("CloudEvent published successfully");
+
+  - name: publish_to_domain
+    prompt: |
+      Publish events to different topics within an Event Grid Domain.
+    expected_patterns:
+      - "Topic ="
+      - "EventGridEvent"
+      - "SendEventsAsync"
+    forbidden_patterns:
+      - "CloudEvent"
+    tags:
+      - publishing
+      - domain
+    mock_response: |
+      using Azure;
+      using Azure.Messaging.EventGrid;
+
+      EventGridPublisherClient client = new(
+          new Uri(Environment.GetEnvironmentVariable("EVENT_GRID_DOMAIN_ENDPOINT")),
+          new AzureKeyCredential(Environment.GetEnvironmentVariable("EVENT_GRID_DOMAIN_KEY")));
+
+      List<EventGridEvent> events = new()
+      {
+          new EventGridEvent(
+              subject: "orders/12345",
+              eventType: "Order.Created",
+              dataVersion: "1.0",
+              data: new { OrderId = "12345" })
+          {
+              Topic = "orders-topic"  // Domain topic name
+          },
+          new EventGridEvent(
+              subject: "inventory/item-1",
+              eventType: "Inventory.Updated",
+              dataVersion: "1.0",
+              data: new { ItemId = "item-1" })
+          {
+              Topic = "inventory-topic"  // Different domain topic
+          }
+      };
+
+      await client.SendEventsAsync(events);
+      Console.WriteLine("Events published to domain topics");
+
+  - name: namespace_send_receive
+    prompt: |
+      Send and receive events using Event Grid Namespaces (pull delivery).
+    expected_patterns:
+      - "EventGridSenderClient"
+      - "EventGridReceiverClient"
+      - "ReceiveAsync"
+      - "AcknowledgeAsync"
+      - "lockToken"
+    forbidden_patterns:
+      - "EventGridPublisherClient"
+    tags:
+      - namespace
+      - pull-delivery
+    mock_response: |
+      using Azure;
+      using Azure.Messaging;
+      using Azure.Messaging.EventGrid.Namespaces;
+
+      var namespaceEndpoint = Environment.GetEnvironmentVariable("EVENT_GRID_NAMESPACE_ENDPOINT");
+      var topicName = Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_NAME");
+      var subscriptionName = Environment.GetEnvironmentVariable("EVENT_GRID_SUBSCRIPTION_NAME");
+      var topicKey = Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_KEY");
+
+      // Send events
+      var senderClient = new EventGridSenderClient(
+          new Uri(namespaceEndpoint),
+          topicName,
+          new AzureKeyCredential(topicKey));
+
+      CloudEvent cloudEvent = new("employee_source", "Employee.Created", 
+          new { Name = "John", Age = 30 });
+      await senderClient.SendAsync(cloudEvent);
+
+      // Receive events
+      var receiverClient = new EventGridReceiverClient(
+          new Uri(namespaceEndpoint),
+          topicName,
+          subscriptionName,
+          new AzureKeyCredential(topicKey));
+
+      ReceiveResult result = await receiverClient.ReceiveAsync(maxEvents: 10);
+
+      List<string> lockTokensToAck = new();
+
+      foreach (ReceiveDetails detail in result.Details)
+      {
+          Console.WriteLine($"Event: {detail.Event.Type}, Data: {detail.Event.Data}");
+          lockTokensToAck.Add(detail.BrokerProperties.LockToken);
+      }
+
+      // Acknowledge processed events
+      if (lockTokensToAck.Any())
+      {
+          await receiverClient.AcknowledgeAsync(lockTokensToAck);
+      }
+
+  - name: parse_eventgrid_events
+    prompt: |
+      Parse EventGridEvents from a webhook payload and handle both system and custom events.
+    expected_patterns:
+      - "EventGridEvent.ParseMany"
+      - "TryGetSystemEventData"
+      - "ToObjectFromJson"
+      - "BinaryData.FromString"
+    forbidden_patterns:
+      - "CloudEvent.ParseMany"
+    tags:
+      - parsing
+      - webhook
+    mock_response: |
+      using Azure.Messaging.EventGrid;
+      using Azure.Messaging.EventGrid.SystemEvents;
+
+      // Parse events from webhook payload
+      string json = requestBody; // From HTTP request
+      EventGridEvent[] events = EventGridEvent.ParseMany(BinaryData.FromString(json));
+
+      foreach (EventGridEvent egEvent in events)
+      {
+          if (egEvent.TryGetSystemEventData(out object systemEvent))
+          {
+              // Handle system event
+              switch (systemEvent)
+              {
+                  case StorageBlobCreatedEventData blobCreated:
+                      Console.WriteLine($"Blob created: {blobCreated.Url}");
+                      break;
+                  case StorageBlobDeletedEventData blobDeleted:
+                      Console.WriteLine($"Blob deleted: {blobDeleted.Url}");
+                      break;
+                  case ContainerRegistryImagePushedEventData imagePushed:
+                      Console.WriteLine($"Image pushed: {imagePushed.Target.Repository}");
+                      break;
+              }
+          }
+          else
+          {
+              // Handle custom event
+              var customData = egEvent.Data.ToObjectFromJson<MyCustomData>();
+              Console.WriteLine($"Custom event: {egEvent.EventType}, Data: {customData}");
+          }
+      }
+
+  - name: azure_functions_eventgrid_trigger
+    prompt: |
+      Create an Azure Function with EventGridTrigger to process events.
+    expected_patterns:
+      - "EventGridTrigger"
+      - "EventGridEvent"
+      - "FunctionName"
+      - "ILogger"
+    forbidden_patterns:
+      - "HttpTrigger"
+    tags:
+      - azure-functions
+      - trigger
+    mock_response: |
+      using Azure.Messaging.EventGrid;
+      using Microsoft.Azure.WebJobs;
+      using Microsoft.Azure.WebJobs.Extensions.EventGrid;
+      using Microsoft.Extensions.Logging;
+
+      public static class EventGridFunction
+      {
+          [FunctionName("ProcessEventGridEvent")]
+          public static void Run(
+              [EventGridTrigger] EventGridEvent eventGridEvent,
+              ILogger log)
+          {
+              log.LogInformation($"Event Type: {eventGridEvent.EventType}");
+              log.LogInformation($"Subject: {eventGridEvent.Subject}");
+              log.LogInformation($"Event Time: {eventGridEvent.EventTime}");
+              log.LogInformation($"Data: {eventGridEvent.Data}");
+
+              // Process based on event type
+              switch (eventGridEvent.EventType)
+              {
+                  case "Order.Created":
+                      var orderData = eventGridEvent.Data.ToObjectFromJson<OrderData>();
+                      log.LogInformation($"Processing order: {orderData.OrderId}");
+                      break;
+                  default:
+                      log.LogWarning($"Unknown event type: {eventGridEvent.EventType}");
+                      break;
+              }
+          }
+      }
+
+  - name: azure_functions_cloudevent_trigger
+    prompt: |
+      Create an Azure Function (isolated worker) with CloudEvent trigger.
+    expected_patterns:
+      - "EventGridTrigger"
+      - "CloudEvent"
+      - "Function"
+      - "FunctionContext"
+    forbidden_patterns:
+      - "EventGridEvent"
+    tags:
+      - azure-functions
+      - isolated-worker
+      - cloud-event
+    mock_response: |
+      using Azure.Messaging;
+      using Microsoft.Azure.Functions.Worker;
+      using Microsoft.Extensions.Logging;
+
+      public class CloudEventFunction
+      {
+          [Function("ProcessCloudEvent")]
+          public void Run(
+              [EventGridTrigger] CloudEvent cloudEvent,
+              FunctionContext context)
+          {
+              var logger = context.GetLogger("ProcessCloudEvent");
+              
+              logger.LogInformation($"Event Type: {cloudEvent.Type}");
+              logger.LogInformation($"Source: {cloudEvent.Source}");
+              logger.LogInformation($"Subject: {cloudEvent.Subject}");
+              logger.LogInformation($"Data: {cloudEvent.Data}");
+
+              // Deserialize data
+              var eventData = cloudEvent.Data.ToObjectFromJson<MyEventData>();
+              logger.LogInformation($"Processed: {eventData}");
+          }
+      }
+
+  - name: error_handling
+    prompt: |
+      Show proper error handling for Event Grid operations.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status"
+      - "401"
+      - "413"
+    forbidden_patterns:
+      - "catch (Exception ex)"
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure;
+      using Azure.Messaging.EventGrid;
+
+      try
+      {
+          await client.SendEventAsync(cloudEvent);
+      }
+      catch (RequestFailedException ex) when (ex.Status == 401)
+      {
+          Console.WriteLine("Authentication failed - check credentials");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 403)
+      {
+          Console.WriteLine("Authorization failed - check RBAC permissions");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 413)
+      {
+          Console.WriteLine("Payload too large - max 1MB per event, 1MB total batch");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 429)
+      {
+          Console.WriteLine("Rate limited - implement backoff and retry");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"Event Grid error: {ex.Status} - {ex.Message}");
+      }
+
+  - name: failover_pattern
+    prompt: |
+      Implement a failover pattern for Event Grid publishing to secondary region.
+    expected_patterns:
+      - "primaryClient"
+      - "secondaryClient"
+      - "RequestFailedException"
+      - "catch"
+    forbidden_patterns:
+      - "catch (Exception)"
+    tags:
+      - failover
+      - resilience
+    mock_response: |
+      using Azure;
+      using Azure.Messaging.EventGrid;
+
+      var primaryUri = new Uri(Environment.GetEnvironmentVariable("EVENT_GRID_PRIMARY_ENDPOINT"));
+      var secondaryUri = new Uri(Environment.GetEnvironmentVariable("EVENT_GRID_SECONDARY_ENDPOINT"));
+      var credential = new AzureKeyCredential(Environment.GetEnvironmentVariable("EVENT_GRID_KEY"));
+
+      var events = new List<EventGridEvent>
+      {
+          new EventGridEvent("orders/123", "Order.Created", "1.0", new { OrderId = "123" })
+      };
+
+      try
+      {
+          var primaryClient = new EventGridPublisherClient(primaryUri, credential);
+          await primaryClient.SendEventsAsync(events);
+          Console.WriteLine("Events sent to primary region");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"Primary region failed: {ex.Message}. Failing over to secondary...");
+          
+          // Failover to secondary region
+          var secondaryClient = new EventGridPublisherClient(secondaryUri, credential);
+          await secondaryClient.SendEventsAsync(events);
+          Console.WriteLine("Events sent to secondary region");
+      }
+
+  - name: sas_token_authentication
+    prompt: |
+      Generate a SAS token for Event Grid authentication.
+    expected_patterns:
+      - "BuildSharedAccessSignature"
+      - "AzureSasCredential"
+      - "DateTimeOffset.UtcNow.AddHours"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+    tags:
+      - authentication
+      - sas-token
+    mock_response: |
+      using Azure;
+      using Azure.Messaging.EventGrid;
+
+      var topicEndpoint = Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_ENDPOINT");
+      var topicKey = Environment.GetEnvironmentVariable("EVENT_GRID_TOPIC_KEY");
+
+      // Generate SAS token valid for 1 hour
+      string sasToken = EventGridPublisherClient.BuildSharedAccessSignature(
+          new Uri(topicEndpoint),
+          DateTimeOffset.UtcNow.AddHours(1),
+          new AzureKeyCredential(topicKey));
+
+      Console.WriteLine($"SAS Token: {sasToken}");
+
+      // Use SAS token for authentication
+      var sasCredential = new AzureSasCredential(sasToken);
+      EventGridPublisherClient client = new(
+          new Uri(topicEndpoint),
+          sasCredential);
+
+      // Now use the client to send events
+      await client.SendEventAsync(new CloudEvent("/source", "Test.Event", new { Message = "Hello" }));

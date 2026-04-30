@@ -1,0 +1,614 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for zustand-store-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Store with subscribeWithSelector
+  - name: basic_store_creation
+    prompt: |
+      Create a basic Zustand store in TypeScript with subscribeWithSelector
+      middleware, state, and actions.
+    expected_patterns:
+      - "create"
+      - "subscribeWithSelector"
+      - "zustand/middleware"
+      - "(set)"
+      - "interface"
+    forbidden_patterns:
+      - "import create from"
+    tags:
+      - basic
+      - middleware
+    mock_response: |
+      import { create } from 'zustand';
+      import { subscribeWithSelector } from 'zustand/middleware';
+
+      interface CounterState {
+        count: number;
+      }
+
+      interface CounterActions {
+        increment: () => void;
+        decrement: () => void;
+        reset: () => void;
+      }
+
+      type CounterStore = CounterState & CounterActions;
+
+      export const useCounterStore = create<CounterStore>()(
+        subscribeWithSelector((set) => ({
+          count: 0,
+          increment: () => set((state) => ({ count: state.count + 1 })),
+          decrement: () => set((state) => ({ count: state.count - 1 })),
+          reset: () => set({ count: 0 }),
+        }))
+      );
+
+  # Store with Separate State and Actions
+  - name: separated_state_actions
+    prompt: |
+      Create a Zustand store with clearly separated state and actions
+      interfaces in TypeScript.
+    expected_patterns:
+      - "interface"
+      - "State"
+      - "Actions"
+      - "type"
+      - "&"
+    forbidden_patterns:
+      - "import create from"
+    tags:
+      - types
+      - organization
+    mock_response: |
+      import { create } from 'zustand';
+      import { subscribeWithSelector } from 'zustand/middleware';
+
+      // State interface
+      export interface ProjectState {
+        projects: Project[];
+        selectedId: string | null;
+        isLoading: boolean;
+        error: string | null;
+      }
+
+      // Actions interface
+      export interface ProjectActions {
+        addProject: (project: Project) => void;
+        removeProject: (id: string) => void;
+        selectProject: (id: string | null) => void;
+        setLoading: (isLoading: boolean) => void;
+      }
+
+      // Combined store type
+      export type ProjectStore = ProjectState & ProjectActions;
+
+      interface Project {
+        id: string;
+        name: string;
+      }
+
+      export const useProjectStore = create<ProjectStore>()(
+        subscribeWithSelector((set) => ({
+          // State
+          projects: [],
+          selectedId: null,
+          isLoading: false,
+          error: null,
+
+          // Actions
+          addProject: (project) =>
+            set((state) => ({
+              projects: [...state.projects, project],
+            })),
+          removeProject: (id) =>
+            set((state) => ({
+              projects: state.projects.filter((p) => p.id !== id),
+              selectedId: state.selectedId === id ? null : state.selectedId,
+            })),
+          selectProject: (id) => set({ selectedId: id }),
+          setLoading: (isLoading) => set({ isLoading }),
+        }))
+      );
+
+  # Individual Selectors Usage
+  - name: individual_selectors
+    prompt: |
+      Create a React component that uses individual selectors to
+      access Zustand store state and actions efficiently.
+    expected_patterns:
+      - "Store((state) =>"
+      - "state.count"
+      - "state.increment"
+    forbidden_patterns:
+      - "const { count, increment } = useStore()"
+      - "useStore()"
+    tags:
+      - selectors
+      - performance
+    mock_response: |
+      import { useCounterStore } from '../store/counter-store';
+
+      function CounterDisplay() {
+        // Individual selectors - only re-renders when specific value changes
+        const count = useCounterStore((state) => state.count);
+        const increment = useCounterStore((state) => state.increment);
+        const decrement = useCounterStore((state) => state.decrement);
+
+        return (
+          <div className="flex items-center gap-4">
+            <button onClick={decrement}>-</button>
+            <span className="text-xl font-bold">{count}</span>
+            <button onClick={increment}>+</button>
+          </div>
+        );
+      }
+
+  # Subscribe Outside React
+  - name: subscribe_outside_react
+    prompt: |
+      Create an example that subscribes to specific Zustand store changes
+      outside of React components.
+    expected_patterns:
+      - "subscribe"
+      - "(state) =>"
+      - "unsubscribe"
+    forbidden_patterns:
+      - "useEffect"
+    tags:
+      - subscriptions
+      - external
+    mock_response: |
+      import { useProjectStore } from '../store/project-store';
+
+      // Subscribe to selectedId changes
+      const unsubscribeSelectedId = useProjectStore.subscribe(
+        (state) => state.selectedId,
+        (selectedId, previousSelectedId) => {
+          console.log('Selected project changed:', previousSelectedId, '->', selectedId);
+          
+          // Perform side effects
+          if (selectedId) {
+            analytics.track('project_selected', { projectId: selectedId });
+          }
+        }
+      );
+
+      // Subscribe with options
+      const unsubscribeProjects = useProjectStore.subscribe(
+        (state) => state.projects,
+        (projects) => {
+          console.log('Projects updated, count:', projects.length);
+        },
+        {
+          fireImmediately: true,  // Fire with current value immediately
+        }
+      );
+
+      // Cleanup when needed
+      function cleanup() {
+        unsubscribeSelectedId();
+        unsubscribeProjects();
+      }
+
+  # Persist Middleware
+  - name: persist_middleware
+    prompt: |
+      Create a Zustand store that persists state to localStorage
+      using the persist middleware.
+    expected_patterns:
+      - "persist"
+      - "createJSONStorage"
+      - "localStorage"
+      - "name:"
+    forbidden_patterns:
+      - "import create from"
+    tags:
+      - persistence
+      - middleware
+    mock_response: |
+      import { create } from 'zustand';
+      import { persist, createJSONStorage } from 'zustand/middleware';
+      import { subscribeWithSelector } from 'zustand/middleware';
+
+      interface SettingsState {
+        theme: 'light' | 'dark';
+        fontSize: number;
+        notifications: boolean;
+      }
+
+      interface SettingsActions {
+        setTheme: (theme: 'light' | 'dark') => void;
+        setFontSize: (size: number) => void;
+        toggleNotifications: () => void;
+      }
+
+      type SettingsStore = SettingsState & SettingsActions;
+
+      export const useSettingsStore = create<SettingsStore>()(
+        subscribeWithSelector(
+          persist(
+            (set) => ({
+              theme: 'dark',
+              fontSize: 14,
+              notifications: true,
+
+              setTheme: (theme) => set({ theme }),
+              setFontSize: (fontSize) => set({ fontSize }),
+              toggleNotifications: () =>
+                set((state) => ({ notifications: !state.notifications })),
+            }),
+            {
+              name: 'settings-storage',
+              storage: createJSONStorage(() => localStorage),
+            }
+          )
+        )
+      );
+
+  # Async Actions
+  - name: async_actions
+    prompt: |
+      Create a Zustand store with async actions that fetch data and
+      handle loading and error states.
+    expected_patterns:
+      - "async"
+      - "await"
+      - "isLoading"
+      - "error"
+      - "try"
+      - "catch"
+    forbidden_patterns:
+      - "import create from"
+    tags:
+      - async
+      - api
+    mock_response: |
+      import { create } from 'zustand';
+      import { subscribeWithSelector } from 'zustand/middleware';
+
+      interface User {
+        id: string;
+        name: string;
+        email: string;
+      }
+
+      interface UserState {
+        users: User[];
+        currentUser: User | null;
+        isLoading: boolean;
+        error: string | null;
+      }
+
+      interface UserActions {
+        fetchUsers: () => Promise<void>;
+        fetchUserById: (id: string) => Promise<void>;
+        clearError: () => void;
+      }
+
+      type UserStore = UserState & UserActions;
+
+      export const useUserStore = create<UserStore>()(
+        subscribeWithSelector((set, get) => ({
+          users: [],
+          currentUser: null,
+          isLoading: false,
+          error: null,
+
+          fetchUsers: async () => {
+            set({ isLoading: true, error: null });
+            try {
+              const response = await fetch('/api/users');
+              if (!response.ok) throw new Error('Failed to fetch users');
+              const users = await response.json();
+              set({ users, isLoading: false });
+            } catch (error) {
+              set({ error: (error as Error).message, isLoading: false });
+            }
+          },
+
+          fetchUserById: async (id: string) => {
+            set({ isLoading: true, error: null });
+            try {
+              const response = await fetch(`/api/users/${id}`);
+              if (!response.ok) throw new Error('User not found');
+              const user = await response.json();
+              set({ currentUser: user, isLoading: false });
+            } catch (error) {
+              set({ error: (error as Error).message, isLoading: false });
+            }
+          },
+
+          clearError: () => set({ error: null }),
+        }))
+      );
+
+  # Shallow Comparison for Multiple Values
+  - name: shallow_comparison
+    prompt: |
+      Create a React component that selects multiple values from a
+      Zustand store using useShallow to prevent unnecessary re-renders.
+    expected_patterns:
+      - "useShallow"
+      - "zustand/react/shallow"
+      - "useStore"
+    forbidden_patterns:
+      - "const { } = useStore()"
+    tags:
+      - selectors
+      - performance
+      - shallow
+    mock_response: |
+      import { useShallow } from 'zustand/react/shallow';
+      import { useProjectStore } from '../store/project-store';
+
+      function ProjectList() {
+        // Using useShallow to select multiple values efficiently
+        const { projects, isLoading, error } = useProjectStore(
+          useShallow((state) => ({
+            projects: state.projects,
+            isLoading: state.isLoading,
+            error: state.error,
+          }))
+        );
+
+        // Select actions separately (they're stable references)
+        const addProject = useProjectStore((state) => state.addProject);
+        const removeProject = useProjectStore((state) => state.removeProject);
+
+        if (isLoading) return <div>Loading...</div>;
+        if (error) return <div>Error: {error}</div>;
+
+        return (
+          <ul>
+            {projects.map((project) => (
+              <li key={project.id}>
+                {project.name}
+                <button onClick={() => removeProject(project.id)}>Delete</button>
+              </li>
+            ))}
+          </ul>
+        );
+      }
+
+  # Get State with get()
+  - name: get_state_access
+    prompt: |
+      Create a Zustand store that uses get() to access current state
+      within actions.
+    expected_patterns:
+      - "(set, get)"
+      - "get()"
+      - "const current ="
+    forbidden_patterns:
+      - "import create from"
+    tags:
+      - actions
+      - get
+    mock_response: |
+      import { create } from 'zustand';
+      import { subscribeWithSelector } from 'zustand/middleware';
+
+      interface CartItem {
+        id: string;
+        name: string;
+        price: number;
+        quantity: number;
+      }
+
+      interface CartState {
+        items: CartItem[];
+      }
+
+      interface CartActions {
+        addItem: (item: Omit<CartItem, 'quantity'>) => void;
+        removeItem: (id: string) => void;
+        updateQuantity: (id: string, quantity: number) => void;
+        getTotal: () => number;
+        checkout: () => Promise<void>;
+      }
+
+      type CartStore = CartState & CartActions;
+
+      export const useCartStore = create<CartStore>()(
+        subscribeWithSelector((set, get) => ({
+          items: [],
+
+          addItem: (item) => {
+            const currentItems = get().items;
+            const existingItem = currentItems.find((i) => i.id === item.id);
+
+            if (existingItem) {
+              set({
+                items: currentItems.map((i) =>
+                  i.id === item.id
+                    ? { ...i, quantity: i.quantity + 1 }
+                    : i
+                ),
+              });
+            } else {
+              set({ items: [...currentItems, { ...item, quantity: 1 }] });
+            }
+          },
+
+          removeItem: (id) =>
+            set((state) => ({
+              items: state.items.filter((i) => i.id !== id),
+            })),
+
+          updateQuantity: (id, quantity) =>
+            set((state) => ({
+              items: state.items.map((i) =>
+                i.id === id ? { ...i, quantity } : i
+              ),
+            })),
+
+          getTotal: () => {
+            const { items } = get();
+            return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+          },
+
+          checkout: async () => {
+            const total = get().getTotal();
+            const items = get().items;
+            
+            await processPayment({ items, total });
+            set({ items: [] });
+          },
+        }))
+      );
+
+      async function processPayment(data: { items: CartItem[]; total: number }) {
+        // API call
+      }
+
+  # Store with Immer
+  - name: immer_middleware
+    prompt: |
+      Create a Zustand store using Immer middleware for simplified
+      immutable state updates.
+    expected_patterns:
+      - "immer"
+      - "zustand/middleware/immer"
+      - "state.todos.push"
+    forbidden_patterns:
+      - "import create from"
+    tags:
+      - immer
+      - middleware
+    mock_response: |
+      import { create } from 'zustand';
+      import { immer } from 'zustand/middleware/immer';
+      import { subscribeWithSelector } from 'zustand/middleware';
+
+      interface Todo {
+        id: string;
+        text: string;
+        completed: boolean;
+      }
+
+      interface TodoState {
+        todos: Todo[];
+      }
+
+      interface TodoActions {
+        addTodo: (text: string) => void;
+        toggleTodo: (id: string) => void;
+        removeTodo: (id: string) => void;
+        updateTodo: (id: string, text: string) => void;
+      }
+
+      type TodoStore = TodoState & TodoActions;
+
+      export const useTodoStore = create<TodoStore>()(
+        subscribeWithSelector(
+          immer((set) => ({
+            todos: [],
+
+            addTodo: (text) =>
+              set((state) => {
+                state.todos.push({
+                  id: Date.now().toString(),
+                  text,
+                  completed: false,
+                });
+              }),
+
+            toggleTodo: (id) =>
+              set((state) => {
+                const todo = state.todos.find((t) => t.id === id);
+                if (todo) {
+                  todo.completed = !todo.completed;
+                }
+              }),
+
+            removeTodo: (id) =>
+              set((state) => {
+                const index = state.todos.findIndex((t) => t.id === id);
+                if (index !== -1) {
+                  state.todos.splice(index, 1);
+                }
+              }),
+
+            updateTodo: (id, text) =>
+              set((state) => {
+                const todo = state.todos.find((t) => t.id === id);
+                if (todo) {
+                  todo.text = text;
+                }
+              }),
+          }))
+        )
+      );
+
+  # Reset Store Pattern
+  - name: reset_store_pattern
+    prompt: |
+      Create a Zustand store with an initial state and reset action
+      for testing and cleanup purposes.
+    expected_patterns:
+      - "initialState"
+      - "reset"
+      - "set(initialState)"
+    forbidden_patterns:
+      - "import create from"
+    tags:
+      - testing
+      - reset
+    mock_response: |
+      import { create } from 'zustand';
+      import { subscribeWithSelector } from 'zustand/middleware';
+
+      interface FormState {
+        name: string;
+        email: string;
+        message: string;
+        submitted: boolean;
+      }
+
+      interface FormActions {
+        setField: <K extends keyof FormState>(field: K, value: FormState[K]) => void;
+        submit: () => Promise<void>;
+        reset: () => void;
+      }
+
+      type FormStore = FormState & FormActions;
+
+      // Define initial state separately for reset functionality
+      const initialState: FormState = {
+        name: '',
+        email: '',
+        message: '',
+        submitted: false,
+      };
+
+      export const useFormStore = create<FormStore>()(
+        subscribeWithSelector((set, get) => ({
+          ...initialState,
+
+          setField: (field, value) =>
+            set({ [field]: value } as Partial<FormState>),
+
+          submit: async () => {
+            const { name, email, message } = get();
+            await submitForm({ name, email, message });
+            set({ submitted: true });
+          },
+
+          reset: () => set(initialState),
+        }))
+      );
+
+      async function submitForm(data: { name: string; email: string; message: string }) {
+        // API call
+      }
+
+      // Usage in tests
+      // beforeEach(() => {
+      //   useFormStore.getState().reset();
+      // });

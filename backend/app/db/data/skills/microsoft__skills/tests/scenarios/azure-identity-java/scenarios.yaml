@@ -1,0 +1,378 @@
+# Test scenarios for azure-identity-java skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # DefaultAzureCredential Basic Usage
+  - name: default_azure_credential_basic
+    prompt: |
+      Create a DefaultAzureCredential and use it with an Azure service client
+      like BlobServiceClient or KeyClient.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "DefaultAzureCredentialBuilder"
+      - ".credential(credential)"
+      - ".build()"
+    forbidden_patterns:
+      - ".key("
+      - "ClientSecretCredential"
+      - "hardcoded"
+    tags:
+      - authentication
+      - default
+    mock_response: |
+      import com.azure.identity.DefaultAzureCredential;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import com.azure.storage.blob.BlobServiceClient;
+      import com.azure.storage.blob.BlobServiceClientBuilder;
+      import com.azure.security.keyvault.keys.KeyClient;
+      import com.azure.security.keyvault.keys.KeyClientBuilder;
+
+      // Create credential
+      DefaultAzureCredential credential = new DefaultAzureCredentialBuilder().build();
+
+      // Use with Blob Storage
+      BlobServiceClient blobClient = new BlobServiceClientBuilder()
+          .endpoint(System.getenv("AZURE_STORAGE_ACCOUNT_URL"))
+          .credential(credential)
+          .buildClient();
+
+      // Use with Key Vault
+      KeyClient keyClient = new KeyClientBuilder()
+          .vaultUrl(System.getenv("AZURE_KEYVAULT_URL"))
+          .credential(credential)
+          .buildClient();
+
+  # Configured DefaultAzureCredential
+  - name: default_credential_configured
+    prompt: |
+      Create a DefaultAzureCredential configured for a specific tenant
+      and user-assigned managed identity. Exclude certain credential types.
+    expected_patterns:
+      - "DefaultAzureCredentialBuilder"
+      - "managedIdentityClientId"
+      - "tenantId"
+      - "exclude"
+      - "System.getenv"
+    forbidden_patterns:
+      - "hardcoded tenant"
+      - "hardcoded client"
+    tags:
+      - authentication
+      - configuration
+    mock_response: |
+      import com.azure.identity.DefaultAzureCredential;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      DefaultAzureCredential credential = new DefaultAzureCredentialBuilder()
+          .managedIdentityClientId(System.getenv("AZURE_CLIENT_ID"))
+          .tenantId(System.getenv("AZURE_TENANT_ID"))
+          .excludeEnvironmentCredential()
+          .excludeAzurePowerShellCredential()
+          .build();
+
+  # ManagedIdentityCredential System-Assigned
+  - name: managed_identity_system_assigned
+    prompt: |
+      Create a ManagedIdentityCredential for system-assigned managed identity
+      in an Azure-hosted application.
+    expected_patterns:
+      - "ManagedIdentityCredential"
+      - "ManagedIdentityCredentialBuilder"
+      - ".build()"
+    forbidden_patterns:
+      - ".clientId("
+      - ".resourceId("
+    tags:
+      - authentication
+      - managed-identity
+    mock_response: |
+      import com.azure.identity.ManagedIdentityCredential;
+      import com.azure.identity.ManagedIdentityCredentialBuilder;
+      import com.azure.cosmos.CosmosClient;
+      import com.azure.cosmos.CosmosClientBuilder;
+
+      // System-assigned managed identity - no client ID needed
+      ManagedIdentityCredential credential = new ManagedIdentityCredentialBuilder()
+          .build();
+
+      // Use with Cosmos DB
+      CosmosClient cosmosClient = new CosmosClientBuilder()
+          .endpoint(System.getenv("COSMOS_ENDPOINT"))
+          .credential(credential)
+          .buildClient();
+
+  # ManagedIdentityCredential User-Assigned
+  - name: managed_identity_user_assigned
+    prompt: |
+      Create a ManagedIdentityCredential for user-assigned managed identity
+      using client ID from environment variable.
+    expected_patterns:
+      - "ManagedIdentityCredential"
+      - "ManagedIdentityCredentialBuilder"
+      - ".clientId("
+      - "System.getenv"
+    forbidden_patterns:
+      - "hardcoded"
+      - ".resourceId("
+    tags:
+      - authentication
+      - managed-identity
+    mock_response: |
+      import com.azure.identity.ManagedIdentityCredential;
+      import com.azure.identity.ManagedIdentityCredentialBuilder;
+
+      // User-assigned managed identity by client ID
+      ManagedIdentityCredential credential = new ManagedIdentityCredentialBuilder()
+          .clientId(System.getenv("AZURE_CLIENT_ID"))
+          .build();
+
+
+  # ClientSecretCredential from Environment
+  - name: client_secret_from_environment
+    prompt: |
+      Create a ClientSecretCredential for service principal authentication
+      with all values from environment variables.
+    expected_patterns:
+      - "ClientSecretCredential"
+      - "ClientSecretCredentialBuilder"
+      - "tenantId"
+      - "clientId"
+      - "clientSecret"
+      - "System.getenv"
+    forbidden_patterns:
+      - '"[0-9a-f]{8}-'
+      - "secret123"
+    tags:
+      - authentication
+      - service-principal
+    mock_response: |
+      import com.azure.identity.ClientSecretCredential;
+      import com.azure.identity.ClientSecretCredentialBuilder;
+
+      ClientSecretCredential credential = new ClientSecretCredentialBuilder()
+          .tenantId(System.getenv("AZURE_TENANT_ID"))
+          .clientId(System.getenv("AZURE_CLIENT_ID"))
+          .clientSecret(System.getenv("AZURE_CLIENT_SECRET"))
+          .build();
+
+  # ClientCertificateCredential
+  - name: client_certificate_credential
+    prompt: |
+      Create a ClientCertificateCredential using PEM certificate file path
+      from environment variable. Enable certificate chain for SNI.
+    expected_patterns:
+      - "ClientCertificateCredential"
+      - "ClientCertificateCredentialBuilder"
+      - "pemCertificate"
+      - "sendCertificateChain"
+      - "System.getenv"
+    forbidden_patterns:
+      - "/path/to/"
+      - "hardcoded"
+    tags:
+      - authentication
+      - certificate
+    mock_response: |
+      import com.azure.identity.ClientCertificateCredential;
+      import com.azure.identity.ClientCertificateCredentialBuilder;
+
+      ClientCertificateCredential credential = new ClientCertificateCredentialBuilder()
+          .tenantId(System.getenv("AZURE_TENANT_ID"))
+          .clientId(System.getenv("AZURE_CLIENT_ID"))
+          .pemCertificate(System.getenv("AZURE_CLIENT_CERTIFICATE_PATH"))
+          .sendCertificateChain(true)
+          .build();
+
+  # ChainedTokenCredential
+  - name: chained_token_credential
+    prompt: |
+      Create a ChainedTokenCredential that tries managed identity first,
+      then falls back to Azure CLI for local development.
+    expected_patterns:
+      - "ChainedTokenCredential"
+      - "ChainedTokenCredentialBuilder"
+      - "addFirst"
+      - "addLast"
+      - "ManagedIdentityCredentialBuilder"
+      - "AzureCliCredentialBuilder"
+    forbidden_patterns: []
+    tags:
+      - authentication
+      - chaining
+    mock_response: |
+      import com.azure.identity.ChainedTokenCredential;
+      import com.azure.identity.ChainedTokenCredentialBuilder;
+      import com.azure.identity.ManagedIdentityCredentialBuilder;
+      import com.azure.identity.AzureCliCredentialBuilder;
+      import com.azure.identity.EnvironmentCredentialBuilder;
+
+      ChainedTokenCredential credential = new ChainedTokenCredentialBuilder()
+          .addFirst(new ManagedIdentityCredentialBuilder()
+              .clientId(System.getenv("AZURE_CLIENT_ID"))
+              .build())
+          .addLast(new EnvironmentCredentialBuilder().build())
+          .addLast(new AzureCliCredentialBuilder().build())
+          .build();
+
+  # WorkloadIdentityCredential for AKS
+  - name: workload_identity_aks
+    prompt: |
+      Create a WorkloadIdentityCredential for Azure Kubernetes Service
+      using workload identity federation.
+    expected_patterns:
+      - "WorkloadIdentityCredential"
+      - "WorkloadIdentityCredentialBuilder"
+    forbidden_patterns:
+      - "ClientSecretCredential"
+    tags:
+      - authentication
+      - kubernetes
+    mock_response: |
+      import com.azure.identity.WorkloadIdentityCredential;
+      import com.azure.identity.WorkloadIdentityCredentialBuilder;
+
+      // Reads from AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_FEDERATED_TOKEN_FILE
+      WorkloadIdentityCredential credential = new WorkloadIdentityCredentialBuilder().build();
+
+      // Or explicit configuration
+      WorkloadIdentityCredential explicitCredential = new WorkloadIdentityCredentialBuilder()
+          .tenantId(System.getenv("AZURE_TENANT_ID"))
+          .clientId(System.getenv("AZURE_CLIENT_ID"))
+          .tokenFilePath("/var/run/secrets/azure/tokens/azure-identity-token")
+          .build();
+
+  # Interactive Browser Credential
+  - name: interactive_browser_credential
+    prompt: |
+      Create an InteractiveBrowserCredential for a desktop application
+      that requires user login.
+    expected_patterns:
+      - "InteractiveBrowserCredential"
+      - "InteractiveBrowserCredentialBuilder"
+      - "clientId"
+      - "redirectUrl"
+    forbidden_patterns: []
+    tags:
+      - authentication
+      - interactive
+    mock_response: |
+      import com.azure.identity.InteractiveBrowserCredential;
+      import com.azure.identity.InteractiveBrowserCredentialBuilder;
+
+      InteractiveBrowserCredential credential = new InteractiveBrowserCredentialBuilder()
+          .clientId(System.getenv("AZURE_CLIENT_ID"))
+          .redirectUrl("http://localhost:8080")
+          .build();
+
+  # Device Code Credential
+  - name: device_code_credential
+    prompt: |
+      Create a DeviceCodeCredential for headless devices or CLI tools
+      with a challenge consumer to display the code to the user.
+    expected_patterns:
+      - "DeviceCodeCredential"
+      - "DeviceCodeCredentialBuilder"
+      - "challengeConsumer"
+      - "getMessage"
+    forbidden_patterns: []
+    tags:
+      - authentication
+      - device-code
+    mock_response: |
+      import com.azure.identity.DeviceCodeCredential;
+      import com.azure.identity.DeviceCodeCredentialBuilder;
+
+      DeviceCodeCredential credential = new DeviceCodeCredentialBuilder()
+          .clientId(System.getenv("AZURE_CLIENT_ID"))
+          .challengeConsumer(challenge -> {
+              // Display to user
+              System.out.println(challenge.getMessage());
+              // Example output: "To sign in, use a web browser to open the page
+              //  https://microsoft.com/devicelogin and enter the code XXXXXX"
+          })
+          .build();
+
+  # Error Handling
+  - name: credential_error_handling
+    prompt: |
+      Show proper error handling for authentication failures including
+      CredentialUnavailableException and ClientAuthenticationException.
+    expected_patterns:
+      - "CredentialUnavailableException"
+      - "ClientAuthenticationException"
+      - "TokenRequestContext"
+      - "addScopes"
+      - "getToken"
+    forbidden_patterns:
+      - "catch (Exception"
+      - "printStackTrace"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.identity.CredentialUnavailableException;
+      import com.azure.identity.DefaultAzureCredential;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import com.azure.core.exception.ClientAuthenticationException;
+      import com.azure.core.credential.AccessToken;
+      import com.azure.core.credential.TokenRequestContext;
+
+      public AccessToken getToken() {
+          try {
+              DefaultAzureCredential credential = new DefaultAzureCredentialBuilder().build();
+
+              AccessToken token = credential.getToken(new TokenRequestContext()
+                  .addScopes("https://management.azure.com/.default"));
+
+              System.out.println("Token acquired, expires: " + token.getExpiresAt());
+              return token;
+
+          } catch (CredentialUnavailableException e) {
+              System.err.println("No credential could authenticate: " + e.getMessage());
+              // Log available credential types tried
+              throw new RuntimeException("Authentication configuration error", e);
+
+          } catch (ClientAuthenticationException e) {
+              System.err.println("Authentication failed: " + e.getMessage());
+              // May be wrong credentials, expired secret, etc.
+              throw new RuntimeException("Authentication failed", e);
+          }
+      }
+
+  # Sovereign Clouds
+  - name: sovereign_clouds
+    prompt: |
+      Create credentials for Azure Government and Azure China sovereign clouds
+      using AzureAuthorityHosts.
+    expected_patterns:
+      - "AzureAuthorityHosts"
+      - "AZURE_GOVERNMENT"
+      - "AZURE_CHINA"
+      - "authorityHost"
+    forbidden_patterns: []
+    tags:
+      - authentication
+      - sovereign
+    mock_response: |
+      import com.azure.identity.AzureAuthorityHosts;
+      import com.azure.identity.DefaultAzureCredential;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      // Azure Government
+      DefaultAzureCredential govCredential = new DefaultAzureCredentialBuilder()
+          .authorityHost(AzureAuthorityHosts.AZURE_GOVERNMENT)
+          .build();
+
+      // Azure China
+      DefaultAzureCredential chinaCredential = new DefaultAzureCredentialBuilder()
+          .authorityHost(AzureAuthorityHosts.AZURE_CHINA)
+          .build();
+
+      // Azure Germany (deprecated, but still supported)
+      DefaultAzureCredential germanyCredential = new DefaultAzureCredentialBuilder()
+          .authorityHost(AzureAuthorityHosts.AZURE_GERMANY)
+          .build();

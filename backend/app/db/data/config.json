@@ -1,0 +1,238 @@
+{
+  "active_persona": "shizuku.json",
+  "api_keys": {
+    "deepseek_chat": {
+      "key": "sk-76c143f207bf4e688b15999a7fcf4336",
+      "base_url": "https://api.deepseek.com/v1",
+      "model": "deepseek-v4-pro"
+    },
+    "search": {
+      "key": "sk-VfP8AhbSELO9p4v31IpKHu5Sn6CWhquS23n2ONjqsDtWM2Ez",
+      "base_url": "https://api.moonshot.cn/v1",
+      "model": ""
+    },
+    "image_recognition": {
+      "key": "sk-a548806c16e5440e97243d782ba3dcae",
+      "base_url": "https://dashscope.aliyuncs.com/api/v1",
+      "model": ""
+    },
+    "image_generation": {
+      "key": "",
+      "base_url": "https://api.deepseek.com/v1",
+      "model": ""
+    },
+    "video_generation": {
+      "key": "",
+      "base_url": "",
+      "model": ""
+    },
+    "coder": {
+      "key": "",
+      "base_url": "https://api.moonshot.cn/v1",
+      "model": "moonshot-v1-8k"
+    },
+    "kimi_coder": {
+      "key": "",
+      "base_url": "https://api.moonshot.cn/v1",
+      "model": "moonshot-v1-8k"
+    },
+    "minimax_coder": {
+      "key": "sk-cp-8Wgwhqzr1dNKGMuoSEJ7NcCN3NEK3L6Zer3fuQ8WVWoECc6Z4XSzVYWkaW23hY-l6YraKNLMaez6nsLT79Bh-yl9KP2xcXEskBtp96yvw8hdCEj-qF22rRo",
+      "base_url": "https://api.minimaxi.com/v1",
+      "model": "MiniMax-M2.7"
+    },
+    "claude_coder": {
+      "key": "",
+      "base_url": "https://api.anthropic.com/v1",
+      "model": "claude-3-7-sonnet-latest"
+    },
+    "speech_to_text": {
+      "key": "",
+      "base_url": "",
+      "model": ""
+    },
+    "text_to_speech": {
+      "key": "",
+      "base_url": "",
+      "model": ""
+    }
+  },
+  "coder_api": {
+    "provider": "minimax",
+    "providers": {
+      "kimi": {
+        "key": "",
+        "base_url": "https://api.moonshot.cn/v1",
+        "model": "moonshot-v1-8k"
+      },
+      "minimax": {
+        "key": "sk-cp-8Wgwhqzr1dNKGMuoSEJ7NcCN3NEK3L6Zer3fuQ8WVWoECc6Z4XSzVYWkaW23hY-l6YraKNLMaez6nsLT79Bh-yl9KP2xcXEskBtp96yvw8hdCEj-qF22rRo",
+        "base_url": "https://api.minimaxi.com/v1",
+        "model": "MiniMax-M2.7"
+      },
+      "claude": {
+        "key": "",
+        "base_url": "https://api.anthropic.com/v1",
+        "model": "claude-3-7-sonnet-latest"
+      }
+    }
+  },
+  "work_mode": {
+    "enabled": false,
+    "password_hash": "73011b56941c1e4bd9675f2c4082fba8d7f8ee20b0dbaab8a55ca730eb5acd0c",
+    "features": {
+      "allow_file_write": true,
+      "allow_code_exec": true,
+      "allow_plan_update": true,
+      "allow_coder_tool": true
+    },
+    "allowed_databases": [
+      "catgirl_db"
+    ]
+  },
+  "unified_api": {
+    "host": "0.0.0.0",
+    "port": 3001,
+    "access_token": "114514"
+  },
+  "onebot": {
+    "access_token": "114514",
+    "host": "127.0.0.1",
+    "http": {
+      "enable": false,
+      "host": "127.0.0.1",
+      "port": 6199
+    },
+    "port": 6199,
+    "ws": {
+      "enable": false,
+      "host": "127.0.0.1",
+      "port": 6199
+    },
+    "ws_reverse": {
+      "enable": true,
+      "url": "ws://127.0.0.1:6199/ws"
+    }
+  },
+  "plugin_framework": {
+    "enabled": true,
+    "plugins": {
+      "builtin.basic": {
+        "enabled": true,
+        "allow_network": true,
+        "allowed_domains": [
+          "wttr.in",
+          "wikipedia.org",
+          "en.wikipedia.org",
+          "zh.wikipedia.org",
+          "hn.algolia.com"
+        ],
+        "allowed_commands": [],
+        "max_execution_ms": 10000
+      },
+      "example.weather": {
+        "enabled": true,
+        "allow_network": false,
+        "allowed_domains": [],
+        "allowed_commands": [],
+        "max_execution_ms": 10000
+      },
+      "crawler.kemono": {
+        "enabled": true,
+        "allow_network": true,
+        "allowed_domains": [
+          "kemono.su"
+        ],
+        "allowed_commands": [
+          "crawl",
+          "kemono_crawl"
+        ],
+        "max_execution_ms": 35000
+      },
+      "default.data_query": {
+        "enabled": true,
+        "allow_network": true,
+        "allowed_domains": [
+          "wttr.in",
+          "wikipedia.org",
+          "en.wikipedia.org",
+          "zh.wikipedia.org",
+          "hn.algolia.com"
+        ],
+        "allowed_commands": [
+          "weather",
+          "wiki",
+          "news"
+        ],
+        "max_execution_ms": 12000
+      },
+      "default_data_query_plugin": {
+        "enabled": true,
+        "allow_network": true,
+        "allowed_domains": [],
+        "allowed_commands": [],
+        "max_execution_ms": 10000
+      },
+      "astrbot_compatibility": {
+        "enabled": true,
+        "allow_network": true,
+        "allowed_domains": [],
+        "allowed_commands": [],
+        "max_execution_ms": 30000
+      }
+    }
+  },
+  "skill_framework": {
+    "enabled": true,
+    "skills": {
+      "office-excel-assistant": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "office-powerpoint-assistant": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "office-word-assistant": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "cls-certify-main": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "dubsopenhub__m365-easy-button": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "microwind__ai-skills": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "error": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "skillhub-18": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "skillhub-1": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "microsoft__skills": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "likaku__mck-ppt-design-skill": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "zhangxuefeng-skill-main": {
+        "enabled": true,
+        "allow_model_invocation": true
+      }
+    }
+  }
+}

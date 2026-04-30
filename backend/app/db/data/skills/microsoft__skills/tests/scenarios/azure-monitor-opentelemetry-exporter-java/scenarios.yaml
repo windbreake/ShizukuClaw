@@ -1,0 +1,378 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-monitor-opentelemetry-exporter-java skill evaluation
+# NOTE: This SDK is deprecated - use azure-monitor-opentelemetry-autoconfigure instead
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: setup_autoconfigure
+    prompt: |
+      Create Java code to set up Azure Monitor OpenTelemetry using
+      the autoconfigure package (recommended approach).
+    expected_patterns:
+      - "AutoConfiguredOpenTelemetrySdk"
+      - "AzureMonitorExporter"
+      - "customize"
+      - "getOpenTelemetrySdk"
+    tags:
+      - setup
+      - recommended
+    mock_response: |
+      import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdk;
+      import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdkBuilder;
+      import io.opentelemetry.api.OpenTelemetry;
+      import com.azure.monitor.opentelemetry.exporter.AzureMonitorExporter;
+
+      public class SetupAutoconfigure {
+          public static void main(String[] args) {
+              // Connection string from APPLICATIONINSIGHTS_CONNECTION_STRING env var
+              AutoConfiguredOpenTelemetrySdkBuilder sdkBuilder = AutoConfiguredOpenTelemetrySdk.builder();
+              AzureMonitorExporter.customize(sdkBuilder);
+              OpenTelemetry openTelemetry = sdkBuilder.build().getOpenTelemetrySdk();
+              
+              System.out.println("OpenTelemetry configured with Azure Monitor");
+          }
+      }
+
+  - name: create_spans
+    prompt: |
+      Create a Java example that creates spans for distributed tracing
+      with attributes using OpenTelemetry.
+    expected_patterns:
+      - "Tracer"
+      - "spanBuilder"
+      - "startSpan"
+      - "makeCurrent"
+      - "Scope"
+      - "end()"
+      - "setAttribute"
+    tags:
+      - tracing
+      - spans
+    mock_response: |
+      import io.opentelemetry.api.OpenTelemetry;
+      import io.opentelemetry.api.trace.Tracer;
+      import io.opentelemetry.api.trace.Span;
+      import io.opentelemetry.context.Scope;
+      import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdk;
+      import com.azure.monitor.opentelemetry.exporter.AzureMonitorExporter;
+
+      public class CreateSpans {
+          public static void main(String[] args) {
+              var sdkBuilder = AutoConfiguredOpenTelemetrySdk.builder();
+              AzureMonitorExporter.customize(sdkBuilder);
+              OpenTelemetry openTelemetry = sdkBuilder.build().getOpenTelemetrySdk();
+              
+              Tracer tracer = openTelemetry.getTracer("com.example.myapp");
+              
+              Span span = tracer.spanBuilder("processOrder")
+                  .setAttribute("order.id", "12345")
+                  .setAttribute("customer.tier", "premium")
+                  .startSpan();
+              
+              try (Scope scope = span.makeCurrent()) {
+                  span.setAttribute("items.count", 3);
+                  processOrder();
+              } catch (Throwable t) {
+                  span.recordException(t);
+                  throw t;
+              } finally {
+                  span.end();
+              }
+          }
+          
+          private static void processOrder() {
+              // Business logic
+          }
+      }
+
+  - name: record_exceptions
+    prompt: |
+      Create a Java example that demonstrates proper exception
+      recording on spans with status codes.
+    expected_patterns:
+      - "recordException"
+      - "setStatus"
+      - "StatusCode.ERROR"
+      - "try"
+      - "catch"
+      - "finally"
+    tags:
+      - error-handling
+      - tracing
+    mock_response: |
+      import io.opentelemetry.api.OpenTelemetry;
+      import io.opentelemetry.api.trace.Tracer;
+      import io.opentelemetry.api.trace.Span;
+      import io.opentelemetry.api.trace.StatusCode;
+      import io.opentelemetry.context.Scope;
+
+      public class RecordExceptions {
+          private final Tracer tracer;
+          
+          public RecordExceptions(OpenTelemetry openTelemetry) {
+              this.tracer = openTelemetry.getTracer("com.example.myapp");
+          }
+          
+          public void riskyOperation() throws Exception {
+              Span span = tracer.spanBuilder("riskyOperation").startSpan();
+              try (Scope scope = span.makeCurrent()) {
+                  performRiskyWork();
+              } catch (Exception e) {
+                  span.recordException(e);
+                  span.setStatus(StatusCode.ERROR, e.getMessage());
+                  throw e;
+              } finally {
+                  span.end();
+              }
+          }
+          
+          private void performRiskyWork() throws Exception {
+              // Implementation
+          }
+      }
+
+  - name: metrics_counter
+    prompt: |
+      Create a Java example that demonstrates recording counter metrics
+      using OpenTelemetry with Azure Monitor, including attributes.
+    expected_patterns:
+      - "Meter"
+      - "getMeter"
+      - "counterBuilder"
+      - "LongCounter"
+      - "build"
+      - "add"
+      - "Attributes"
+    tags:
+      - metrics
+      - counter
+    mock_response: |
+      import io.opentelemetry.api.OpenTelemetry;
+      import io.opentelemetry.api.metrics.Meter;
+      import io.opentelemetry.api.metrics.LongCounter;
+      import io.opentelemetry.api.common.Attributes;
+      import io.opentelemetry.api.common.AttributeKey;
+      import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdk;
+      import com.azure.monitor.opentelemetry.exporter.AzureMonitorExporter;
+
+      public class MetricsCounter {
+          public static void main(String[] args) {
+              var sdkBuilder = AutoConfiguredOpenTelemetrySdk.builder();
+              AzureMonitorExporter.customize(sdkBuilder);
+              OpenTelemetry openTelemetry = sdkBuilder.build().getOpenTelemetrySdk();
+              
+              Meter meter = openTelemetry.getMeter("com.example.myapp");
+              
+              LongCounter requestCounter = meter.counterBuilder("http.requests")
+                  .setDescription("Total HTTP requests")
+                  .setUnit("requests")
+                  .build();
+              
+              requestCounter.add(1, Attributes.of(
+                  AttributeKey.stringKey("http.method"), "GET",
+                  AttributeKey.longKey("http.status_code"), 200L
+              ));
+          }
+      }
+
+  - name: metrics_histogram
+    prompt: |
+      Create a Java example that demonstrates recording latency
+      histogram metrics using OpenTelemetry with Azure Monitor.
+    expected_patterns:
+      - "Meter"
+      - "histogramBuilder"
+      - "LongHistogram|DoubleHistogram"
+      - "record"
+      - "setDescription"
+      - "setUnit"
+    tags:
+      - metrics
+      - histogram
+    mock_response: |
+      import io.opentelemetry.api.OpenTelemetry;
+      import io.opentelemetry.api.metrics.Meter;
+      import io.opentelemetry.api.metrics.LongHistogram;
+      import io.opentelemetry.api.common.Attributes;
+      import io.opentelemetry.api.common.AttributeKey;
+      import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdk;
+      import com.azure.monitor.opentelemetry.exporter.AzureMonitorExporter;
+
+      public class MetricsHistogram {
+          public static void main(String[] args) {
+              var sdkBuilder = AutoConfiguredOpenTelemetrySdk.builder();
+              AzureMonitorExporter.customize(sdkBuilder);
+              OpenTelemetry openTelemetry = sdkBuilder.build().getOpenTelemetrySdk();
+              
+              Meter meter = openTelemetry.getMeter("com.example.myapp");
+              
+              LongHistogram latencyHistogram = meter.histogramBuilder("http.latency")
+                  .setDescription("Request latency")
+                  .setUnit("ms")
+                  .ofLongs()
+                  .build();
+              
+              latencyHistogram.record(150, Attributes.of(
+                  AttributeKey.stringKey("http.route"), "/api/users"
+              ));
+          }
+      }
+
+  - name: nested_spans
+    prompt: |
+      Create a Java example that demonstrates nested/hierarchical spans
+      where a child span is automatically linked to its parent span.
+    expected_patterns:
+      - "Tracer"
+      - "spanBuilder"
+      - "makeCurrent"
+      - "Scope"
+      - "parentOperation|parent"
+      - "childOperation|child"
+      - "end\\(\\)"
+    tags:
+      - tracing
+      - nested
+    mock_response: |
+      import io.opentelemetry.api.OpenTelemetry;
+      import io.opentelemetry.api.trace.Tracer;
+      import io.opentelemetry.api.trace.Span;
+      import io.opentelemetry.context.Scope;
+      import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdk;
+      import com.azure.monitor.opentelemetry.exporter.AzureMonitorExporter;
+
+      public class NestedSpans {
+          private final Tracer tracer;
+          
+          public NestedSpans(OpenTelemetry openTelemetry) {
+              this.tracer = openTelemetry.getTracer("com.example.myapp");
+          }
+          
+          public void parentOperation() {
+              Span parentSpan = tracer.spanBuilder("parentOperation").startSpan();
+              try (Scope scope = parentSpan.makeCurrent()) {
+                  childOperation();
+              } finally {
+                  parentSpan.end();
+              }
+          }
+          
+          public void childOperation() {
+              // Automatically links to parent via Context
+              Span childSpan = tracer.spanBuilder("childOperation").startSpan();
+              try (Scope scope = childSpan.makeCurrent()) {
+                  // Child work
+              } finally {
+                  childSpan.end();
+              }
+          }
+          
+          public static void main(String[] args) {
+              var sdkBuilder = AutoConfiguredOpenTelemetrySdk.builder();
+              AzureMonitorExporter.customize(sdkBuilder);
+              OpenTelemetry openTelemetry = sdkBuilder.build().getOpenTelemetrySdk();
+              
+              NestedSpans example = new NestedSpans(openTelemetry);
+              example.parentOperation();
+          }
+      }
+
+  - name: custom_span_processor
+    prompt: |
+      Create a Java example that implements a custom SpanProcessor to
+      add custom attributes to every span automatically.
+    expected_patterns:
+      - "SpanProcessor"
+      - "onStart"
+      - "ReadWriteSpan"
+      - "Context"
+      - "setAttribute"
+      - "addSpanProcessor|addTracerProviderCustomizer"
+    tags:
+      - advanced
+      - tracing
+    mock_response: |
+      import io.opentelemetry.api.OpenTelemetry;
+      import io.opentelemetry.api.common.AttributeKey;
+      import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdk;
+      import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdkBuilder;
+      import io.opentelemetry.sdk.trace.SpanProcessor;
+      import io.opentelemetry.sdk.trace.ReadWriteSpan;
+      import io.opentelemetry.sdk.trace.ReadableSpan;
+      import io.opentelemetry.context.Context;
+      import com.azure.monitor.opentelemetry.exporter.AzureMonitorExporter;
+
+      public class CustomSpanProcessor {
+          private static final AttributeKey<String> CUSTOM_ATTR = AttributeKey.stringKey("custom.attribute");
+          
+          public static void main(String[] args) {
+              SpanProcessor customProcessor = new SpanProcessor() {
+                  @Override
+                  public void onStart(Context context, ReadWriteSpan span) {
+                      span.setAttribute(CUSTOM_ATTR, "customValue");
+                  }
+                  
+                  @Override
+                  public boolean isStartRequired() {
+                      return true;
+                  }
+                  
+                  @Override
+                  public void onEnd(ReadableSpan span) {
+                      // Post-processing if needed
+                  }
+                  
+                  @Override
+                  public boolean isEndRequired() {
+                      return false;
+                  }
+              };
+              
+              AutoConfiguredOpenTelemetrySdkBuilder sdkBuilder = AutoConfiguredOpenTelemetrySdk.builder();
+              AzureMonitorExporter.customize(sdkBuilder);
+              
+              sdkBuilder.addTracerProviderCustomizer(
+                  (sdkTracerProviderBuilder, configProperties) -> 
+                      sdkTracerProviderBuilder.addSpanProcessor(customProcessor)
+              );
+              
+              OpenTelemetry openTelemetry = sdkBuilder.build().getOpenTelemetrySdk();
+          }
+      }
+
+  - name: explicit_connection_string
+    prompt: |
+      Create a Java example that sets up Azure Monitor OpenTelemetry
+      with an explicit connection string instead of using environment variables.
+    expected_patterns:
+      - "AutoConfiguredOpenTelemetrySdk"
+      - "AzureMonitorExporter"
+      - 'customize\(.*,.*\)'
+      - "getOpenTelemetrySdk"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'InstrumentationKey=.*IngestionEndpoint='
+    tags:
+      - setup
+      - configuration
+    mock_response: |
+      import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdk;
+      import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdkBuilder;
+      import io.opentelemetry.api.OpenTelemetry;
+      import com.azure.monitor.opentelemetry.exporter.AzureMonitorExporter;
+
+      public class ExplicitConnectionString {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING");
+              
+              AutoConfiguredOpenTelemetrySdkBuilder sdkBuilder = AutoConfiguredOpenTelemetrySdk.builder();
+              AzureMonitorExporter.customize(sdkBuilder, connectionString);
+              OpenTelemetry openTelemetry = sdkBuilder.build().getOpenTelemetrySdk();
+              
+              System.out.println("OpenTelemetry configured with explicit connection string");
+          }
+      }

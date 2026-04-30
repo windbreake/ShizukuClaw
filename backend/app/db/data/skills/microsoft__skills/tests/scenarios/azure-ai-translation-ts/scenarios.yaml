@@ -1,0 +1,318 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-ai-translation-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Text Translation
+  - name: basic_text_translation
+    prompt: |
+      Create a TypeScript example that translates text from English to Spanish
+      and French using Azure Text Translation REST client with API key authentication.
+    expected_patterns:
+      - "TextTranslationClient"
+      - "TranslatorCredential"
+      - 'path("/translate")'
+      - "isUnexpected"
+      - "targets"
+    forbidden_patterns:
+      - "new TextTranslationClient"
+      - "from azure.ai"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import TextTranslationClient, { TranslatorCredential, isUnexpected } from "@azure-rest/ai-translation-text";
+
+      const credential: TranslatorCredential = {
+        key: process.env.TRANSLATOR_SUBSCRIPTION_KEY!,
+        region: process.env.TRANSLATOR_REGION!,
+      };
+      const client = TextTranslationClient(process.env.TRANSLATOR_ENDPOINT!, credential);
+
+      const response = await client.path("/translate").post({
+        body: {
+          inputs: [
+            {
+              text: "Hello, how are you?",
+              targets: [
+                { language: "es" },
+                { language: "fr" },
+              ],
+            },
+          ],
+        },
+      });
+
+      if (isUnexpected(response)) {
+        throw response.body.error;
+      }
+
+      for (const result of response.body.value) {
+        for (const translation of result.translations) {
+          console.log(`${translation.language}: ${translation.text}`);
+        }
+      }
+
+  # Language Detection
+  - name: detect_language
+    prompt: |
+      Create a TypeScript example that detects the language of input text
+      using Azure Text Translation client.
+    expected_patterns:
+      - "TextTranslationClient"
+      - 'path("/detect")'
+      - "isUnexpected"
+      - "language"
+      - "score"
+    forbidden_patterns:
+      - "new TextTranslationClient"
+    tags:
+      - basic
+      - detection
+    mock_response: |
+      import TextTranslationClient, { TranslatorCredential, isUnexpected } from "@azure-rest/ai-translation-text";
+
+      const credential: TranslatorCredential = {
+        key: process.env.TRANSLATOR_SUBSCRIPTION_KEY!,
+        region: process.env.TRANSLATOR_REGION!,
+      };
+      const client = TextTranslationClient(process.env.TRANSLATOR_ENDPOINT!, credential);
+
+      const response = await client.path("/detect").post({
+        body: { inputs: [{ text: "Bonjour le monde" }] },
+      });
+
+      if (!isUnexpected(response)) {
+        for (const result of response.body.value) {
+          console.log(`Language: ${result.language}, Score: ${result.score}`);
+        }
+      }
+
+  # Transliteration
+  - name: transliterate_text
+    prompt: |
+      Create a TypeScript example that transliterates Chinese text from
+      Han script to Latin script using Azure Text Translation.
+    expected_patterns:
+      - "TextTranslationClient"
+      - 'path("/transliterate")'
+      - "fromScript"
+      - "toScript"
+      - "queryParameters"
+    forbidden_patterns:
+      - "new TextTranslationClient"
+    tags:
+      - transliteration
+    mock_response: |
+      import TextTranslationClient, { TranslatorCredential, isUnexpected } from "@azure-rest/ai-translation-text";
+
+      const credential: TranslatorCredential = {
+        key: process.env.TRANSLATOR_SUBSCRIPTION_KEY!,
+        region: process.env.TRANSLATOR_REGION!,
+      };
+      const client = TextTranslationClient(process.env.TRANSLATOR_ENDPOINT!, credential);
+
+      const response = await client.path("/transliterate").post({
+        body: { inputs: [{ text: "这是个测试" }] },
+        queryParameters: {
+          language: "zh-Hans",
+          fromScript: "Hans",
+          toScript: "Latn",
+        },
+      });
+
+      if (!isUnexpected(response)) {
+        for (const t of response.body.value) {
+          console.log(`${t.script}: ${t.text}`);
+        }
+      }
+
+  # Get Supported Languages
+  - name: list_supported_languages
+    prompt: |
+      Create a TypeScript example that lists all supported translation languages
+      using Azure Text Translation.
+    expected_patterns:
+      - "TextTranslationClient"
+      - 'path("/languages")'
+      - "isUnexpected"
+      - "translation"
+    forbidden_patterns:
+      - "new TextTranslationClient"
+    tags:
+      - basic
+      - languages
+    mock_response: |
+      import TextTranslationClient, { TranslatorCredential, isUnexpected } from "@azure-rest/ai-translation-text";
+
+      const credential: TranslatorCredential = {
+        key: process.env.TRANSLATOR_SUBSCRIPTION_KEY!,
+        region: process.env.TRANSLATOR_REGION!,
+      };
+      const client = TextTranslationClient(process.env.TRANSLATOR_ENDPOINT!, credential);
+
+      const response = await client.path("/languages").get();
+
+      if (!isUnexpected(response)) {
+        for (const [code, lang] of Object.entries(response.body.translation || {})) {
+          console.log(`${code}: ${lang.name} (${lang.nativeName})`);
+        }
+      }
+
+  # Document Translation with DefaultAzureCredential
+  - name: document_translation_client
+    prompt: |
+      Create a TypeScript example that sets up a Document Translation client
+      using DefaultAzureCredential for Azure AD authentication.
+    expected_patterns:
+      - "DocumentTranslationClient"
+      - "DefaultAzureCredential"
+      - "@azure-rest/ai-translation-document"
+      - "@azure/identity"
+    forbidden_patterns:
+      - "new DocumentTranslationClient"
+      - "api-key"
+    tags:
+      - document
+      - authentication
+    mock_response: |
+      import DocumentTranslationClient from "@azure-rest/ai-translation-document";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const endpoint = process.env.DOCUMENT_TRANSLATION_ENDPOINT!;
+      const client = DocumentTranslationClient(endpoint, new DefaultAzureCredential());
+
+      console.log("Document translation client initialized");
+
+  # Single Document Translation
+  - name: single_document_translation
+    prompt: |
+      Create a TypeScript example that translates a single document
+      from English to Spanish using Azure Document Translation.
+    expected_patterns:
+      - "DocumentTranslationClient"
+      - 'path("/document:translate")'
+      - "targetLanguage"
+      - "multipart/form-data"
+      - "asNodeStream"
+    forbidden_patterns:
+      - "new DocumentTranslationClient"
+    tags:
+      - document
+      - single
+    mock_response: |
+      import DocumentTranslationClient from "@azure-rest/ai-translation-document";
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { writeFile } from "node:fs/promises";
+
+      const client = DocumentTranslationClient(
+        process.env.DOCUMENT_TRANSLATION_ENDPOINT!,
+        new DefaultAzureCredential()
+      );
+
+      const response = await client.path("/document:translate").post({
+        queryParameters: {
+          targetLanguage: "es",
+          sourceLanguage: "en",
+        },
+        contentType: "multipart/form-data",
+        body: [
+          {
+            name: "document",
+            body: "Hello, this is a test document.",
+            filename: "test.txt",
+            contentType: "text/plain",
+          },
+        ],
+      }).asNodeStream();
+
+      if (response.status === "200") {
+        await writeFile("translated.txt", response.body);
+        console.log("Document translated successfully");
+      }
+
+  # Batch Document Translation
+  - name: batch_document_translation
+    prompt: |
+      Create a TypeScript example that starts a batch document translation
+      job using source and target container SAS URLs.
+    expected_patterns:
+      - "DocumentTranslationClient"
+      - 'path("/document/batches")'
+      - "sourceUrl"
+      - "targetUrl"
+      - "operation-location"
+    forbidden_patterns:
+      - "new DocumentTranslationClient"
+    tags:
+      - document
+      - batch
+    mock_response: |
+      import DocumentTranslationClient from "@azure-rest/ai-translation-document";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = DocumentTranslationClient(
+        process.env.DOCUMENT_TRANSLATION_ENDPOINT!,
+        new DefaultAzureCredential()
+      );
+
+      const sourceSasUrl = process.env.SOURCE_CONTAINER_SAS_URL!;
+      const targetSasUrl = process.env.TARGET_CONTAINER_SAS_URL!;
+
+      const response = await client.path("/document/batches").post({
+        body: {
+          inputs: [
+            {
+              source: { sourceUrl: sourceSasUrl },
+              targets: [
+                { targetUrl: targetSasUrl, language: "fr" },
+              ],
+            },
+          ],
+        },
+      });
+
+      const operationId = new URL(response.headers["operation-location"])
+        .pathname.split("/").pop();
+
+      console.log(`Started batch translation: ${operationId}`);
+
+  # Check Translation Status
+  - name: check_translation_status
+    prompt: |
+      Create a TypeScript example that checks the status of a batch
+      document translation operation.
+    expected_patterns:
+      - "DocumentTranslationClient"
+      - 'path("/document/batches/{id}"'
+      - "isUnexpected"
+      - "status"
+      - "summary"
+    forbidden_patterns:
+      - "new DocumentTranslationClient"
+    tags:
+      - document
+      - status
+    mock_response: |
+      import DocumentTranslationClient, { isUnexpected } from "@azure-rest/ai-translation-document";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const client = DocumentTranslationClient(
+        process.env.DOCUMENT_TRANSLATION_ENDPOINT!,
+        new DefaultAzureCredential()
+      );
+
+      const operationId = process.env.OPERATION_ID!;
+      const statusResponse = await client.path("/document/batches/{id}", operationId).get();
+
+      if (!isUnexpected(statusResponse)) {
+        const status = statusResponse.body;
+        console.log(`Status: ${status.status}`);
+        console.log(`Total: ${status.summary.total}`);
+        console.log(`Success: ${status.summary.success}`);
+      }

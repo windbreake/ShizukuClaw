@@ -1,0 +1,336 @@
+# Test scenarios for azure-mgmt-weightsandbiases-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Create W&B Instance
+  - name: create_wandb_instance
+    prompt: |
+      Create a Weights & Biases instance in Azure using the Azure.ResourceManager.WeightsAndBiases SDK
+      with marketplace integration and user details.
+    expected_patterns:
+      - "ArmClient"
+      - "DefaultAzureCredential"
+      - "GetWeightsAndBiasesInstances"
+      - "WeightsAndBiasesInstanceData"
+      - "WeightsAndBiasesMarketplaceDetails"
+      - "WeightsAndBiasesOfferDetails"
+      - "WeightsAndBiasesUserDetails"
+      - "WeightsAndBiasesPartnerProperties"
+      - "CreateOrUpdateAsync"
+    tags:
+      - basic
+      - instance
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.WeightsAndBiases;
+      using Azure.ResourceManager.WeightsAndBiases.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var subscription = await client.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      WeightsAndBiasesInstanceCollection instances = resourceGroup.Value.GetWeightsAndBiasesInstances();
+
+      WeightsAndBiasesInstanceData data = new WeightsAndBiasesInstanceData(AzureLocation.EastUS)
+      {
+          Properties = new WeightsAndBiasesInstanceProperties
+          {
+              Marketplace = new WeightsAndBiasesMarketplaceDetails
+              {
+                  SubscriptionId = "<marketplace-subscription-id>",
+                  OfferDetails = new WeightsAndBiasesOfferDetails
+                  {
+                      PublisherId = "wandb",
+                      OfferId = "wandb-pay-as-you-go",
+                      PlanId = "wandb-payg",
+                      PlanName = "Pay As You Go",
+                      TermId = "monthly",
+                      TermUnit = "P1M"
+                  }
+              },
+              User = new WeightsAndBiasesUserDetails
+              {
+                  FirstName = "Admin",
+                  LastName = "User",
+                  EmailAddress = "admin@example.com",
+                  Upn = "admin@example.com"
+              },
+              PartnerProperties = new WeightsAndBiasesPartnerProperties
+              {
+                  Region = WeightsAndBiasesRegion.EastUS,
+                  Subdomain = "my-company-wandb"
+              }
+          },
+          Identity = new ManagedServiceIdentity(ManagedServiceIdentityType.SystemAssigned)
+      };
+
+      ArmOperation<WeightsAndBiasesInstanceResource> operation = await instances
+          .CreateOrUpdateAsync(WaitUntil.Completed, "my-wandb-instance", data);
+
+      WeightsAndBiasesInstanceResource instance = operation.Value;
+
+      Console.WriteLine($"W&B Instance created: {instance.Data.Name}");
+      Console.WriteLine($"Provisioning state: {instance.Data.Properties.ProvisioningState}");
+
+  # Get Instance
+  - name: get_wandb_instance
+    prompt: |
+      Retrieve an existing Weights & Biases instance and display its properties.
+    expected_patterns:
+      - "GetWeightsAndBiasesInstanceAsync"
+      - "ProvisioningState"
+      - "PartnerProperties"
+      - "Region"
+      - "Subdomain"
+    tags:
+      - get
+      - properties
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.WeightsAndBiases;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var subscription = await client.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      WeightsAndBiasesInstanceResource instance = await resourceGroup.Value
+          .GetWeightsAndBiasesInstanceAsync("my-wandb-instance");
+
+      Console.WriteLine($"Instance: {instance.Data.Name}");
+      Console.WriteLine($"Location: {instance.Data.Location}");
+      Console.WriteLine($"State: {instance.Data.Properties.ProvisioningState}");
+
+      if (instance.Data.Properties.PartnerProperties != null)
+      {
+          Console.WriteLine($"Region: {instance.Data.Properties.PartnerProperties.Region}");
+          Console.WriteLine($"Subdomain: {instance.Data.Properties.PartnerProperties.Subdomain}");
+      }
+
+  # Configure SSO
+  - name: configure_sso
+    prompt: |
+      Configure Single Sign-On (SSO) for a Weights & Biases instance using Entra ID.
+    expected_patterns:
+      - "SingleSignOnPropertiesV2"
+      - "WeightsAndBiasSingleSignOnPropertiesV2"
+      - "WeightsAndBiasSingleSignOnType"
+      - "WeightsAndBiasSingleSignOnState"
+      - "EnterpriseAppId"
+      - "AadDomains"
+    tags:
+      - sso
+      - security
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.WeightsAndBiases;
+      using Azure.ResourceManager.WeightsAndBiases.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var subscription = await client.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      WeightsAndBiasesInstanceResource instance = await resourceGroup.Value
+          .GetWeightsAndBiasesInstanceAsync("my-wandb-instance");
+
+      WeightsAndBiasesInstanceData updateData = instance.Data;
+
+      updateData.Properties.SingleSignOnPropertiesV2 = new WeightsAndBiasSingleSignOnPropertiesV2
+      {
+          Type = WeightsAndBiasSingleSignOnType.Saml,
+          State = WeightsAndBiasSingleSignOnState.Enable,
+          EnterpriseAppId = "<entra-app-id>",
+          AadDomains = { "example.com", "contoso.com" }
+      };
+
+      ArmOperation<WeightsAndBiasesInstanceResource> operation = await resourceGroup.Value
+          .GetWeightsAndBiasesInstances()
+          .CreateOrUpdateAsync(WaitUntil.Completed, "my-wandb-instance", updateData);
+
+      Console.WriteLine("SSO configured");
+
+  # Update Instance Tags
+  - name: update_instance_tags
+    prompt: |
+      Update tags on a Weights & Biases instance for cost tracking.
+    expected_patterns:
+      - "WeightsAndBiasesInstancePatch"
+      - "UpdateAsync"
+      - "Tags"
+    tags:
+      - update
+      - tags
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.WeightsAndBiases;
+      using Azure.ResourceManager.WeightsAndBiases.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var subscription = await client.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      WeightsAndBiasesInstanceResource instance = await resourceGroup.Value
+          .GetWeightsAndBiasesInstanceAsync("my-wandb-instance");
+
+      WeightsAndBiasesInstancePatch patch = new WeightsAndBiasesInstancePatch
+      {
+          Tags =
+          {
+              { "environment", "production" },
+              { "team", "ml-platform" },
+              { "costCenter", "CC-ML-001" }
+          }
+      };
+
+      instance = await instance.UpdateAsync(patch);
+      Console.WriteLine($"Updated instance: {instance.Data.Name}");
+
+  # List Instances
+  - name: list_instances
+    prompt: |
+      List all Weights & Biases instances in a resource group and subscription.
+    expected_patterns:
+      - "GetWeightsAndBiasesInstances"
+      - "await foreach"
+      - "GetWeightsAndBiasesInstancesAsync"
+    tags:
+      - list
+      - management
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.WeightsAndBiases;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var subscription = await client.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      // List in resource group
+      await foreach (WeightsAndBiasesInstanceResource instance in
+          resourceGroup.Value.GetWeightsAndBiasesInstances())
+      {
+          Console.WriteLine($"Instance: {instance.Data.Name}");
+          Console.WriteLine($"  Location: {instance.Data.Location}");
+          Console.WriteLine($"  State: {instance.Data.Properties.ProvisioningState}");
+      }
+
+      // List in subscription
+      await foreach (WeightsAndBiasesInstanceResource instance in
+          subscription.GetWeightsAndBiasesInstancesAsync())
+      {
+          Console.WriteLine($"{instance.Data.Name} in {instance.Id.ResourceGroupName}");
+      }
+
+  # Delete Instance
+  - name: delete_instance
+    prompt: |
+      Delete a Weights & Biases instance from Azure.
+    expected_patterns:
+      - "DeleteAsync"
+      - "WaitUntil.Completed"
+    tags:
+      - delete
+      - cleanup
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.WeightsAndBiases;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      var subscription = await client.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      WeightsAndBiasesInstanceResource instance = await resourceGroup.Value
+          .GetWeightsAndBiasesInstanceAsync("my-wandb-instance");
+
+      await instance.DeleteAsync(WaitUntil.Completed);
+      Console.WriteLine("Instance deleted");
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Implement proper error handling for Weights & Biases instance operations.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status"
+      - "catch"
+      - "when"
+    tags:
+      - error-handling
+      - best-practice
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.WeightsAndBiases;
+      using Azure.ResourceManager.WeightsAndBiases.Models;
+
+      ArmClient client = new ArmClient(new DefaultAzureCredential());
+
+      try
+      {
+          var subscription = await client.GetDefaultSubscriptionAsync();
+          var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+          WeightsAndBiasesInstanceCollection instances = resourceGroup.Value.GetWeightsAndBiasesInstances();
+
+          WeightsAndBiasesInstanceData data = new WeightsAndBiasesInstanceData(AzureLocation.EastUS)
+          {
+              Properties = new WeightsAndBiasesInstanceProperties
+              {
+                  Marketplace = new WeightsAndBiasesMarketplaceDetails
+                  {
+                      SubscriptionId = "subscription-id",
+                      OfferDetails = new WeightsAndBiasesOfferDetails
+                      {
+                          PublisherId = "wandb",
+                          OfferId = "wandb-pay-as-you-go",
+                          PlanId = "wandb-payg",
+                          PlanName = "Pay As You Go",
+                          TermId = "monthly",
+                          TermUnit = "P1M"
+                      }
+                  },
+                  User = new WeightsAndBiasesUserDetails
+                  {
+                      EmailAddress = "admin@example.com",
+                      Upn = "admin@example.com"
+                  }
+              }
+          };
+
+          ArmOperation<WeightsAndBiasesInstanceResource> operation = await instances
+              .CreateOrUpdateAsync(WaitUntil.Completed, "my-wandb", data);
+      }
+      catch (RequestFailedException ex) when (ex.Status == 409)
+      {
+          Console.WriteLine("Instance already exists or name conflict");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 400)
+      {
+          Console.WriteLine($"Invalid configuration: {ex.Message}");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"Azure error: {ex.Status} - {ex.Message}");
+      }

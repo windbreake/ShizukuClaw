@@ -1,0 +1,481 @@
+# Test scenarios for azure-mgmt-fabric-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Client Creation
+  - name: basic_client_creation
+    prompt: |
+      Create a basic Azure Fabric Management client that connects to Azure
+      using DefaultAzureCredential. Include proper authentication and cleanup.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "FabricMgmtClient"
+      - "subscription_id"
+      - "AZURE_SUBSCRIPTION_ID"
+    forbidden_patterns:
+      - "hardcoded"
+      - "endpoint="
+      - "from azure.mgmt import FabricMgmtClient"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import os
+      from azure.mgmt.fabric import FabricMgmtClient
+      from azure.identity import DefaultAzureCredential
+      
+      credential = DefaultAzureCredential()
+      client = FabricMgmtClient(
+          credential=credential,
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      with client:
+          capacities = client.fabric_capacities.list_by_subscription()
+          for capacity in capacities:
+              print(f"Capacity: {capacity.name}")
+
+  # Create Fabric Capacity
+  - name: create_fabric_capacity
+    prompt: |
+      Create a new Fabric capacity with the Azure Fabric Management SDK.
+      Include the SKU configuration, location, and proper LRO handling.
+    expected_patterns:
+      - "FabricCapacity"
+      - "CapacitySku"
+      - "begin_create_or_update"
+      - ".result()"
+      - "location="
+      - "tier="
+    forbidden_patterns:
+      - "create_capacity"
+      - "CapacitySku()"
+    tags:
+      - create
+      - capacity
+    mock_response: |
+      import os
+      from azure.mgmt.fabric import FabricMgmtClient
+      from azure.mgmt.fabric.models import FabricCapacity, CapacitySku
+      from azure.identity import DefaultAzureCredential
+      
+      client = FabricMgmtClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      capacity_name = "myfabriccapacity"
+      
+      capacity = client.fabric_capacities.begin_create_or_update(
+          resource_group_name=resource_group,
+          capacity_name=capacity_name,
+          resource=FabricCapacity(
+              location="eastus",
+              sku=CapacitySku(
+                  name="F2",
+                  tier="Fabric"
+              )
+          )
+      ).result()
+      
+      print(f"Capacity created: {capacity.name}")
+      client.close()
+
+  # Get and List Capacities
+  - name: list_capacities
+    prompt: |
+      Retrieve and list Fabric capacities. Show how to get capacity details
+      and iterate through capacities in a resource group.
+    expected_patterns:
+      - "fabric_capacities.get"
+      - "list_by_resource_group"
+      - "capacity.name"
+      - "capacity.sku"
+    forbidden_patterns:
+      - "list_capacities()"
+      - "get_capacity"
+    tags:
+      - read
+      - list
+      - capacity
+    mock_response: |
+      import os
+      from azure.mgmt.fabric import FabricMgmtClient
+      from azure.identity import DefaultAzureCredential
+      
+      client = FabricMgmtClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      capacity_name = "myfabriccapacity"
+      
+      # Get specific capacity
+      capacity = client.fabric_capacities.get(
+          resource_group_name=resource_group,
+          capacity_name=capacity_name
+      )
+      
+      print(f"Capacity: {capacity.name}")
+      print(f"SKU: {capacity.sku.name}")
+      print(f"State: {capacity.properties.state}")
+      
+      # List capacities in resource group
+      capacities = client.fabric_capacities.list_by_resource_group(
+          resource_group_name=resource_group
+      )
+      
+      for cap in capacities:
+          print(f"Capacity: {cap.name} - SKU: {cap.sku.name}")
+      
+      client.close()
+
+  # Update Capacity SKU
+  - name: update_capacity_sku
+    prompt: |
+      Update a Fabric capacity to scale it to a different SKU.
+      Use FabricCapacityUpdate and handle the long-running operation.
+    expected_patterns:
+      - "FabricCapacityUpdate"
+      - "begin_update"
+      - ".result()"
+      - "CapacitySku"
+    forbidden_patterns:
+      - "FabricCapacity\\("
+      - "update_capacity"
+    tags:
+      - update
+      - capacity
+      - scaling
+    mock_response: |
+      import os
+      from azure.mgmt.fabric import FabricMgmtClient
+      from azure.mgmt.fabric.models import FabricCapacityUpdate, CapacitySku
+      from azure.identity import DefaultAzureCredential
+      
+      client = FabricMgmtClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      capacity_name = "myfabriccapacity"
+      
+      updated = client.fabric_capacities.begin_update(
+          resource_group_name=resource_group,
+          capacity_name=capacity_name,
+          properties=FabricCapacityUpdate(
+              sku=CapacitySku(
+                  name="F4",
+                  tier="Fabric"
+              ),
+              tags={"environment": "production"}
+          )
+      ).result()
+      
+      print(f"Updated SKU: {updated.sku.name}")
+      client.close()
+
+  # Suspend and Resume Capacity
+  - name: suspend_resume_capacity
+    prompt: |
+      Suspend a Fabric capacity to stop billing, then resume it.
+      Handle the long-running operations properly.
+    expected_patterns:
+      - "begin_suspend"
+      - "begin_resume"
+      - ".result()"
+    forbidden_patterns:
+      - "suspend_capacity"
+      - "resume_capacity"
+      - "pause"
+    tags:
+      - control
+      - capacity
+    mock_response: |
+      import os
+      from azure.mgmt.fabric import FabricMgmtClient
+      from azure.identity import DefaultAzureCredential
+      
+      client = FabricMgmtClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      capacity_name = "myfabriccapacity"
+      
+      # Suspend capacity to stop billing
+      client.fabric_capacities.begin_suspend(
+          resource_group_name=resource_group,
+          capacity_name=capacity_name
+      ).result()
+      
+      print("Capacity suspended")
+      
+      # Resume capacity
+      client.fabric_capacities.begin_resume(
+          resource_group_name=resource_group,
+          capacity_name=capacity_name
+      ).result()
+      
+      print("Capacity resumed")
+      client.close()
+
+  # Delete Capacity
+  - name: delete_capacity
+    prompt: |
+      Delete a Fabric capacity completely. Include error handling
+      for the case where the capacity doesn't exist.
+    expected_patterns:
+      - "begin_delete"
+      - ".result()"
+      - "ResourceNotFoundError"
+    forbidden_patterns:
+      - "delete_capacity"
+    tags:
+      - delete
+      - capacity
+    mock_response: |
+      import os
+      from azure.mgmt.fabric import FabricMgmtClient
+      from azure.identity import DefaultAzureCredential
+      from azure.core.exceptions import ResourceNotFoundError
+      
+      client = FabricMgmtClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      capacity_name = "myfabriccapacity"
+      
+      try:
+          client.fabric_capacities.begin_delete(
+              resource_group_name=resource_group,
+              capacity_name=capacity_name
+          ).result()
+          
+          print("Capacity deleted")
+      except ResourceNotFoundError:
+          print(f"Capacity {capacity_name} not found")
+      
+      client.close()
+
+  # Check Name Availability
+  - name: check_name_availability
+    prompt: |
+      Check if a Fabric capacity name is available before creating it.
+      Validate the name and location.
+    expected_patterns:
+      - "check_name_availability"
+      - "CheckNameAvailabilityRequest"
+      - "name_available"
+      - "Microsoft.Fabric/capacities"
+    forbidden_patterns:
+      - "is_name_available"
+      - "validate_name"
+    tags:
+      - validation
+      - capacity
+    mock_response: |
+      import os
+      from azure.mgmt.fabric import FabricMgmtClient
+      from azure.mgmt.fabric.models import CheckNameAvailabilityRequest
+      from azure.identity import DefaultAzureCredential
+      
+      client = FabricMgmtClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      result = client.fabric_capacities.check_name_availability(
+          location="eastus",
+          body=CheckNameAvailabilityRequest(
+              name="my-new-capacity",
+              type="Microsoft.Fabric/capacities"
+          )
+      )
+      
+      if result.name_available:
+          print("Name is available")
+      else:
+          print(f"Name not available: {result.reason}")
+      
+      client.close()
+
+  # List Available SKUs
+  - name: list_available_skus
+    prompt: |
+      List all available Fabric SKUs to understand capacity options.
+      Include tier and name information.
+    expected_patterns:
+      - "list_skus"
+      - "sku.name"
+      - "sku.tier"
+    forbidden_patterns:
+      - "get_skus"
+    tags:
+      - skus
+      - reference
+    mock_response: |
+      import os
+      from azure.mgmt.fabric import FabricMgmtClient
+      from azure.identity import DefaultAzureCredential
+      
+      client = FabricMgmtClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      skus = client.fabric_capacities.list_skus()
+      
+      print("Available Fabric SKUs:")
+      for sku in skus:
+          print(f"SKU: {sku.name} - Tier: {sku.tier}")
+      
+      client.close()
+
+  # Error Handling for Capacity Operations
+  - name: error_handling
+    prompt: |
+      Create code that handles errors when managing Fabric capacities.
+      Include ResourceNotFoundError and ResourceExistsError handling.
+    expected_patterns:
+      - "ResourceNotFoundError"
+      - "try:"
+      - "except"
+      - "get("
+    forbidden_patterns:
+      - "except:"
+    tags:
+      - error-handling
+      - resilience
+    mock_response: |
+      import os
+      from azure.mgmt.fabric import FabricMgmtClient
+      from azure.identity import DefaultAzureCredential
+      from azure.core.exceptions import ResourceNotFoundError, ResourceExistsError
+      
+      client = FabricMgmtClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      capacity_name = "myfabriccapacity"
+      
+      try:
+          capacity = client.fabric_capacities.get(
+              resource_group_name=resource_group,
+              capacity_name=capacity_name
+          )
+          print(f"Found capacity: {capacity.name}")
+      except ResourceNotFoundError:
+          print(f"Capacity {capacity_name} not found")
+      except Exception as e:
+          print(f"Error: {e}")
+      finally:
+          client.close()
+
+  # Complete Lifecycle Example
+  - name: complete_lifecycle
+    prompt: |
+      Create a complete example showing the full lifecycle of a Fabric capacity:
+      create, get, update, suspend, resume, and delete.
+    expected_patterns:
+      - "begin_create_or_update"
+      - "begin_update"
+      - "begin_suspend"
+      - "begin_resume"
+      - "begin_delete"
+      - ".result()"
+    forbidden_patterns:
+      - "await"
+    tags:
+      - lifecycle
+      - advanced
+    mock_response: |
+      import os
+      import time
+      from azure.mgmt.fabric import FabricMgmtClient
+      from azure.mgmt.fabric.models import FabricCapacity, FabricCapacityUpdate, CapacitySku
+      from azure.identity import DefaultAzureCredential
+      from azure.core.exceptions import ResourceNotFoundError
+      
+      client = FabricMgmtClient(
+          credential=DefaultAzureCredential(),
+          subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"]
+      )
+      
+      resource_group = os.environ["AZURE_RESOURCE_GROUP"]
+      capacity_name = "lifecycle-test"
+      
+      try:
+          # Create
+          print("Creating capacity...")
+          capacity = client.fabric_capacities.begin_create_or_update(
+              resource_group_name=resource_group,
+              capacity_name=capacity_name,
+              resource=FabricCapacity(
+                  location="eastus",
+                  sku=CapacitySku(name="F2", tier="Fabric")
+              )
+          ).result()
+          print(f"Created: {capacity.name}")
+          
+          # Get
+          capacity = client.fabric_capacities.get(
+              resource_group_name=resource_group,
+              capacity_name=capacity_name
+          )
+          print(f"Current state: {capacity.properties.state}")
+          
+          # Update
+          print("Updating SKU...")
+          capacity = client.fabric_capacities.begin_update(
+              resource_group_name=resource_group,
+              capacity_name=capacity_name,
+              properties=FabricCapacityUpdate(
+                  sku=CapacitySku(name="F4", tier="Fabric")
+              )
+          ).result()
+          print(f"Updated SKU: {capacity.sku.name}")
+          
+          # Suspend
+          print("Suspending capacity...")
+          client.fabric_capacities.begin_suspend(
+              resource_group_name=resource_group,
+              capacity_name=capacity_name
+          ).result()
+          print("Suspended")
+          
+          # Resume
+          print("Resuming capacity...")
+          client.fabric_capacities.begin_resume(
+              resource_group_name=resource_group,
+              capacity_name=capacity_name
+          ).result()
+          print("Resumed")
+          
+          # Delete
+          print("Deleting capacity...")
+          client.fabric_capacities.begin_delete(
+              resource_group_name=resource_group,
+              capacity_name=capacity_name
+          ).result()
+          print("Deleted")
+          
+      except ResourceNotFoundError:
+          print(f"Capacity {capacity_name} not found")
+      except Exception as e:
+          print(f"Error: {e}")
+      finally:
+          client.close()

@@ -1,0 +1,8 @@
+{
+  "skill_id": "microwind__ai-skills",
+  "deployed_at": "2026-04-10 11:18:02",
+  "source": "github",
+  "name": "microwind__ai-skills",
+  "url": "https://github.com/microwind/ai-skills",
+  "layout": "github_clone_with_root_skill_md"
+}

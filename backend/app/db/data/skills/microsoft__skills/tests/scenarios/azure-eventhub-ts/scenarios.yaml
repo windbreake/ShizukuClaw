@@ -1,0 +1,531 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+# Test scenarios for azure-eventhub-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: producer_client_aad_auth
+    prompt: |
+      Create an EventHubProducerClient in TypeScript using DefaultAzureCredential
+      for AAD authentication. Use environment variables for namespace and hub name.
+    expected_patterns:
+      - "import { EventHubProducerClient } from \"@azure/event-hubs\""
+      - "import { DefaultAzureCredential } from \"@azure/identity\""
+      - "new EventHubProducerClient"
+      - "process.env"
+    forbidden_patterns:
+      - "require("
+      - "SharedAccessKey"
+    tags:
+      - authentication
+      - producer
+    mock_response: |
+      import { EventHubProducerClient } from "@azure/event-hubs";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const fullyQualifiedNamespace = process.env.EVENTHUB_NAMESPACE!;
+      const eventHubName = process.env.EVENTHUB_NAME!;
+      const credential = new DefaultAzureCredential();
+
+      const producer = new EventHubProducerClient(
+        fullyQualifiedNamespace,
+        eventHubName,
+        credential
+      );
+
+  - name: send_batch_events
+    prompt: |
+      Send multiple events to Azure Event Hubs using TypeScript. Create a batch,
+      add events, and send. Handle the case when batch becomes full.
+    expected_patterns:
+      - "createBatch"
+      - "tryAdd"
+      - "sendBatch"
+      - "close"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - producer
+      - batch
+    mock_response: |
+      import { EventHubProducerClient } from "@azure/event-hubs";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const producer = new EventHubProducerClient(
+        process.env.EVENTHUB_NAMESPACE!,
+        process.env.EVENTHUB_NAME!,
+        new DefaultAzureCredential()
+      );
+
+      const events = [
+        { temperature: 72.5, deviceId: "sensor-1" },
+        { temperature: 68.2, deviceId: "sensor-2" },
+        { temperature: 75.1, deviceId: "sensor-3" },
+      ];
+
+      let batch = await producer.createBatch();
+
+      for (const event of events) {
+        if (!batch.tryAdd({ body: event })) {
+          // Batch is full, send and create new
+          await producer.sendBatch(batch);
+          batch = await producer.createBatch();
+          
+          if (!batch.tryAdd({ body: event })) {
+            throw new Error("Event too large for batch");
+          }
+        }
+      }
+
+      // Send remaining events
+      if (batch.count > 0) {
+        await producer.sendBatch(batch);
+      }
+
+      await producer.close();
+
+  - name: send_to_partition
+    prompt: |
+      Send events to a specific partition in Azure Event Hubs using TypeScript.
+      Show both partitionId and partitionKey approaches.
+    expected_patterns:
+      - "createBatch"
+      - "partitionId"
+      - "partitionKey"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - producer
+      - partition
+    mock_response: |
+      import { EventHubProducerClient } from "@azure/event-hubs";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const producer = new EventHubProducerClient(
+        process.env.EVENTHUB_NAMESPACE!,
+        process.env.EVENTHUB_NAME!,
+        new DefaultAzureCredential()
+      );
+
+      // Send to specific partition by ID
+      const batchByPartitionId = await producer.createBatch({ partitionId: "0" });
+      batchByPartitionId.tryAdd({ body: "Event for partition 0" });
+      await producer.sendBatch(batchByPartitionId);
+
+      // Send using partition key (consistent hashing)
+      const batchByPartitionKey = await producer.createBatch({ 
+        partitionKey: "device-123" 
+      });
+      batchByPartitionKey.tryAdd({ body: "Event with partition key" });
+      await producer.sendBatch(batchByPartitionKey);
+
+      await producer.close();
+
+  - name: simple_consumer
+    prompt: |
+      Create an EventHubConsumerClient in TypeScript and subscribe to receive
+      events. Handle both processEvents and processError callbacks.
+    expected_patterns:
+      - "EventHubConsumerClient"
+      - "subscribe"
+      - "processEvents"
+      - "processError"
+      - "close"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - consumer
+      - subscribe
+    mock_response: |
+      import { EventHubConsumerClient } from "@azure/event-hubs";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const consumer = new EventHubConsumerClient(
+        "$Default",
+        process.env.EVENTHUB_NAMESPACE!,
+        process.env.EVENTHUB_NAME!,
+        new DefaultAzureCredential()
+      );
+
+      const subscription = consumer.subscribe({
+        processEvents: async (events, context) => {
+          for (const event of events) {
+            console.log(`Partition: ${context.partitionId}`);
+            console.log(`Body: ${JSON.stringify(event.body)}`);
+            console.log(`Sequence: ${event.sequenceNumber}`);
+          }
+        },
+        processError: async (err, context) => {
+          console.error(`Error on partition ${context.partitionId}: ${err.message}`);
+        },
+      });
+
+      // Stop after 60 seconds
+      setTimeout(async () => {
+        await subscription.close();
+        await consumer.close();
+      }, 60000);
+
+  - name: consumer_with_checkpointing
+    prompt: |
+      Create an Event Hubs consumer in TypeScript with blob-based checkpointing
+      for production use. Use BlobCheckpointStore for tracking progress.
+    expected_patterns:
+      - "BlobCheckpointStore"
+      - "ContainerClient"
+      - "updateCheckpoint"
+      - "checkpointStore"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - consumer
+      - checkpointing
+    mock_response: |
+      import { EventHubConsumerClient } from "@azure/event-hubs";
+      import { ContainerClient } from "@azure/storage-blob";
+      import { BlobCheckpointStore } from "@azure/eventhubs-checkpointstore-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const credential = new DefaultAzureCredential();
+      const storageAccount = process.env.STORAGE_ACCOUNT_NAME!;
+      const containerName = process.env.STORAGE_CONTAINER_NAME!;
+
+      const containerClient = new ContainerClient(
+        `https://${storageAccount}.blob.core.windows.net/${containerName}`,
+        credential
+      );
+
+      const checkpointStore = new BlobCheckpointStore(containerClient);
+
+      const consumer = new EventHubConsumerClient(
+        "$Default",
+        process.env.EVENTHUB_NAMESPACE!,
+        process.env.EVENTHUB_NAME!,
+        credential,
+        checkpointStore
+      );
+
+      const subscription = consumer.subscribe({
+        processEvents: async (events, context) => {
+          for (const event of events) {
+            console.log(`Processing: ${JSON.stringify(event.body)}`);
+          }
+          
+          // Checkpoint after processing batch
+          if (events.length > 0) {
+            await context.updateCheckpoint(events[events.length - 1]);
+          }
+        },
+        processError: async (err, context) => {
+          console.error(`Error: ${err.message}`);
+        },
+      });
+
+  - name: consumer_start_position
+    prompt: |
+      Subscribe to Event Hubs in TypeScript starting from different positions
+      for different partitions. Use earliestEventPosition and latestEventPosition.
+    expected_patterns:
+      - "startPosition"
+      - "earliestEventPosition"
+      - "latestEventPosition"
+      - "offset"
+      - "enqueuedOn"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - consumer
+      - position
+    mock_response: |
+      import { 
+        EventHubConsumerClient,
+        earliestEventPosition,
+        latestEventPosition,
+      } from "@azure/event-hubs";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const consumer = new EventHubConsumerClient(
+        "$Default",
+        process.env.EVENTHUB_NAMESPACE!,
+        process.env.EVENTHUB_NAME!,
+        new DefaultAzureCredential()
+      );
+
+      const subscription = consumer.subscribe(
+        {
+          processEvents: async (events, context) => {
+            for (const event of events) {
+              console.log(`Partition ${context.partitionId}: ${JSON.stringify(event.body)}`);
+            }
+          },
+          processError: async (err, context) => {
+            console.error(`Error: ${err.message}`);
+          },
+        },
+        {
+          startPosition: {
+            // Start from beginning for partition 0
+            "0": earliestEventPosition,
+            // Start from end (new events only) for partition 1
+            "1": latestEventPosition,
+            // Start from specific offset for partition 2
+            "2": { offset: "12345" },
+            // Start from specific time for partition 3
+            "3": { enqueuedOn: new Date("2024-01-01T00:00:00Z") },
+          },
+        }
+      );
+
+  - name: batch_processing_options
+    prompt: |
+      Configure batch processing options for Event Hubs consumer in TypeScript.
+      Set maxBatchSize and maxWaitTimeInSeconds.
+    expected_patterns:
+      - "maxBatchSize"
+      - "maxWaitTimeInSeconds"
+      - "subscribe"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - consumer
+      - batch
+    mock_response: |
+      import { EventHubConsumerClient } from "@azure/event-hubs";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const consumer = new EventHubConsumerClient(
+        "$Default",
+        process.env.EVENTHUB_NAMESPACE!,
+        process.env.EVENTHUB_NAME!,
+        new DefaultAzureCredential()
+      );
+
+      const subscription = consumer.subscribe(
+        {
+          processEvents: async (events, context) => {
+            console.log(`Received ${events.length} events from partition ${context.partitionId}`);
+            
+            for (const event of events) {
+              await processEvent(event);
+            }
+          },
+          processError: async (err, context) => {
+            console.error(`Error: ${err.message}`);
+          },
+        },
+        {
+          maxBatchSize: 100,           // Process up to 100 events per batch
+          maxWaitTimeInSeconds: 30,    // Wait up to 30 seconds for batch to fill
+        }
+      );
+
+      async function processEvent(event: any) {
+        console.log(`Processing: ${JSON.stringify(event.body)}`);
+      }
+
+  - name: get_hub_properties
+    prompt: |
+      Get Event Hub properties and partition information in TypeScript.
+      Show how to get partition IDs and last enqueued sequence number.
+    expected_patterns:
+      - "getEventHubProperties"
+      - "getPartitionProperties"
+      - "partitionIds"
+      - "lastEnqueuedSequenceNumber"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - properties
+      - partition
+    mock_response: |
+      import { EventHubProducerClient } from "@azure/event-hubs";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const producer = new EventHubProducerClient(
+        process.env.EVENTHUB_NAMESPACE!,
+        process.env.EVENTHUB_NAME!,
+        new DefaultAzureCredential()
+      );
+
+      // Get Event Hub properties
+      const hubProperties = await producer.getEventHubProperties();
+      console.log(`Event Hub: ${hubProperties.name}`);
+      console.log(`Partitions: ${hubProperties.partitionIds.join(", ")}`);
+
+      // Get properties for each partition
+      for (const partitionId of hubProperties.partitionIds) {
+        const partitionProperties = await producer.getPartitionProperties(partitionId);
+        console.log(`Partition ${partitionId}:`);
+        console.log(`  Last sequence: ${partitionProperties.lastEnqueuedSequenceNumber}`);
+        console.log(`  Last enqueued: ${partitionProperties.lastEnqueuedOnUtc}`);
+        console.log(`  Beginning sequence: ${partitionProperties.beginningSequenceNumber}`);
+      }
+
+      await producer.close();
+
+  - name: error_handling_consumer
+    prompt: |
+      Implement proper error handling for Event Hubs consumer in TypeScript.
+      Only checkpoint on successful processing, handle transient errors.
+    expected_patterns:
+      - "try"
+      - "catch"
+      - "updateCheckpoint"
+      - "processError"
+      - "MessagingError"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - error-handling
+      - consumer
+    mock_response: |
+      import { EventHubConsumerClient } from "@azure/event-hubs";
+      import { ContainerClient } from "@azure/storage-blob";
+      import { BlobCheckpointStore } from "@azure/eventhubs-checkpointstore-blob";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const credential = new DefaultAzureCredential();
+      const containerClient = new ContainerClient(
+        `https://${process.env.STORAGE_ACCOUNT_NAME}.blob.core.windows.net/${process.env.STORAGE_CONTAINER_NAME}`,
+        credential
+      );
+      const checkpointStore = new BlobCheckpointStore(containerClient);
+
+      const consumer = new EventHubConsumerClient(
+        "$Default",
+        process.env.EVENTHUB_NAMESPACE!,
+        process.env.EVENTHUB_NAME!,
+        credential,
+        checkpointStore
+      );
+
+      const subscription = consumer.subscribe({
+        processEvents: async (events, context) => {
+          try {
+            for (const event of events) {
+              await processEvent(event);
+            }
+            
+            // Only checkpoint on successful processing
+            if (events.length > 0) {
+              await context.updateCheckpoint(events[events.length - 1]);
+            }
+          } catch (error) {
+            // Don't checkpoint on error - events will be reprocessed
+            console.error("Processing failed:", error);
+          }
+        },
+        processError: async (err, context) => {
+          if (err.name === "MessagingError") {
+            // Transient error - SDK will retry automatically
+            console.warn(`Transient error on partition ${context.partitionId}: ${err.message}`);
+          } else {
+            // Fatal error - may need intervention
+            console.error(`Fatal error on partition ${context.partitionId}:`, err);
+          }
+        },
+      });
+
+      async function processEvent(event: any): Promise<void> {
+        // Process the event
+        console.log(`Processing: ${JSON.stringify(event.body)}`);
+      }
+
+  - name: send_with_properties
+    prompt: |
+      Send events to Event Hubs in TypeScript with custom properties,
+      content type, and correlation ID.
+    expected_patterns:
+      - "properties"
+      - "contentType"
+      - "correlationId"
+      - "tryAdd"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - producer
+      - properties
+    mock_response: |
+      import { EventHubProducerClient } from "@azure/event-hubs";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const producer = new EventHubProducerClient(
+        process.env.EVENTHUB_NAMESPACE!,
+        process.env.EVENTHUB_NAME!,
+        new DefaultAzureCredential()
+      );
+
+      const batch = await producer.createBatch();
+
+      batch.tryAdd({
+        body: { 
+          temperature: 72.5, 
+          humidity: 45,
+          deviceId: "sensor-001" 
+        },
+        properties: {
+          eventType: "telemetry",
+          source: "iot-device",
+          priority: "high",
+        },
+        contentType: "application/json",
+        correlationId: `request-${Date.now()}`,
+      });
+
+      await producer.sendBatch(batch);
+      await producer.close();
+
+  - name: subscribe_single_partition
+    prompt: |
+      Subscribe to a single partition in Event Hubs using TypeScript.
+      First get partition IDs, then subscribe to only one partition.
+    expected_patterns:
+      - "getPartitionIds"
+      - "subscribe"
+      - "partitionIds\\[0\\]"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - consumer
+      - partition
+    mock_response: |
+      import { EventHubConsumerClient, earliestEventPosition } from "@azure/event-hubs";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const consumer = new EventHubConsumerClient(
+        "$Default",
+        process.env.EVENTHUB_NAMESPACE!,
+        process.env.EVENTHUB_NAME!,
+        new DefaultAzureCredential()
+      );
+
+      const partitionIds = await consumer.getPartitionIds();
+      console.log(`Available partitions: ${partitionIds.join(", ")}`);
+
+      // Subscribe to only the first partition
+      const subscription = consumer.subscribe(
+        partitionIds[0],
+        {
+          processEvents: async (events, context) => {
+            for (const event of events) {
+              console.log(`Partition ${context.partitionId}: ${JSON.stringify(event.body)}`);
+            }
+          },
+          processError: async (err, context) => {
+            console.error(`Error: ${err.message}`);
+          },
+        },
+        {
+          startPosition: earliestEventPosition,
+        }
+      );
+
+      // Stop after 30 seconds
+      setTimeout(async () => {
+        await subscription.close();
+        await consumer.close();
+      }, 30000);

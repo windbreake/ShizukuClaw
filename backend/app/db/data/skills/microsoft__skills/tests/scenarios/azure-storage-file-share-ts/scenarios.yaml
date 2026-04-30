@@ -1,0 +1,404 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-storage-file-share-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic Connection String Authentication
+  - name: connection_string_auth
+    prompt: |
+      Create a TypeScript example that connects to Azure File Share
+      using a connection string and lists all shares.
+    expected_patterns:
+      - "ShareServiceClient"
+      - "fromConnectionString"
+      - "AZURE_STORAGE_CONNECTION_STRING"
+      - "listShares"
+    forbidden_patterns:
+      - "myaccountkey"
+      - "hardcoded"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import { ShareServiceClient } from "@azure/storage-file-share";
+
+      const client = ShareServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function listShares() {
+        for await (const share of client.listShares()) {
+          console.log(share.name, share.properties.quota);
+        }
+      }
+
+      listShares();
+
+  # DefaultAzureCredential Authentication
+  - name: default_credential_auth
+    prompt: |
+      Create a TypeScript example that connects to Azure File Share
+      using DefaultAzureCredential for Azure AD authentication.
+    expected_patterns:
+      - "ShareServiceClient"
+      - "DefaultAzureCredential"
+      - "@azure/identity"
+      - "AZURE_STORAGE_ACCOUNT_NAME"
+    forbidden_patterns:
+      - "fromConnectionString"
+      - "StorageSharedKeyCredential"
+    tags:
+      - authentication
+      - identity
+    mock_response: |
+      import { ShareServiceClient } from "@azure/storage-file-share";
+      import { DefaultAzureCredential } from "@azure/identity";
+
+      const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME!;
+      const client = new ShareServiceClient(
+        `https://${accountName}.file.core.windows.net`,
+        new DefaultAzureCredential()
+      );
+
+      async function listShares() {
+        for await (const share of client.listShares()) {
+          console.log(share.name);
+        }
+      }
+
+      listShares();
+
+  # Create and Delete Share
+  - name: create_delete_share
+    prompt: |
+      Create a TypeScript example that creates a new Azure file share
+      with a quota, then deletes it.
+    expected_patterns:
+      - "ShareServiceClient"
+      - "getShareClient"
+      - "create"
+      - "delete"
+      - "quota"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - shares
+      - basic
+    mock_response: |
+      import { ShareServiceClient } from "@azure/storage-file-share";
+
+      const client = ShareServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function manageShare() {
+        const shareClient = client.getShareClient("my-share");
+
+        // Create share with 100 GB quota
+        await shareClient.create({ quota: 100 });
+        console.log("Share created");
+
+        // Get properties
+        const properties = await shareClient.getProperties();
+        console.log("Quota:", properties.quota, "GB");
+
+        // Delete share
+        await shareClient.delete();
+        console.log("Share deleted");
+      }
+
+      manageShare();
+
+  # Directory Operations
+  - name: directory_operations
+    prompt: |
+      Create a TypeScript example that creates a directory in a share,
+      lists its contents, and then deletes it.
+    expected_patterns:
+      - "getDirectoryClient"
+      - "create"
+      - "listFilesAndDirectories"
+      - "deleteIfExists"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - directories
+      - basic
+    mock_response: |
+      import { ShareServiceClient } from "@azure/storage-file-share";
+
+      const client = ShareServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function manageDirectory() {
+        const shareClient = client.getShareClient("my-share");
+        const directoryClient = shareClient.getDirectoryClient("my-directory");
+
+        // Create directory
+        await directoryClient.create();
+        console.log("Directory created");
+
+        // Check if exists
+        const exists = await directoryClient.exists();
+        console.log("Exists:", exists);
+
+        // List contents
+        for await (const item of directoryClient.listFilesAndDirectories()) {
+          if (item.kind === "directory") {
+            console.log(`[DIR] ${item.name}`);
+          } else {
+            console.log(`[FILE] ${item.name} (${item.properties.contentLength} bytes)`);
+          }
+        }
+
+        // Delete directory
+        await directoryClient.deleteIfExists();
+        console.log("Directory deleted");
+      }
+
+      manageDirectory();
+
+  # Upload File Content
+  - name: upload_file_content
+    prompt: |
+      Create a TypeScript example that uploads string content to a file
+      in Azure File Share using create and uploadRange.
+    expected_patterns:
+      - "getFileClient"
+      - "create"
+      - "uploadRange"
+      - "content.length"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - files
+      - upload
+    mock_response: |
+      import { ShareServiceClient } from "@azure/storage-file-share";
+
+      const client = ShareServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function uploadFile() {
+        const shareClient = client.getShareClient("my-share");
+        const fileClient = shareClient
+          .getDirectoryClient("my-directory")
+          .getFileClient("my-file.txt");
+
+        const content = "Hello, World!";
+        await fileClient.create(content.length);
+        await fileClient.uploadRange(content, 0, content.length);
+
+        console.log("File uploaded");
+      }
+
+      uploadFile();
+
+  # Download File to Buffer
+  - name: download_file_buffer
+    prompt: |
+      Create a TypeScript example that downloads a file from Azure File
+      Share to a buffer and prints its content.
+    expected_patterns:
+      - "getFileClient"
+      - "downloadToBuffer"
+      - "toString"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - files
+      - download
+    mock_response: |
+      import { ShareServiceClient } from "@azure/storage-file-share";
+
+      const client = ShareServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function downloadFile() {
+        const shareClient = client.getShareClient("my-share");
+        const fileClient = shareClient.rootDirectoryClient.getFileClient("my-file.txt");
+
+        const buffer = await fileClient.downloadToBuffer();
+        console.log("Content:", buffer.toString());
+      }
+
+      downloadFile();
+
+  # Upload from Local File
+  - name: upload_local_file
+    prompt: |
+      Create a TypeScript example that uploads a local file to Azure
+      File Share using uploadFile method.
+    expected_patterns:
+      - "getFileClient"
+      - "uploadFile"
+      - "fs.statSync"
+      - "create"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - files
+      - upload
+      - nodejs
+    mock_response: |
+      import { ShareServiceClient } from "@azure/storage-file-share";
+      import * as fs from "fs";
+
+      const client = ShareServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function uploadLocalFile() {
+        const shareClient = client.getShareClient("my-share");
+        const fileClient = shareClient.rootDirectoryClient.getFileClient("uploaded.txt");
+        const localFilePath = "/path/to/local/file.txt";
+
+        const fileSize = fs.statSync(localFilePath).size;
+        await fileClient.create(fileSize);
+        await fileClient.uploadFile(localFilePath);
+
+        console.log("File uploaded from local path");
+      }
+
+      uploadLocalFile();
+
+  # File Properties and Metadata
+  - name: file_properties_metadata
+    prompt: |
+      Create a TypeScript example that gets file properties and sets
+      custom metadata on a file in Azure File Share.
+    expected_patterns:
+      - "getFileClient"
+      - "getProperties"
+      - "setMetadata"
+      - "contentLength"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - files
+      - properties
+      - metadata
+    mock_response: |
+      import { ShareServiceClient } from "@azure/storage-file-share";
+
+      const client = ShareServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function manageFileProperties() {
+        const shareClient = client.getShareClient("my-share");
+        const fileClient = shareClient.rootDirectoryClient.getFileClient("my-file.txt");
+
+        // Get properties
+        const properties = await fileClient.getProperties();
+        console.log("Content-Length:", properties.contentLength);
+        console.log("Content-Type:", properties.contentType);
+        console.log("Last Modified:", properties.lastModified);
+
+        // Set metadata
+        await fileClient.setMetadata({
+          author: "John Doe",
+          category: "documents",
+        });
+
+        console.log("Metadata set");
+      }
+
+      manageFileProperties();
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Create a TypeScript example that handles common errors when
+      working with Azure File Share using RestError.
+    expected_patterns:
+      - "RestError"
+      - "statusCode"
+      - "try"
+      - "catch"
+      - "instanceof"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - errors
+      - best-practices
+    mock_response: |
+      import { ShareServiceClient, RestError } from "@azure/storage-file-share";
+
+      const client = ShareServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function handleErrors() {
+        const shareClient = client.getShareClient("my-share");
+
+        try {
+          await shareClient.create();
+        } catch (error) {
+          if (error instanceof RestError) {
+            switch (error.statusCode) {
+              case 404:
+                console.log("Share not found");
+                break;
+              case 409:
+                console.log("Share already exists");
+                break;
+              case 403:
+                console.log("Access denied");
+                break;
+              default:
+                console.error(`Storage error ${error.statusCode}: ${error.message}`);
+            }
+          }
+          throw error;
+        }
+      }
+
+      handleErrors();
+
+  # Create Share Snapshot
+  - name: create_snapshot
+    prompt: |
+      Create a TypeScript example that creates a snapshot of a file
+      share and accesses a file from the snapshot.
+    expected_patterns:
+      - "createSnapshot"
+      - "withSnapshot"
+      - "snapshot"
+      - "downloadToBuffer"
+    forbidden_patterns:
+      - "hardcoded"
+    tags:
+      - snapshots
+      - advanced
+    mock_response: |
+      import { ShareServiceClient } from "@azure/storage-file-share";
+
+      const client = ShareServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING!
+      );
+
+      async function useSnapshot() {
+        const shareClient = client.getShareClient("my-share");
+
+        // Create snapshot
+        const snapshotResponse = await shareClient.createSnapshot();
+        console.log("Snapshot:", snapshotResponse.snapshot);
+
+        // Access snapshot
+        const snapshotShareClient = shareClient.withSnapshot(snapshotResponse.snapshot!);
+        const snapshotFileClient = snapshotShareClient.rootDirectoryClient.getFileClient("file.txt");
+        const content = await snapshotFileClient.downloadToBuffer();
+
+        console.log("Snapshot content:", content.toString());
+      }
+
+      useSnapshot();

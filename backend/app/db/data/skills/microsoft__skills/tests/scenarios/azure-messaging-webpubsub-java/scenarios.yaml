@@ -1,0 +1,339 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-messaging-webpubsub-java skill evaluation
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: client_creation
+    prompt: |
+      Create Java code to set up the Azure Web PubSub service client
+      using a connection string from an environment variable.
+    expected_patterns:
+      - "WebPubSubServiceClientBuilder"
+      - "connectionString"
+      - "hub"
+      - "buildClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'connectionString\("Endpoint='
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import com.azure.messaging.webpubsub.WebPubSubServiceClient;
+      import com.azure.messaging.webpubsub.WebPubSubServiceClientBuilder;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("WEB_PUBSUB_CONNECTION_STRING");
+              
+              WebPubSubServiceClient client = new WebPubSubServiceClientBuilder()
+                  .connectionString(connectionString)
+                  .hub("chat")
+                  .buildClient();
+              
+              System.out.println("Client initialized successfully");
+          }
+      }
+
+  - name: send_to_all
+    prompt: |
+      Create a Java example that sends a message to all connected
+      clients using Azure Web PubSub.
+    expected_patterns:
+      - "sendToAll"
+      - "WebPubSubContentType"
+    tags:
+      - messaging
+      - basic
+    mock_response: |
+      import com.azure.messaging.webpubsub.WebPubSubServiceClient;
+      import com.azure.messaging.webpubsub.WebPubSubServiceClientBuilder;
+      import com.azure.messaging.webpubsub.models.WebPubSubContentType;
+
+      public class SendToAll {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("WEB_PUBSUB_CONNECTION_STRING");
+              
+              WebPubSubServiceClient client = new WebPubSubServiceClientBuilder()
+                  .connectionString(connectionString)
+                  .hub("notifications")
+                  .buildClient();
+              
+              // Send text message
+              client.sendToAll("Hello everyone!", WebPubSubContentType.TEXT_PLAIN);
+              
+              // Send JSON message
+              String jsonMessage = "{\"type\": \"notification\", \"message\": \"New update!\"}";
+              client.sendToAll(jsonMessage, WebPubSubContentType.APPLICATION_JSON);
+              
+              System.out.println("Messages sent to all clients");
+          }
+      }
+
+  - name: group_management
+    prompt: |
+      Create a Java example that demonstrates group management:
+      adding users and connections to groups, sending to groups.
+    expected_patterns:
+      - "addConnectionToGroup"
+      - "addUserToGroup"
+      - "sendToGroup"
+      - "removeConnectionFromGroup"
+    tags:
+      - groups
+    mock_response: |
+      import com.azure.messaging.webpubsub.WebPubSubServiceClient;
+      import com.azure.messaging.webpubsub.WebPubSubServiceClientBuilder;
+      import com.azure.messaging.webpubsub.models.WebPubSubContentType;
+
+      public class GroupManagement {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("WEB_PUBSUB_CONNECTION_STRING");
+              
+              WebPubSubServiceClient client = new WebPubSubServiceClientBuilder()
+                  .connectionString(connectionString)
+                  .hub("chat")
+                  .buildClient();
+              
+              String connectionId = "connection-123";
+              String userId = "user-456";
+              
+              // Add connection to group
+              client.addConnectionToGroup("premium-users", connectionId);
+              
+              // Add user to group (all their connections)
+              client.addUserToGroup("admin-group", userId);
+              
+              // Send to group
+              client.sendToGroup("premium-users", "Welcome premium users!", WebPubSubContentType.TEXT_PLAIN);
+              
+              // Remove connection from group
+              client.removeConnectionFromGroup("premium-users", connectionId);
+              
+              System.out.println("Group operations completed");
+          }
+      }
+
+  - name: client_access_token
+    prompt: |
+      Create a Java example that generates a client access token
+      with user ID, roles, and groups for WebSocket connections.
+    expected_patterns:
+      - "getClientAccessToken"
+      - "GetClientAccessTokenOptions"
+      - "setUserId"
+      - "addRole"
+      - "addGroup"
+      - "getUrl"
+    tags:
+      - authentication
+      - tokens
+    mock_response: |
+      import com.azure.messaging.webpubsub.WebPubSubServiceClient;
+      import com.azure.messaging.webpubsub.WebPubSubServiceClientBuilder;
+      import com.azure.messaging.webpubsub.models.GetClientAccessTokenOptions;
+      import com.azure.messaging.webpubsub.models.WebPubSubClientAccessToken;
+
+      public class GenerateToken {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("WEB_PUBSUB_CONNECTION_STRING");
+              
+              WebPubSubServiceClient client = new WebPubSubServiceClientBuilder()
+                  .connectionString(connectionString)
+                  .hub("chat")
+                  .buildClient();
+              
+              WebPubSubClientAccessToken token = client.getClientAccessToken(
+                  new GetClientAccessTokenOptions()
+                      .setUserId("user123")
+                      .addRole("webpubsub.joinLeaveGroup")
+                      .addRole("webpubsub.sendToGroup")
+                      .addGroup("announcements")
+                      .addGroup("updates"));
+              
+              System.out.println("WebSocket URL: " + token.getUrl());
+              System.out.println("Token: " + token.getToken());
+          }
+      }
+
+  - name: send_to_user
+    prompt: |
+      Create Java code that demonstrates sending a message to a specific
+      user using Azure Web PubSub sendToUser method.
+    expected_patterns:
+      - "sendToUser"
+      - "WebPubSubContentType"
+      - "WebPubSubServiceClient"
+    tags:
+      - messaging
+      - user-targeting
+    mock_response: |
+      import com.azure.messaging.webpubsub.WebPubSubServiceClient;
+      import com.azure.messaging.webpubsub.WebPubSubServiceClientBuilder;
+      import com.azure.messaging.webpubsub.models.WebPubSubContentType;
+
+      public class SendToUser {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("WEB_PUBSUB_CONNECTION_STRING");
+              
+              WebPubSubServiceClient client = new WebPubSubServiceClientBuilder()
+                  .connectionString(connectionString)
+                  .hub("notifications")
+                  .buildClient();
+              
+              // Send text message to a specific user (all their connections)
+              client.sendToUser("andy", "Hello Andy!", WebPubSubContentType.TEXT_PLAIN);
+              
+              // Send JSON message to user
+              String jsonMessage = "{\"type\": \"alert\", \"message\": \"You have a new notification\"}";
+              client.sendToUser("andy", jsonMessage, WebPubSubContentType.APPLICATION_JSON);
+              
+              System.out.println("Messages sent to user 'andy'");
+          }
+      }
+
+  - name: send_to_connection
+    prompt: |
+      Create Java code that demonstrates sending a message to a specific
+      connection by connection ID using Azure Web PubSub.
+    expected_patterns:
+      - "sendToConnection"
+      - "WebPubSubContentType"
+      - "connectionId"
+    tags:
+      - messaging
+      - connection-targeting
+    mock_response: |
+      import com.azure.messaging.webpubsub.WebPubSubServiceClient;
+      import com.azure.messaging.webpubsub.WebPubSubServiceClientBuilder;
+      import com.azure.messaging.webpubsub.models.WebPubSubContentType;
+
+      public class SendToConnection {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("WEB_PUBSUB_CONNECTION_STRING");
+              
+              WebPubSubServiceClient client = new WebPubSubServiceClientBuilder()
+                  .connectionString(connectionString)
+                  .hub("chat")
+                  .buildClient();
+              
+              // Connection ID received from client connection
+              String connectionId = "abc123-connection-id";
+              
+              // Send text message to specific connection
+              client.sendToConnection(connectionId, "Private message for this connection", 
+                  WebPubSubContentType.TEXT_PLAIN);
+              
+              // Send JSON to specific connection
+              String jsonMessage = "{\"type\": \"private\", \"content\": \"Secret data\"}";
+              client.sendToConnection(connectionId, jsonMessage, WebPubSubContentType.APPLICATION_JSON);
+              
+              System.out.println("Message sent to connection: " + connectionId);
+          }
+      }
+
+  - name: connection_management
+    prompt: |
+      Create Java code that demonstrates connection management:
+      checking if a connection exists, closing connections, and
+      checking if a user is online.
+    expected_patterns:
+      - "connectionExists"
+      - "closeConnection"
+      - "userExists"
+    tags:
+      - connection-management
+    mock_response: |
+      import com.azure.messaging.webpubsub.WebPubSubServiceClient;
+      import com.azure.messaging.webpubsub.WebPubSubServiceClientBuilder;
+
+      public class ConnectionManagement {
+          public static void main(String[] args) {
+              String connectionString = System.getenv("WEB_PUBSUB_CONNECTION_STRING");
+              
+              WebPubSubServiceClient client = new WebPubSubServiceClientBuilder()
+                  .connectionString(connectionString)
+                  .hub("chat")
+                  .buildClient();
+              
+              String connectionId = "connection-123";
+              String userId = "user-456";
+              
+              // Check if a specific connection exists
+              boolean connected = client.connectionExists(connectionId);
+              System.out.println("Connection exists: " + connected);
+              
+              // Check if a user has any active connections
+              boolean userOnline = client.userExists(userId);
+              System.out.println("User is online: " + userOnline);
+              
+              // Close a specific connection
+              client.closeConnection(connectionId);
+              System.out.println("Connection closed: " + connectionId);
+              
+              // Close connection with a reason
+              client.closeConnection(connectionId, "Session expired");
+              
+              // Close all connections for a user
+              client.closeUserConnections(userId);
+              System.out.println("All connections closed for user: " + userId);
+              
+              // Close all connections in a group
+              client.closeGroupConnections("inactive-group");
+              System.out.println("All group connections closed");
+          }
+      }
+
+  - name: async_operations
+    prompt: |
+      Create Java code that demonstrates using the async client
+      WebPubSubServiceAsyncClient for non-blocking operations.
+    expected_patterns:
+      - "WebPubSubServiceAsyncClient"
+      - "buildAsyncClient"
+      - "subscribe"
+    tags:
+      - async
+      - reactive
+    mock_response: |
+      import com.azure.messaging.webpubsub.WebPubSubServiceAsyncClient;
+      import com.azure.messaging.webpubsub.WebPubSubServiceClientBuilder;
+      import com.azure.messaging.webpubsub.models.WebPubSubContentType;
+
+      public class AsyncOperations {
+          public static void main(String[] args) throws InterruptedException {
+              String connectionString = System.getenv("WEB_PUBSUB_CONNECTION_STRING");
+              
+              // Build async client
+              WebPubSubServiceAsyncClient asyncClient = new WebPubSubServiceClientBuilder()
+                  .connectionString(connectionString)
+                  .hub("chat")
+                  .buildAsyncClient();
+              
+              // Send to all asynchronously
+              asyncClient.sendToAll("Async broadcast!", WebPubSubContentType.TEXT_PLAIN)
+                  .subscribe(
+                      unused -> System.out.println("Message sent to all"),
+                      error -> System.err.println("Error: " + error.getMessage())
+                  );
+              
+              // Send to group with reactive operators
+              asyncClient.sendToGroup("developers", "Group update", WebPubSubContentType.TEXT_PLAIN)
+                  .doOnSuccess(v -> System.out.println("Sent to group"))
+                  .doOnError(e -> System.err.println("Failed: " + e.getMessage()))
+                  .subscribe();
+              
+              // Send to user asynchronously
+              asyncClient.sendToUser("user123", "Personal notification", WebPubSubContentType.TEXT_PLAIN)
+                  .doOnSuccess(v -> System.out.println("Sent to user"))
+                  .subscribe();
+              
+              // Keep main thread alive for async operations
+              Thread.sleep(2000);
+              System.out.println("Async operations completed");
+          }
+      }

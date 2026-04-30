@@ -1,0 +1,55 @@
+{
+  "skill_framework": {
+    "enabled": true,
+    "skills": {
+      "cls-certify-main": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "dubsopenhub__m365-easy-button": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "error": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "likaku__mck-ppt-design-skill": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "microsoft__skills": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "microwind__ai-skills": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "office-excel-assistant": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "office-powerpoint-assistant": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "office-word-assistant": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "skillhub-1": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "skillhub-18": {
+        "enabled": true,
+        "allow_model_invocation": true
+      },
+      "zhangxuefeng-skill-main": {
+        "enabled": false,
+        "allow_model_invocation": true
+      }
+    }
+  }
+}

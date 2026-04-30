@@ -1,0 +1,287 @@
+# yaml-language-server: $schema=../../schemas/skill-scenarios.schema.json
+# Test scenarios for azure-monitor-query-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: logs_basic_query
+    prompt: |
+      Provide a basic LogsQueryClient example that queries a Log Analytics workspace.
+      Use DefaultAzureCredential and a relative timespan.
+    expected_patterns:
+      - "from azure.monitor.query import LogsQueryClient"
+      - "from azure.identity import DefaultAzureCredential"
+      - "query_workspace"
+      - "timespan=timedelta"
+    forbidden_patterns:
+      - "MetricsClient"
+    tags:
+      - logs
+      - basic
+    mock_response: |
+      import os
+      from datetime import timedelta
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.query import LogsQueryClient
+
+      credential = DefaultAzureCredential()
+      client = LogsQueryClient(credential)
+
+      query = "AppRequests | take 5"
+      response = client.query_workspace(
+          workspace_id=os.environ["AZURE_LOG_ANALYTICS_WORKSPACE_ID"],
+          query=query,
+          timespan=timedelta(hours=1),
+      )
+
+      for table in response.tables:
+          for row in table.rows:
+              print(row)
+
+  - name: logs_timespan_tuple
+    prompt: |
+      Show a LogsQueryClient example that uses a time range tuple with timezone-aware datetimes.
+    expected_patterns:
+      - "datetime(2024, 1, 1"
+      - "timezone.utc"
+      - "timespan=("
+    forbidden_patterns:
+      - "timespan=\"1h\""
+    tags:
+      - logs
+      - timespan
+    mock_response: |
+      import os
+      from datetime import datetime, timezone
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.query import LogsQueryClient
+
+      credential = DefaultAzureCredential()
+      client = LogsQueryClient(credential)
+
+      response = client.query_workspace(
+          workspace_id=os.environ["AZURE_LOG_ANALYTICS_WORKSPACE_ID"],
+          query="AppRequests | take 10",
+          timespan=(
+              datetime(2024, 1, 1, tzinfo=timezone.utc),
+              datetime(2024, 1, 2, tzinfo=timezone.utc),
+          ),
+      )
+
+      if response.tables:
+          print(response.tables[0].columns)
+
+  - name: logs_batch_query_partial
+    prompt: |
+      Provide a batch logs query example using LogsBatchQuery.
+      Include handling for partial results using LogsQueryStatus.
+    expected_patterns:
+      - "LogsBatchQuery"
+      - "query_batch"
+      - "LogsQueryStatus.PARTIAL"
+    forbidden_patterns:
+      - "query_workspace_batch"
+    tags:
+      - logs
+      - batch
+    mock_response: |
+      import os
+      from datetime import timedelta
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.query import LogsBatchQuery, LogsQueryClient, LogsQueryStatus
+
+      credential = DefaultAzureCredential()
+      client = LogsQueryClient(credential)
+
+      queries = [
+          LogsBatchQuery(
+              workspace_id=os.environ["AZURE_LOG_ANALYTICS_WORKSPACE_ID"],
+              query="AppRequests | take 5",
+              timespan=timedelta(hours=1),
+          ),
+          LogsBatchQuery(
+              workspace_id=os.environ["AZURE_LOG_ANALYTICS_WORKSPACE_ID"],
+              query="AppExceptions | take 5",
+              timespan=timedelta(hours=1),
+          ),
+      ]
+
+      responses = client.query_batch(queries)
+
+      for response in responses:
+          if response.status == LogsQueryStatus.PARTIAL:
+              print(f"Partial: {response.partial_error}")
+          elif response.status == LogsQueryStatus.FAILURE:
+              print(f"Failed: {response.partial_error}")
+
+  - name: metrics_query_resource
+    prompt: |
+      Provide a MetricsQueryClient example that queries metrics for a resource.
+      Include a granularity and iterate through the data.
+    expected_patterns:
+      - "from azure.monitor.query import MetricsQueryClient"
+      - "query_resource"
+      - "metric_names=["
+      - "granularity=timedelta"
+    forbidden_patterns:
+      - "MetricsClient"
+    tags:
+      - metrics
+      - basic
+    mock_response: |
+      import os
+      from datetime import timedelta
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.query import MetricsQueryClient
+
+      credential = DefaultAzureCredential()
+      metrics_client = MetricsQueryClient(credential)
+
+      response = metrics_client.query_resource(
+          resource_uri=os.environ["AZURE_METRICS_RESOURCE_URI"],
+          metric_names=["Percentage CPU"],
+          timespan=timedelta(hours=1),
+          granularity=timedelta(minutes=5),
+      )
+
+      for metric in response.metrics:
+          for series in metric.timeseries:
+              for point in series.data:
+                  print(point.timestamp, point.average)
+
+  - name: metrics_aggregations_filter
+    prompt: |
+      Show MetricsQueryClient usage with aggregations and a dimension filter.
+    expected_patterns:
+      - "MetricAggregationType.AVERAGE"
+      - "aggregations=["
+      - "filter=\"ApiName eq"
+    forbidden_patterns:
+      - "aggregation="
+    tags:
+      - metrics
+      - aggregations
+    mock_response: |
+      import os
+      from datetime import timedelta
+      from azure.identity import DefaultAzureCredential
+      from azure.monitor.query import MetricAggregationType, MetricsQueryClient
+
+      credential = DefaultAzureCredential()
+      metrics_client = MetricsQueryClient(credential)
+
+      response = metrics_client.query_resource(
+          resource_uri=os.environ["AZURE_METRICS_RESOURCE_URI"],
+          metric_names=["Requests"],
+          timespan=timedelta(hours=1),
+          aggregations=[
+              MetricAggregationType.AVERAGE,
+              MetricAggregationType.MAXIMUM,
+              MetricAggregationType.MINIMUM,
+              MetricAggregationType.COUNT,
+          ],
+          filter="ApiName eq 'GetBlob'",
+      )
+
+      print(len(response.metrics))
+
+  - name: kusto_query_multiline
+    prompt: |
+      Provide a multi-line Kusto query string for AppRequests with summarize and order by.
+    expected_patterns:
+      - "AppRequests"
+      - "| summarize"
+      - "| order by"
+    forbidden_patterns:
+      - "SELECT * FROM"
+    tags:
+      - kusto
+    mock_response: |
+      query = """
+      AppRequests
+      | where TimeGenerated > ago(1h)
+      | summarize count() by ResultCode
+      | order by count_ desc
+      """
+
+      print(query)
+
+  - name: async_logs_query
+    prompt: |
+      Provide an async LogsQueryClient example using azure.monitor.query.aio and DefaultAzureCredential.
+    expected_patterns:
+      - "from azure.monitor.query.aio import LogsQueryClient"
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "await client.query_workspace"
+    forbidden_patterns:
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - logs
+      - async
+    mock_response: |
+      import os
+      import asyncio
+      from datetime import timedelta
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.monitor.query.aio import LogsQueryClient
+
+      async def main() -> None:
+          credential = DefaultAzureCredential()
+          client = LogsQueryClient(credential)
+
+          response = await client.query_workspace(
+              workspace_id=os.environ["AZURE_LOG_ANALYTICS_WORKSPACE_ID"],
+              query="AppRequests | take 3",
+              timespan=timedelta(hours=1),
+          )
+
+          if response.tables:
+              print(response.tables[0].rows)
+
+          await client.close()
+          await credential.close()
+
+      if __name__ == "__main__":
+          asyncio.run(main())
+
+  - name: async_metrics_query
+    prompt: |
+      Provide an async MetricsQueryClient example using azure.monitor.query.aio.
+      Include timespan and metric_names.
+    expected_patterns:
+      - "from azure.monitor.query.aio import MetricsQueryClient"
+      - "await client.query_resource"
+      - "metric_names=["
+    forbidden_patterns:
+      - "from azure.monitor.query import MetricsQueryClient"
+    tags:
+      - metrics
+      - async
+    mock_response: |
+      import os
+      import asyncio
+      from datetime import timedelta
+      from azure.identity.aio import DefaultAzureCredential
+      from azure.monitor.query.aio import MetricsQueryClient
+
+      async def main() -> None:
+          credential = DefaultAzureCredential()
+          client = MetricsQueryClient(credential)
+
+          response = await client.query_resource(
+              resource_uri=os.environ["AZURE_METRICS_RESOURCE_URI"],
+              metric_names=["Requests"],
+              timespan=timedelta(hours=1),
+          )
+
+          print(len(response.metrics))
+
+          await client.close()
+          await credential.close()
+
+      if __name__ == "__main__":
+          asyncio.run(main())

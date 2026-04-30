@@ -1,0 +1,129 @@
+# yaml-language-server: $schema=../skill-scenarios.schema.json
+# Test scenarios for azure-cosmos-rust skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: basic_entra_client
+    prompt: |
+      Create a basic Cosmos DB NoSQL example using DeveloperToolsCredential in Rust.
+      Get a database and container client, and create an item.
+    expected_patterns:
+      - "DeveloperToolsCredential"
+      - "CosmosClient"
+      - "database_client"
+      - "container_client"
+      - "create_item"
+    forbidden_patterns:
+      - "primary_key"
+      - "key_auth"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      use azure_identity::DeveloperToolsCredential;
+      use azure_data_cosmos::CosmosClient;
+      use serde::{Serialize, Deserialize};
+
+      #[derive(Serialize, Deserialize)]
+      struct Item {
+          pub id: String,
+          pub partition_key: String,
+          pub value: String,
+      }
+
+      let credential = DeveloperToolsCredential::new(None)?;
+      let client = CosmosClient::new(
+          "https://<account>.documents.azure.com:443/",
+          credential.clone(),
+          None,
+      )?;
+
+      let container = client.database_client("myDatabase").container_client("myContainer");
+
+      let item = Item {
+          id: "1".into(),
+          partition_key: "partition1".into(),
+          value: "hello".into(),
+      };
+
+      container.create_item("partition1", item, None).await?;
+
+  - name: read_item
+    prompt: |
+      Read an item from a Cosmos DB container in Rust and deserialize it 
+      into a struct.
+    expected_patterns:
+      - "read_item"
+      - "into_model"
+      - "partition"
+    forbidden_patterns:
+      - "query_items"
+    tags:
+      - crud
+      - read
+    mock_response: |
+      let response = container.read_item("partition1", "1", None).await?;
+      let item: Item = response.into_model()?;
+      println!("Value: {}", item.value);
+
+  - name: replace_item
+    prompt: |
+      Update an existing item in Cosmos DB using replace_item in Rust.
+    expected_patterns:
+      - "replace_item"
+      - "read_item"
+      - "partition"
+    forbidden_patterns:
+      - "upsert"
+    tags:
+      - crud
+      - update
+    mock_response: |
+      // Read existing item
+      let response = container.read_item("partition1", "1", None).await?;
+      let mut item: Item = response.into_model()?;
+      
+      // Update and replace
+      item.value = "updated".into();
+      container.replace_item("partition1", "1", item, None).await?;
+
+  - name: patch_item
+    prompt: |
+      Patch an item in Cosmos DB to add a new field and remove an old field.
+    expected_patterns:
+      - "patch_item"
+      - "PatchDocument"
+      - "with_add"
+      - "with_remove"
+    forbidden_patterns:
+      - "replace_item"
+    tags:
+      - crud
+      - patch
+    mock_response: |
+      use azure_data_cosmos::models::PatchDocument;
+
+      let patch = PatchDocument::default()
+          .with_add("/newField", "newValue")?
+          .with_remove("/oldField")?;
+
+      container.patch_item("partition1", "1", patch, None).await?;
+
+  - name: delete_item
+    prompt: |
+      Delete an item from a Cosmos DB container in Rust.
+    expected_patterns:
+      - "delete_item"
+      - "partition"
+    forbidden_patterns:
+      - "drop"
+    tags:
+      - crud
+      - delete
+    mock_response: |
+      container.delete_item("partition1", "1", None).await?;

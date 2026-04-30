@@ -1,0 +1,553 @@
+# Test scenarios for azure-mgmt-apicenter-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Basic API Center Creation
+  - name: basic_api_center_creation
+    prompt: |
+      Create a basic Azure API Center service with proper authentication,
+      specify a location (eastus), and include resource cleanup.
+      Use environment variables for configuration.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "ApiCenterMgmtClient"
+      - "create_or_update"
+      - "location="
+      - "AZURE_SUBSCRIPTION_ID"
+      - "AZURE_RESOURCE_GROUP"
+    forbidden_patterns:
+      - "hardcoded"
+      - "xxxxx"
+      - "subscription_id=\""
+      - "credential = Cli"
+    tags:
+      - basic
+      - authentication
+      - service-management
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apicenter import ApiCenterMgmtClient
+      from azure.mgmt.apicenter.models import Service
+      
+      subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
+      resource_group = os.environ.get("AZURE_RESOURCE_GROUP")
+      
+      credential = DefaultAzureCredential()
+      client = ApiCenterMgmtClient(
+          subscription_id=subscription_id,
+          credential=credential,
+      )
+      
+      service = client.services.create_or_update(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          resource=Service(location="eastus"),
+      )
+      
+      print(f"Created service: {service.name}")
+
+  # API Registration Workflow
+  - name: api_registration_workflow
+    prompt: |
+      Register a REST API in the API Center with metadata.
+      Include the API kind (REST), lifecycle stage, and description.
+      Use the "default" workspace for API operations.
+    expected_patterns:
+      - "create_or_update"
+      - "ApiKind.REST"
+      - "LifecycleStage"
+      - "workspace_name=\"default\""
+      - "Api("
+      - "kind="
+      - "state="
+    forbidden_patterns:
+      - "ApiKind.SOAP"
+      - "ApiKind.REST_API"
+      - "workspace_name=None"
+      - "kind=None"
+    tags:
+      - api-registration
+      - governance
+      - inventory
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apicenter import ApiCenterMgmtClient
+      from azure.mgmt.apicenter.models import Api, ApiKind, LifecycleStage
+      
+      subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
+      resource_group = os.environ.get("AZURE_RESOURCE_GROUP")
+      
+      credential = DefaultAzureCredential()
+      client = ApiCenterMgmtClient(
+          subscription_id=subscription_id,
+          credential=credential,
+      )
+      
+      api = client.apis.create_or_update(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+          api_name="pet-api",
+          resource=Api(
+              kind=ApiKind.REST,
+              state=LifecycleStage.PRODUCTION,
+              title="Pet Store API",
+              summary="API for managing pet store",
+          ),
+      )
+      
+      print(f"Registered API: {api.title}")
+
+  # API Version and Definition
+  - name: api_version_and_definition
+    prompt: |
+      Create an API version and import an OpenAPI specification.
+      Use version name "v1.0" and import an OpenAPI 3.0 spec.
+      Include proper metadata and version stage.
+    expected_patterns:
+      - "api_versions.create_or_update"
+      - "api_definitions.create_or_update"
+      - "ApiVersion("
+      - "ApiDefinition("
+      - "specification="
+      - "VersionStage"
+      - "workspace_name="
+    forbidden_patterns:
+      - "import_specification"
+      - "swagger_url="
+      - "workspace_name=None"
+      - "version_name=None"
+    tags:
+      - api-versioning
+      - specs
+      - governance
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apicenter import ApiCenterMgmtClient
+      from azure.mgmt.apicenter.models import (
+          ApiVersion,
+          ApiDefinition,
+          VersionStage,
+          ExternalDocumentationProperties,
+      )
+      
+      subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
+      resource_group = os.environ.get("AZURE_RESOURCE_GROUP")
+      
+      credential = DefaultAzureCredential()
+      client = ApiCenterMgmtClient(
+          subscription_id=subscription_id,
+          credential=credential,
+      )
+      
+      # Create API version
+      version = client.api_versions.create_or_update(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+          api_name="pet-api",
+          version_name="v1.0",
+          resource=ApiVersion(
+              title="Version 1.0",
+              stage=VersionStage.PRODUCTION,
+          ),
+      )
+      
+      # Create API definition with spec
+      definition = client.api_definitions.create_or_update(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+          api_name="pet-api",
+          version_name="v1.0",
+          definition_name="openapi",
+          resource=ApiDefinition(
+              title="OpenAPI Definition",
+              specification=ExternalDocumentationProperties(
+                  url="https://raw.githubusercontent.com/OAI/OpenAPI-Specification/main/examples/v3.0/petstore.json"
+              ),
+          ),
+      )
+      
+      print(f"Created version: {version.title}, Definition: {definition.title}")
+
+  # Environment and Deployment Tracking
+  - name: environment_and_deployment
+    prompt: |
+      Create an environment (e.g., "production") and track a deployment to it.
+      Include environment kind and deployment server information.
+      Use proper resource naming and status tracking.
+    expected_patterns:
+      - "environments.create_or_update"
+      - "deployments.create_or_update"
+      - "Environment("
+      - "Deployment("
+      - "environment_name="
+      - "deployment_name="
+      - "workspace_name="
+    forbidden_patterns:
+      - "environment_id="
+      - "deployment_id="
+      - "workspace_name=None"
+      - "environment_name=None"
+    tags:
+      - deployment
+      - environment
+      - tracking
+      - governance
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apicenter import ApiCenterMgmtClient
+      from azure.mgmt.apicenter.models import (
+          Environment,
+          Deployment,
+          DeploymentState,
+          EnvironmentKind,
+      )
+      
+      subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
+      resource_group = os.environ.get("AZURE_RESOURCE_GROUP")
+      
+      credential = DefaultAzureCredential()
+      client = ApiCenterMgmtClient(
+          subscription_id=subscription_id,
+          credential=credential,
+      )
+      
+      # Create environment
+      environment = client.environments.create_or_update(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+          environment_name="production",
+          resource=Environment(
+              kind=EnvironmentKind.PRODUCTION,
+              title="Production",
+              server={"url": "https://api.example.com"},
+          ),
+      )
+      
+      # Track deployment
+      deployment = client.deployments.create_or_update(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+          deployment_name="prod-2024-01",
+          resource=Deployment(
+              environment_name="production",
+              api_name="pet-api",
+              api_version="v1.0",
+              definition_name="openapi",
+              state=DeploymentState.ACTIVE,
+              title="Production Deployment Jan 2024",
+          ),
+      )
+      
+      print(f"Environment: {environment.title}, Deployment: {deployment.title}")
+
+  # Metadata Governance - Define Custom Schema
+  - name: metadata_governance_schema
+    prompt: |
+      Define a custom metadata schema for API governance.
+      Include at least one metadata property with type and required flag.
+      Use proper schema naming conventions.
+    expected_patterns:
+      - "metadata_schemas.create_or_update"
+      - "MetadataSchema("
+      - "MetadataSchemaProperty("
+      - "schema_name="
+      - "workspace_name="
+      - "properties="
+    forbidden_patterns:
+      - "schema_id="
+      - "workspace_name=None"
+      - "schema_name=None"
+      - "properties=None"
+    tags:
+      - metadata
+      - governance
+      - customization
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apicenter import ApiCenterMgmtClient
+      from azure.mgmt.apicenter.models import (
+          MetadataSchema,
+          MetadataSchemaProperty,
+      )
+      
+      subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
+      resource_group = os.environ.get("AZURE_RESOURCE_GROUP")
+      
+      credential = DefaultAzureCredential()
+      client = ApiCenterMgmtClient(
+          subscription_id=subscription_id,
+          credential=credential,
+      )
+      
+      # Define custom metadata schema
+      schema = client.metadata_schemas.create_or_update(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+          schema_name="api-compliance",
+          resource=MetadataSchema(
+              schema=[
+                  MetadataSchemaProperty(
+                      name="team-owner",
+                      type="string",
+                      required=True,
+                      display_name="Team Owner",
+                  ),
+                  MetadataSchemaProperty(
+                      name="compliance-level",
+                      type="string",
+                      required=True,
+                      display_name="Compliance Level",
+                  ),
+              ]
+          ),
+      )
+      
+      print(f"Created metadata schema: {schema.name}")
+
+  # List and Search APIs with Filtering
+  - name: list_and_search_apis
+    prompt: |
+      List all APIs in the API Center workspace with proper iteration.
+      Handle pagination and filtering results.
+      Include error handling for missing resources.
+    expected_patterns:
+      - "apis.list"
+      - "workspace_name="
+      - "for api in"
+      - "api.name"
+      - "api.title"
+    forbidden_patterns:
+      - "hardcoded"
+      - "workspace_name=None"
+      - "break"
+    tags:
+      - list
+      - search
+      - inventory
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apicenter import ApiCenterMgmtClient
+      
+      subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
+      resource_group = os.environ.get("AZURE_RESOURCE_GROUP")
+      
+      credential = DefaultAzureCredential()
+      client = ApiCenterMgmtClient(
+          subscription_id=subscription_id,
+          credential=credential,
+      )
+      
+      # List all APIs in workspace
+      apis = client.apis.list(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+      )
+      
+      print("APIs in catalog:")
+      for api in apis:
+          print(f"  - {api.name}: {api.title}")
+          if hasattr(api, 'kind'):
+              print(f"    Kind: {api.kind}")
+
+  # API Lifecycle Management
+  - name: api_lifecycle_management
+    prompt: |
+      Update an API's lifecycle stage from production to deprecated.
+      Use proper lifecycle stage enums and include a reason/description.
+      Demonstrate updating the API resource state.
+    expected_patterns:
+      - "apis.create_or_update"
+      - "LifecycleStage.DEPRECATED"
+      - "state="
+      - "Api("
+      - "workspace_name="
+    forbidden_patterns:
+      - "state=None"
+      - "LifecycleStage.PRODUCTION"
+      - "workspace_name=None"
+      - "hardcoded"
+    tags:
+      - lifecycle
+      - governance
+      - api-management
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apicenter import ApiCenterMgmtClient
+      from azure.mgmt.apicenter.models import Api, LifecycleStage
+      
+      subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
+      resource_group = os.environ.get("AZURE_RESOURCE_GROUP")
+      
+      credential = DefaultAzureCredential()
+      client = ApiCenterMgmtClient(
+          subscription_id=subscription_id,
+          credential=credential,
+      )
+      
+      # Get existing API
+      api = client.apis.get(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+          api_name="old-api",
+      )
+      
+      # Update lifecycle stage to deprecated
+      updated_api = client.apis.create_or_update(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+          api_name="old-api",
+          resource=Api(
+              kind=api.kind,
+              state=LifecycleStage.DEPRECATED,
+              title=api.title,
+              summary="This API is deprecated. Use new-api instead.",
+          ),
+      )
+      
+      print(f"Updated {api.title} to {updated_api.state}")
+
+  # Complete Governance Workflow
+  - name: complete_api_center_governance
+    prompt: |
+      Demonstrate a complete API Center governance workflow:
+      1. Create API Center service
+      2. Register an API with metadata
+      3. Create API version and import spec
+      4. Define custom governance metadata schema
+      5. List all registered APIs
+      Include proper authentication, error handling, and resource management.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "ApiCenterMgmtClient"
+      - "services.create_or_update"
+      - "apis.create_or_update"
+      - "api_versions.create_or_update"
+      - "metadata_schemas.create_or_update"
+      - "apis.list"
+      - "AZURE_SUBSCRIPTION_ID"
+      - "AZURE_RESOURCE_GROUP"
+    forbidden_patterns:
+      - "hardcoded"
+      - "xxxxx"
+      - "workspace_name=None"
+      - "subscription_id=\""
+    tags:
+      - workflow
+      - governance
+      - advanced
+      - complete
+    mock_response: |
+      import os
+      from azure.identity import DefaultAzureCredential
+      from azure.mgmt.apicenter import ApiCenterMgmtClient
+      from azure.mgmt.apicenter.models import (
+          Service,
+          Api,
+          ApiVersion,
+          MetadataSchema,
+          MetadataSchemaProperty,
+          ApiKind,
+          LifecycleStage,
+          VersionStage,
+          ExternalDocumentationProperties,
+      )
+      
+      subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
+      resource_group = os.environ.get("AZURE_RESOURCE_GROUP")
+      
+      credential = DefaultAzureCredential()
+      client = ApiCenterMgmtClient(
+          subscription_id=subscription_id,
+          credential=credential,
+      )
+      
+      # 1. Create API Center service
+      service = client.services.create_or_update(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          resource=Service(location="eastus"),
+      )
+      print(f"1. Created service: {service.name}")
+      
+      # 2. Register API
+      api = client.apis.create_or_update(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+          api_name="products-api",
+          resource=Api(
+              kind=ApiKind.REST,
+              state=LifecycleStage.PRODUCTION,
+              title="Products API",
+              summary="API for managing product catalog",
+          ),
+      )
+      print(f"2. Registered API: {api.title}")
+      
+      # 3. Create version and spec
+      version = client.api_versions.create_or_update(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+          api_name="products-api",
+          version_name="v1.0",
+          resource=ApiVersion(
+              title="Version 1.0",
+              stage=VersionStage.PRODUCTION,
+          ),
+      )
+      print(f"3. Created version: {version.title}")
+      
+      # 4. Define custom governance schema
+      schema = client.metadata_schemas.create_or_update(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+          schema_name="governance",
+          resource=MetadataSchema(
+              schema=[
+                  MetadataSchemaProperty(
+                      name="owner-team",
+                      type="string",
+                      required=True,
+                  ),
+                  MetadataSchemaProperty(
+                      name="data-classification",
+                      type="string",
+                      required=True,
+                  ),
+              ]
+          ),
+      )
+      print(f"4. Created governance schema: {schema.name}")
+      
+      # 5. List all APIs
+      print("5. Registered APIs:")
+      apis = client.apis.list(
+          resource_group_name=resource_group,
+          service_name="my-api-center",
+          workspace_name="default",
+      )
+      for registered_api in apis:
+          print(f"  - {registered_api.name}: {registered_api.title}")

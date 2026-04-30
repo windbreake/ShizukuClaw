@@ -1,0 +1,28 @@
+[
+  {
+    "id": "ghmcp001",
+    "name": "GitHub MCP",
+    "description": "GitHub 官方 MCP（HTTP）",
+    "protocol_version": "1.0",
+    "type": "http",
+    "command": "",
+    "args": [],
+    "url": "https://api.githubcopilot.com/mcp/",
+    "headers": {
+      "Authorization": "Bearer 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"
+    },
+    "capabilities": {
+      "tags": [
+        "github",
+        "official",
+        "remote"
+      ],
+      "source": "market"
+    },
+    "enabled": true,
+    "status": "connected",
+    "last_sync": "2026-04-27T15:29:32.084936",
+    "created_at": "2026-04-10T00:00:00",
+    "updated_at": "2026-04-27T15:29:32.084936"
+  }
+]

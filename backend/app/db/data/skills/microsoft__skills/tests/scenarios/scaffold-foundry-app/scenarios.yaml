@@ -1,0 +1,557 @@
+# Test scenarios for scaffold-foundry-app prompt
+# Note: This prompt generates multi-file project scaffolds, not single code files
+# Each scenario tests generation of a specific file type
+
+config:
+  model: gpt-4
+  max_tokens: 4000
+  temperature: 0.3
+
+scenarios:
+  # =============================================================================
+  # Azure Developer CLI Configuration
+  # =============================================================================
+  - name: azure_yaml_config
+    prompt: |
+      Generate the azure.yaml configuration file for an Azure AI Foundry chat application.
+      The app has a frontend (React/Vite) and backend (FastAPI).
+      Use remoteBuild: true for container builds.
+    expected_patterns:
+      - "name:"
+      - "services:"
+      - "frontend:"
+      - "backend:"
+      - "host: containerapp"
+      - "remoteBuild: true"
+    forbidden_patterns:
+      - "host: docker"  # Should use Container Apps, not raw Docker host
+      - "localhost"  # No hardcoded localhost
+    tags:
+      - infrastructure
+      - azd
+    mock_response: |
+      name: foundry-chat-app
+      metadata:
+        template: azd-init@1.0.0
+      services:
+        frontend:
+          project: ./src/frontend
+          language: ts
+          host: containerapp
+          docker:
+            remoteBuild: true
+        backend:
+          project: ./src/api
+          language: py
+          host: containerapp
+          docker:
+            remoteBuild: true
+
+  # =============================================================================
+  # Bicep Infrastructure
+  # =============================================================================
+  - name: bicep_main_module
+    prompt: |
+      Generate the main.bicep file for an Azure AI Foundry application.
+      Include Container Apps Environment, Container Registry, and managed identity.
+    expected_patterns:
+      - "targetScope = 'subscription'"
+      - "module containerAppsEnvironment"
+      - "module containerRegistry"
+      - "param environmentName string"
+      - "resource resourceGroup"
+      - "managedIdentity"
+    forbidden_patterns:
+      - "adminUserEnabled: true"  # Should use managed identity
+      - "password"  # No hardcoded passwords
+      - "secret"  # No hardcoded secrets
+    tags:
+      - infrastructure
+      - bicep
+    mock_response: |
+      targetScope = 'subscription'
+      
+      @minLength(1)
+      @maxLength(64)
+      param environmentName string
+      
+      @minLength(1)
+      param location string
+      
+      var abbrs = loadJsonContent('./abbreviations.json')
+      var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
+      var tags = { 'azd-env-name': environmentName }
+      
+      resource resourceGroup 'Microsoft.Resources/resourceGroups@2024-03-01' = {
+        name: 'rg-${environmentName}'
+        location: location
+        tags: tags
+      }
+      
+      module managedIdentity './core/security/managed-identity.bicep' = {
+        name: 'managed-identity'
+        scope: resourceGroup
+        params: {
+          name: '${abbrs.managedIdentity}${resourceToken}'
+          location: location
+          tags: tags
+        }
+      }
+      
+      module containerAppsEnvironment './core/host/container-apps-environment.bicep' = {
+        name: 'container-apps-environment'
+        scope: resourceGroup
+        params: {
+          name: '${abbrs.containerAppsEnvironment}${resourceToken}'
+          location: location
+          tags: tags
+        }
+      }
+      
+      module containerRegistry './core/host/container-registry.bicep' = {
+        name: 'container-registry'
+        scope: resourceGroup
+        params: {
+          name: '${abbrs.containerRegistry}${resourceToken}'
+          location: location
+          tags: tags
+        }
+      }
+
+  # =============================================================================
+  # FastAPI Backend
+  # =============================================================================
+  - name: fastapi_main
+    prompt: |
+      Generate the main.py file for a FastAPI backend for an Azure AI Foundry application.
+      Include lifespan management, CORS configuration, and health endpoint.
+    expected_patterns:
+      - "from fastapi import FastAPI"
+      - "@asynccontextmanager"
+      - "async def lifespan"
+      - "CORSMiddleware"
+      - "allow_origins"
+      - "/health"
+    forbidden_patterns:
+      - "allow_origins=[\"*\"]"  # Should be configurable, not wildcard in prod
+      - "debug=True"  # Should be configurable
+    tags:
+      - backend
+      - fastapi
+    mock_response: |
+      import os
+      from contextlib import asynccontextmanager
+      from fastapi import FastAPI
+      from fastapi.middleware.cors import CORSMiddleware
+      
+      from app.routers import chat
+      
+      
+      @asynccontextmanager
+      async def lifespan(app: FastAPI):
+          """Initialize and cleanup application resources."""
+          # Startup
+          yield
+          # Shutdown
+      
+      
+      app = FastAPI(
+          title="Foundry Chat API",
+          version="0.1.0",
+          lifespan=lifespan,
+      )
+      
+      # CORS configuration
+      allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+      app.add_middleware(
+          CORSMiddleware,
+          allow_origins=allowed_origins,
+          allow_credentials=True,
+          allow_methods=["*"],
+          allow_headers=["*"],
+      )
+      
+      # Include routers
+      app.include_router(chat.router, prefix="/api")
+      
+      
+      @app.get("/health")
+      async def health_check():
+          """Health check endpoint for container orchestration."""
+          return {"status": "healthy"}
+
+  - name: pyproject_toml
+    prompt: |
+      Generate the pyproject.toml file for a FastAPI backend.
+      Include FastAPI, Pydantic, pytest, and Ruff for linting.
+    expected_patterns:
+      - "[project]"
+      - "fastapi"
+      - "pydantic"
+      - "pytest"
+      - "pytest-asyncio"
+      - "ruff"
+      - "azure-identity"
+    forbidden_patterns:
+      - "setup.py"  # Should use pyproject.toml only
+    tags:
+      - backend
+      - python
+      - config
+    mock_response: |
+      [project]
+      name = "foundry-chat-api"
+      version = "0.1.0"
+      description = "Azure AI Foundry Chat API"
+      requires-python = ">=3.11"
+      dependencies = [
+          "fastapi>=0.115.0",
+          "uvicorn[standard]>=0.32.0",
+          "pydantic>=2.10.0",
+          "pydantic-settings>=2.6.0",
+          "azure-identity>=1.19.0",
+          "azure-ai-projects>=1.0.0b6",
+      ]
+      
+      [project.optional-dependencies]
+      dev = [
+          "pytest>=8.3.0",
+          "pytest-asyncio>=0.24.0",
+          "pytest-cov>=6.0.0",
+          "httpx>=0.28.0",
+          "ruff>=0.8.0",
+      ]
+      
+      [tool.pytest.ini_options]
+      asyncio_mode = "auto"
+      testpaths = ["tests"]
+      
+      [tool.ruff]
+      line-length = 100
+      target-version = "py311"
+      
+      [tool.ruff.lint]
+      select = ["E", "F", "I", "N", "W", "UP"]
+
+  - name: pydantic_models
+    prompt: |
+      Generate Pydantic models for a chat API with messages, requests, and responses.
+      Follow the Base/Create/Response pattern.
+    expected_patterns:
+      - "from pydantic import BaseModel"
+      - "class Message"
+      - "BaseModel"
+      - "Create"
+      - "Response"
+      - "role:"
+      - "content:"
+    forbidden_patterns:
+      - "class Config:"  # Pydantic v2 uses model_config
+      - "orm_mode"  # Pydantic v2 uses from_attributes
+    tags:
+      - backend
+      - pydantic
+    mock_response: |
+      from datetime import datetime
+      from enum import Enum
+      from pydantic import BaseModel, Field
+      
+      
+      class MessageRole(str, Enum):
+          """Role of a message in a conversation."""
+          USER = "user"
+          ASSISTANT = "assistant"
+          SYSTEM = "system"
+      
+      
+      class MessageBase(BaseModel):
+          """Base message schema."""
+          role: MessageRole
+          content: str
+      
+      
+      class MessageCreate(MessageBase):
+          """Schema for creating a new message."""
+          pass
+      
+      
+      class MessageResponse(MessageBase):
+          """Schema for message response."""
+          id: str
+          created_at: datetime
+          
+          model_config = {"from_attributes": True}
+      
+      
+      class ChatRequest(BaseModel):
+          """Schema for chat request."""
+          messages: list[MessageCreate] = Field(..., min_length=1)
+          stream: bool = False
+      
+      
+      class ChatResponse(BaseModel):
+          """Schema for chat response."""
+          message: MessageResponse
+          usage: dict | None = None
+
+  # =============================================================================
+  # React Frontend
+  # =============================================================================
+  - name: vite_config
+    prompt: |
+      Generate vite.config.ts for a React + TypeScript frontend.
+      Include proper build configuration and dev server settings.
+    expected_patterns:
+      - "import { defineConfig }"
+      - "import react from"
+      - "plugins:"
+      - "react()"
+      - "export default defineConfig"
+    forbidden_patterns:
+      - "module.exports"  # Should use ES modules
+    tags:
+      - frontend
+      - vite
+      - config
+    mock_response: |
+      import { defineConfig } from 'vite'
+      import react from '@vitejs/plugin-react'
+      
+      export default defineConfig({
+        plugins: [react()],
+        server: {
+          port: 5173,
+          proxy: {
+            '/api': {
+              target: 'http://localhost:8000',
+              changeOrigin: true,
+            },
+          },
+        },
+        build: {
+          outDir: 'dist',
+          sourcemap: true,
+        },
+      })
+
+  - name: package_json
+    prompt: |
+      Generate package.json for a Vite + React + TypeScript frontend with Fluent UI v9.
+      Include Framer Motion and Tailwind CSS.
+    expected_patterns:
+      - '"react":'
+      - '"react-dom":'
+      - '"@fluentui/react-components":'
+      - '"framer-motion":'
+      - '"tailwindcss":'
+      - '"vite":'
+      - '"typescript":'
+    forbidden_patterns:
+      - '"@fluentui/react":'  # Should use v9, not v8
+      - '"@material-ui'  # Wrong UI library
+    tags:
+      - frontend
+      - npm
+      - config
+    mock_response: |
+      {
+        "name": "foundry-chat-frontend",
+        "version": "0.1.0",
+        "type": "module",
+        "scripts": {
+          "dev": "vite",
+          "build": "tsc && vite build",
+          "lint": "eslint . --ext ts,tsx",
+          "preview": "vite preview"
+        },
+        "dependencies": {
+          "@fluentui/react-components": "^9.56.0",
+          "@fluentui/react-icons": "^2.0.258",
+          "framer-motion": "^11.13.0",
+          "react": "^18.3.1",
+          "react-dom": "^18.3.1"
+        },
+        "devDependencies": {
+          "@types/react": "^18.3.12",
+          "@types/react-dom": "^18.3.1",
+          "@vitejs/plugin-react": "^4.3.3",
+          "autoprefixer": "^10.4.20",
+          "eslint": "^9.15.0",
+          "postcss": "^8.4.49",
+          "tailwindcss": "^3.4.15",
+          "typescript": "^5.6.3",
+          "vite": "^6.0.1"
+        }
+      }
+
+  - name: fluent_theme_provider
+    prompt: |
+      Generate a React App.tsx that sets up Fluent UI v9 with a dark theme.
+      Include FluentProvider with webDarkTheme.
+    expected_patterns:
+      - "FluentProvider"
+      - "webDarkTheme"
+      - "from '@fluentui/react-components'"
+    forbidden_patterns:
+      - "ThemeProvider"  # Fluent UI v8 pattern
+      - "createTheme"  # Fluent UI v8 pattern
+      - "webLightTheme"  # Should be dark theme
+    tags:
+      - frontend
+      - fluent-ui
+      - theme
+    mock_response: |
+      import { FluentProvider, webDarkTheme } from '@fluentui/react-components'
+      import { Chat } from './components/Chat'
+      import './App.css'
+      
+      function App() {
+        return (
+          <FluentProvider theme={webDarkTheme}>
+            <div className="min-h-screen bg-neutral-900">
+              <Chat />
+            </div>
+          </FluentProvider>
+        )
+      }
+      
+      export default App
+
+  - name: tsconfig_strict
+    prompt: |
+      Generate tsconfig.json for a React + TypeScript project with strict type checking.
+    expected_patterns:
+      - '"strict": true'
+      - '"noEmit": true'
+      - '"jsx":'
+      - '"module":'
+      - '"target":'
+    forbidden_patterns:
+      - '"strict": false'
+      - '"noImplicitAny": false'
+    tags:
+      - frontend
+      - typescript
+      - config
+    mock_response: |
+      {
+        "compilerOptions": {
+          "target": "ES2020",
+          "useDefineForClassFields": true,
+          "lib": ["ES2020", "DOM", "DOM.Iterable"],
+          "module": "ESNext",
+          "skipLibCheck": true,
+          "moduleResolution": "bundler",
+          "allowImportingTsExtensions": true,
+          "isolatedModules": true,
+          "moduleDetection": "force",
+          "noEmit": true,
+          "jsx": "react-jsx",
+          "strict": true,
+          "noUnusedLocals": true,
+          "noUnusedParameters": true,
+          "noFallthroughCasesInSwitch": true,
+          "noUncheckedSideEffectImports": true
+        },
+        "include": ["src"]
+      }
+
+  # =============================================================================
+  # Container Configuration
+  # =============================================================================
+  - name: dockerfile_backend
+    prompt: |
+      Generate a Dockerfile for a FastAPI Python backend.
+      Use multi-stage build with uv for dependency management.
+    expected_patterns:
+      - "FROM python:"
+      - "WORKDIR"
+      - "COPY"
+      - "EXPOSE"
+      - "CMD"
+      - "uvicorn"
+    forbidden_patterns:
+      - "RUN pip install"  # Should use uv, not raw pip
+      - "requirements.txt"  # Should use pyproject.toml
+    tags:
+      - infrastructure
+      - docker
+      - backend
+    mock_response: |
+      FROM python:3.11-slim AS builder
+      
+      WORKDIR /app
+      
+      # Install uv
+      COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+      
+      # Copy dependency files
+      COPY pyproject.toml ./
+      
+      # Install dependencies
+      RUN uv pip install --system --no-cache -e .
+      
+      # Production stage
+      FROM python:3.11-slim
+      
+      WORKDIR /app
+      
+      # Copy installed packages from builder
+      COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+      COPY --from=builder /usr/local/bin /usr/local/bin
+      
+      # Copy application code
+      COPY app ./app
+      
+      EXPOSE 8000
+      
+      CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  - name: dockerfile_frontend
+    prompt: |
+      Generate a Dockerfile for a Vite React frontend with nginx serving.
+      Use multi-stage build with pnpm.
+    expected_patterns:
+      - "FROM node:"
+      - "pnpm"
+      - "nginx"
+      - "COPY --from="
+      - "EXPOSE"
+    forbidden_patterns:
+      - "RUN npm install"  # Should use pnpm
+      - "yarn"  # Should use pnpm
+    tags:
+      - infrastructure
+      - docker
+      - frontend
+    mock_response: |
+      # Build stage
+      FROM node:20-alpine AS builder
+      
+      # Install pnpm
+      RUN corepack enable && corepack prepare pnpm@latest --activate
+      
+      WORKDIR /app
+      
+      # Copy package files
+      COPY package.json pnpm-lock.yaml ./
+      
+      # Install dependencies
+      RUN pnpm install --frozen-lockfile
+      
+      # Copy source and build
+      COPY . .
+      RUN pnpm build
+      
+      # Production stage
+      FROM nginx:alpine
+      
+      # Copy built assets
+      COPY --from=builder /app/dist /usr/share/nginx/html
+      
+      # Copy nginx config
+      COPY nginx.conf /etc/nginx/conf.d/default.conf
+      
+      EXPOSE 80
+      
+      CMD ["nginx", "-g", "daemon off;"]

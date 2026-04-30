@@ -1,0 +1,406 @@
+# Test scenarios for azure-mgmt-apimanagement-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Create APIM Service
+  - name: create_apim_service
+    prompt: |
+      Create an Azure API Management service in C# using the Developer SKU.
+      Include proper authentication and required publisher information.
+    expected_patterns:
+      - "ArmClient"
+      - "DefaultAzureCredential"
+      - "ApiManagementServiceData"
+      - "ApiManagementServiceSkuType"
+      - "publisherEmail"
+      - "publisherName"
+      - "CreateOrUpdateAsync"
+    forbidden_patterns:
+      - "new ApiManagementClient"
+    tags:
+      - basic
+      - service
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiManagement;
+      using Azure.ResourceManager.ApiManagement.Models;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID");
+      var subscription = armClient.GetSubscriptionResource(
+          new ResourceIdentifier($"/subscriptions/{subscriptionId}"));
+
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+      var serviceData = new ApiManagementServiceData(
+          location: AzureLocation.EastUS,
+          sku: new ApiManagementServiceSkuProperties(
+              ApiManagementServiceSkuType.Developer,
+              capacity: 1),
+          publisherEmail: "admin@contoso.com",
+          publisherName: "Contoso");
+
+      var serviceCollection = resourceGroup.Value.GetApiManagementServices();
+      var operation = await serviceCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-apim-service",
+          serviceData);
+
+      ApiManagementServiceResource service = operation.Value;
+      Console.WriteLine($"APIM Service created: {service.Data.Name}");
+
+  # Create API
+  - name: create_api
+    prompt: |
+      Create an API in Azure API Management that proxies to a backend service.
+      Configure HTTPS protocol and set the backend URL.
+    expected_patterns:
+      - "GetApis"
+      - "ApiCreateOrUpdateContent"
+      - "DisplayName"
+      - "Path"
+      - "ServiceUri"
+      - "ApiOperationInvokableProtocol"
+    tags:
+      - api
+      - basic
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiManagement;
+      using Azure.ResourceManager.ApiManagement.Models;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscription = await armClient.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+      var service = await resourceGroup.Value.GetApiManagementServiceAsync("my-apim-service");
+
+      var apiData = new ApiCreateOrUpdateContent
+      {
+          DisplayName = "Orders API",
+          Path = "orders",
+          Protocols = { ApiOperationInvokableProtocol.Https },
+          ServiceUri = new Uri("https://backend.contoso.com/api/orders")
+      };
+
+      var apiCollection = service.Value.GetApis();
+      var apiOperation = await apiCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "orders-api",
+          apiData);
+
+      ApiResource api = apiOperation.Value;
+      Console.WriteLine($"API created: {api.Data.Name}");
+
+  # Create Product with API
+  - name: create_product
+    prompt: |
+      Create a product in Azure API Management and add an API to it.
+      Configure subscription requirements and publish the product.
+    expected_patterns:
+      - "GetApiManagementProducts"
+      - "ApiManagementProductData"
+      - "IsSubscriptionRequired"
+      - "ApiManagementProductState"
+      - "GetProductApis"
+    tags:
+      - product
+      - subscription
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiManagement;
+      using Azure.ResourceManager.ApiManagement.Models;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscription = await armClient.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+      var service = await resourceGroup.Value.GetApiManagementServiceAsync("my-apim-service");
+
+      // Create product
+      var productData = new ApiManagementProductData
+      {
+          DisplayName = "Starter",
+          Description = "Starter tier with limited access",
+          IsSubscriptionRequired = true,
+          IsApprovalRequired = false,
+          SubscriptionsLimit = 1,
+          State = ApiManagementProductState.Published
+      };
+
+      var productCollection = service.Value.GetApiManagementProducts();
+      var productOperation = await productCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "starter",
+          productData);
+
+      ApiManagementProductResource product = productOperation.Value;
+
+      // Add API to product
+      await product.GetProductApis().CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "orders-api");
+
+      Console.WriteLine($"Product created: {product.Data.DisplayName}");
+
+  # Create Subscription
+  - name: create_subscription
+    prompt: |
+      Create a subscription in Azure API Management for a product
+      and retrieve the subscription keys.
+    expected_patterns:
+      - "GetApiManagementSubscriptions"
+      - "ApiManagementSubscriptionCreateOrUpdateContent"
+      - "GetSecretsAsync"
+      - "PrimaryKey"
+      - "Scope"
+    tags:
+      - subscription
+      - keys
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiManagement;
+      using Azure.ResourceManager.ApiManagement.Models;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscription = await armClient.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+      var service = await resourceGroup.Value.GetApiManagementServiceAsync("my-apim-service");
+
+      // Create subscription
+      var subscriptionData = new ApiManagementSubscriptionCreateOrUpdateContent
+      {
+          DisplayName = "My Subscription",
+          Scope = "/products/starter",
+          State = ApiManagementSubscriptionState.Active
+      };
+
+      var subscriptionCollection = service.Value.GetApiManagementSubscriptions();
+      var subOperation = await subscriptionCollection.CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          "my-subscription",
+          subscriptionData);
+
+      ApiManagementSubscriptionResource apimSubscription = subOperation.Value;
+
+      // Get subscription keys
+      var keys = await apimSubscription.GetSecretsAsync();
+      Console.WriteLine($"Primary Key: {keys.Value.PrimaryKey}");
+      Console.WriteLine($"Secondary Key: {keys.Value.SecondaryKey}");
+
+  # Set API Policy
+  - name: set_api_policy
+    prompt: |
+      Set a rate limiting policy on an API in Azure API Management.
+      Include proper XML policy structure with inbound, backend, outbound, and on-error sections.
+    expected_patterns:
+      - "GetApiPolicy"
+      - "PolicyContractData"
+      - "PolicyContentFormat"
+      - "rate-limit"
+      - "<base />"
+      - "<policies>"
+    tags:
+      - policy
+      - rate-limiting
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiManagement;
+      using Azure.ResourceManager.ApiManagement.Models;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscription = await armClient.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+      var service = await resourceGroup.Value.GetApiManagementServiceAsync("my-apim-service");
+      var api = await service.Value.GetApiAsync("orders-api");
+
+      var policyXml = @"
+      <policies>
+          <inbound>
+              <rate-limit calls=""100"" renewal-period=""60"" />
+              <set-header name=""X-Custom-Header"" exists-action=""override"">
+                  <value>CustomValue</value>
+              </set-header>
+              <base />
+          </inbound>
+          <backend>
+              <base />
+          </backend>
+          <outbound>
+              <base />
+          </outbound>
+          <on-error>
+              <base />
+          </on-error>
+      </policies>";
+
+      var policyData = new PolicyContractData
+      {
+          Value = policyXml,
+          Format = PolicyContentFormat.Xml
+      };
+
+      await api.Value.GetApiPolicy().CreateOrUpdateAsync(
+          WaitUntil.Completed,
+          policyData);
+
+      Console.WriteLine("Policy applied successfully");
+
+  # Backup and Restore
+  - name: backup_restore
+    prompt: |
+      Backup an Azure API Management service to Azure Storage using
+      managed identity authentication.
+    expected_patterns:
+      - "BackupAsync"
+      - "ApiManagementServiceBackupRestoreContent"
+      - "storageAccount"
+      - "containerName"
+      - "StorageAccountAccessType"
+    tags:
+      - backup
+      - disaster-recovery
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiManagement;
+      using Azure.ResourceManager.ApiManagement.Models;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscription = await armClient.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+      var service = await resourceGroup.Value.GetApiManagementServiceAsync("my-apim-service");
+
+      // Backup
+      var backupParams = new ApiManagementServiceBackupRestoreContent(
+          storageAccount: "mystorageaccount",
+          containerName: "apim-backups",
+          backupName: $"backup-{DateTime.UtcNow:yyyy-MM-dd}")
+      {
+          AccessType = StorageAccountAccessType.SystemAssignedManagedIdentity
+      };
+
+      await service.Value.BackupAsync(WaitUntil.Completed, backupParams);
+      Console.WriteLine("Backup completed successfully");
+
+  # Error Handling
+  - name: error_handling
+    prompt: |
+      Implement proper error handling for Azure API Management operations
+      using RequestFailedException.
+    expected_patterns:
+      - "RequestFailedException"
+      - "ex.Status"
+      - "catch"
+      - "when"
+      - "409"
+      - "400"
+    tags:
+      - error-handling
+      - best-practice
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiManagement;
+      using Azure.ResourceManager.ApiManagement.Models;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      try
+      {
+          var subscription = await armClient.GetDefaultSubscriptionAsync();
+          var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+
+          var serviceData = new ApiManagementServiceData(
+              location: AzureLocation.EastUS,
+              sku: new ApiManagementServiceSkuProperties(
+                  ApiManagementServiceSkuType.Developer, 1),
+              publisherEmail: "admin@contoso.com",
+              publisherName: "Contoso");
+
+          var serviceCollection = resourceGroup.GetApiManagementServices();
+          var operation = await serviceCollection.CreateOrUpdateAsync(
+              WaitUntil.Completed,
+              "my-apim-service",
+              serviceData);
+      }
+      catch (RequestFailedException ex) when (ex.Status == 409)
+      {
+          Console.WriteLine("Service already exists");
+      }
+      catch (RequestFailedException ex) when (ex.Status == 400)
+      {
+          Console.WriteLine($"Bad request: {ex.Message}");
+      }
+      catch (RequestFailedException ex)
+      {
+          Console.WriteLine($"ARM Error: {ex.Status} - {ex.ErrorCode}: {ex.Message}");
+      }
+
+  # List APIs and Operations
+  - name: list_apis
+    prompt: |
+      List all APIs in an Azure API Management service with their operations.
+    expected_patterns:
+      - "GetApis"
+      - "await foreach"
+      - "GetApiOperations"
+    tags:
+      - list
+      - operations
+    mock_response: |
+      using Azure;
+      using Azure.Identity;
+      using Azure.ResourceManager;
+      using Azure.ResourceManager.ApiManagement;
+      using Azure.ResourceManager.ApiManagement.Models;
+
+      var credential = new DefaultAzureCredential();
+      var armClient = new ArmClient(credential);
+
+      var subscription = await armClient.GetDefaultSubscriptionAsync();
+      var resourceGroup = await subscription.GetResourceGroupAsync("my-resource-group");
+      var service = await resourceGroup.Value.GetApiManagementServiceAsync("my-apim-service");
+
+      // List all APIs
+      await foreach (var api in service.Value.GetApis())
+      {
+          Console.WriteLine($"API: {api.Data.DisplayName}");
+          Console.WriteLine($"  Path: {api.Data.Path}");
+
+          // List operations
+          await foreach (var operation in api.GetApiOperations())
+          {
+              Console.WriteLine($"  Operation: {operation.Data.DisplayName}");
+              Console.WriteLine($"    Method: {operation.Data.Method}");
+              Console.WriteLine($"    URL: {operation.Data.UrlTemplate}");
+          }
+      }

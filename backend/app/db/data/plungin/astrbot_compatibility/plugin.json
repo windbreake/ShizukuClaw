@@ -1,0 +1,43 @@
+{
+  "entry": "plugin.py",
+  "module_name": "astrbot_compatibility",
+  "name": "astrbot_compatibility",
+  "version": "1.0.0",
+  "description": "AstrBot插件兼容层 - 让ShizukuClaw可以加载和运行AstrBot插件",
+  "author": "ShizukuClaw Team",
+  "dependencies": [],
+  "config_schema": {
+    "title": "AstrBot兼容层配置",
+    "description": "配置AstrBot插件兼容层的运行参数",
+    "version": "1.0.0",
+    "sections": [
+      {
+        "title": "基础设置",
+        "fields": [
+          {
+            "key": "astrbot_plugins_dir",
+            "type": "text",
+            "label": "AstrBot插件目录",
+            "default": "app/db/data/plungin/astrbot_plugins",
+            "description": "存放AstrBot插件的目录路径（相对于项目根目录）",
+            "required": true
+          },
+          {
+            "key": "auto_load_plugins",
+            "type": "switch",
+            "label": "自动加载插件",
+            "default": true,
+            "description": "启动时自动加载发现的AstrBot插件"
+          },
+          {
+            "key": "enable_sandbox",
+            "type": "switch",
+            "label": "启用沙箱模式",
+            "default": true,
+            "description": "在隔离环境中运行AstrBot插件以提高安全性"
+          }
+        ]
+      }
+    ]
+  }
+}

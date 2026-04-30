@@ -1,0 +1,258 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+# Test scenarios for azure-identity-ts skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: default_credential_basic
+    prompt: |
+      Show a minimal TypeScript example using DefaultAzureCredential with
+      an Azure Storage Blob client.
+    expected_patterns:
+      - "import { DefaultAzureCredential } from \"@azure/identity\""
+      - "new DefaultAzureCredential()"
+      - "credential"
+    forbidden_patterns:
+      - "require("
+      - "ClientSecretCredential"
+      - "hardcoded-token"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import { DefaultAzureCredential } from "@azure/identity";
+      import { BlobServiceClient } from "@azure/storage-blob";
+
+      const credential = new DefaultAzureCredential();
+      const blobClient = new BlobServiceClient(
+        `https://${process.env.STORAGE_ACCOUNT_NAME}.blob.core.windows.net`,
+        credential
+      );
+
+  - name: managed_identity_user_assigned
+    prompt: |
+      Create a ManagedIdentityCredential using a user-assigned client ID
+      from AZURE_CLIENT_ID environment variable in TypeScript.
+    expected_patterns:
+      - "ManagedIdentityCredential"
+      - "clientId"
+      - "process.env"
+    forbidden_patterns:
+      - "tenantId"
+      - "require("
+    tags:
+      - managed-identity
+    mock_response: |
+      import { ManagedIdentityCredential } from "@azure/identity";
+
+      const credential = new ManagedIdentityCredential({
+        clientId: process.env.AZURE_CLIENT_ID
+      });
+
+  - name: client_secret_credential_env
+    prompt: |
+      Authenticate using ClientSecretCredential with environment variables for
+      tenant ID, client ID, and client secret in TypeScript.
+    expected_patterns:
+      - "ClientSecretCredential"
+      - "AZURE_TENANT_ID"
+      - "AZURE_CLIENT_SECRET"
+      - "process.env"
+    forbidden_patterns:
+      - "\"secret\""
+      - "'secret'"
+    tags:
+      - service-principal
+    mock_response: |
+      import { ClientSecretCredential } from "@azure/identity";
+
+      const credential = new ClientSecretCredential(
+        process.env.AZURE_TENANT_ID!,
+        process.env.AZURE_CLIENT_ID!,
+        process.env.AZURE_CLIENT_SECRET!
+      );
+
+  - name: interactive_browser_credential
+    prompt: |
+      Provide an InteractiveBrowserCredential example in TypeScript with
+      clientId, tenantId, and loginHint.
+    expected_patterns:
+      - "InteractiveBrowserCredential"
+      - "clientId"
+      - "tenantId"
+      - "loginHint"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - interactive
+    mock_response: |
+      import { InteractiveBrowserCredential } from "@azure/identity";
+
+      const credential = new InteractiveBrowserCredential({
+        clientId: "<client-id>",
+        tenantId: "<tenant-id>",
+        loginHint: "user@example.com"
+      });
+
+      const token = await credential.getToken("https://management.azure.com/.default");
+      console.log(token.token);
+
+  - name: chained_token_credential
+    prompt: |
+      Build a ChainedTokenCredential in TypeScript that tries 
+      ManagedIdentityCredential first and then AzureCliCredential.
+    expected_patterns:
+      - "ChainedTokenCredential"
+      - "ManagedIdentityCredential"
+      - "AzureCliCredential"
+      - "new"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+      - "require("
+    tags:
+      - chained
+    mock_response: |
+      import { 
+        ChainedTokenCredential,
+        ManagedIdentityCredential,
+        AzureCliCredential
+      } from "@azure/identity";
+
+      const credential = new ChainedTokenCredential(
+        new ManagedIdentityCredential({ clientId: "<user-assigned-client-id>" }),
+        new AzureCliCredential()
+      );
+
+  - name: device_code_credential
+    prompt: |
+      Show how to use DeviceCodeCredential in TypeScript with a custom
+      userPromptCallback that logs the device code message.
+    expected_patterns:
+      - "DeviceCodeCredential"
+      - "userPromptCallback"
+      - "info.message"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - interactive
+      - device-code
+    mock_response: |
+      import { DeviceCodeCredential } from "@azure/identity";
+
+      const credential = new DeviceCodeCredential({
+        clientId: "<client-id>",
+        tenantId: "<tenant-id>",
+        userPromptCallback: (info) => {
+          console.log(info.message);
+        }
+      });
+
+      const token = await credential.getToken("https://management.azure.com/.default");
+
+  - name: azure_government_auth
+    prompt: |
+      Show how to authenticate to Azure Government using ClientSecretCredential
+      in TypeScript with AzureAuthorityHosts.
+    expected_patterns:
+      - "AzureAuthorityHosts"
+      - "AzureGovernment"
+      - "authorityHost"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - sovereign-cloud
+    mock_response: |
+      import { ClientSecretCredential, AzureAuthorityHosts } from "@azure/identity";
+
+      const credential = new ClientSecretCredential(
+        process.env.AZURE_TENANT_ID!,
+        process.env.AZURE_CLIENT_ID!,
+        process.env.AZURE_CLIENT_SECRET!,
+        { authorityHost: AzureAuthorityHosts.AzureGovernment }
+      );
+
+  - name: bearer_token_provider
+    prompt: |
+      Show how to use getBearerTokenProvider to get a token function in TypeScript
+      that can be used with APIs that need bearer tokens.
+    expected_patterns:
+      - "getBearerTokenProvider"
+      - "DefaultAzureCredential"
+      - "await"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - bearer-token
+    mock_response: |
+      import { DefaultAzureCredential, getBearerTokenProvider } from "@azure/identity";
+
+      const credential = new DefaultAzureCredential();
+      const getAccessToken = getBearerTokenProvider(
+        credential,
+        "https://cognitiveservices.azure.com/.default"
+      );
+
+      // Use the token provider
+      const token = await getAccessToken();
+      console.log(`Bearer ${token}`);
+
+  - name: custom_credential_implementation
+    prompt: |
+      Implement a custom TokenCredential class in TypeScript that implements
+      the TokenCredential interface from @azure/core-auth.
+    expected_patterns:
+      - "implements TokenCredential"
+      - "getToken"
+      - "AccessToken"
+      - "expiresOnTimestamp"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - custom-credential
+    mock_response: |
+      import type { TokenCredential, AccessToken, GetTokenOptions } from "@azure/core-auth";
+
+      class CustomCredential implements TokenCredential {
+        async getToken(
+          scopes: string | string[],
+          options?: GetTokenOptions
+        ): Promise<AccessToken | null> {
+          // Custom token acquisition logic
+          const token = await this.fetchTokenFromCustomSource(scopes);
+          
+          return {
+            token: token,
+            expiresOnTimestamp: Date.now() + 3600000 // 1 hour
+          };
+        }
+
+        private async fetchTokenFromCustomSource(scopes: string | string[]): Promise<string> {
+          // Implementation here
+          return "<custom-token>";
+        }
+      }
+
+  - name: enable_logging
+    prompt: |
+      Show how to enable verbose logging for Azure Identity SDK in TypeScript.
+    expected_patterns:
+      - "setLogLevel"
+      - "@azure/logger"
+      - "verbose"
+    forbidden_patterns:
+      - "require("
+    tags:
+      - debugging
+    mock_response: |
+      import { setLogLevel, AzureLogger } from "@azure/logger";
+
+      setLogLevel("verbose");
+
+      // Optional: Custom log handler
+      AzureLogger.log = (...args) => {
+        console.log("[Azure Identity]", ...args);
+      };

@@ -1,0 +1,8 @@
+{
+  "source": "github",
+  "skill_id": "dubsopenhub__m365-easy-button",
+  "name": "m365-easy-button",
+  "url": "https://github.com/DUBSOpenHub/m365-easy-button",
+  "deployed_at": "2026-04-10",
+  "layout": "repo-clone-with-root-skill-md"
+}

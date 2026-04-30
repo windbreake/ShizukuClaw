@@ -1,0 +1,189 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+# Test scenarios for azure-identity-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: default_credential_basic
+    prompt: |
+      Show a minimal example using DefaultAzureCredential to request a token
+      for https://management.azure.com/.default.
+    expected_patterns:
+      - "DefaultAzureCredential"
+      - "get_token"
+      - "https://management.azure.com/.default"
+    forbidden_patterns:
+      - "ClientSecretCredential"
+      - "InteractiveBrowserCredential"
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      from azure.identity import DefaultAzureCredential
+
+      credential = DefaultAzureCredential()
+      token = credential.get_token("https://management.azure.com/.default")
+      print(token.expires_on)
+
+  - name: managed_identity_user_assigned
+    prompt: |
+      Create a ManagedIdentityCredential using a user-assigned client ID from
+      AZURE_CLIENT_ID environment variable.
+    expected_patterns:
+      - "ManagedIdentityCredential"
+      - "client_id"
+      - "AZURE_CLIENT_ID"
+    forbidden_patterns:
+      - "tenant_id="
+    tags:
+      - managed-identity
+    mock_response: |
+      import os
+      from azure.identity import ManagedIdentityCredential
+
+      credential = ManagedIdentityCredential(
+          client_id=os.environ["AZURE_CLIENT_ID"],
+      )
+
+  - name: client_secret_credential_env
+    prompt: |
+      Authenticate using ClientSecretCredential with environment variables for
+      tenant ID, client ID, and client secret.
+    expected_patterns:
+      - "ClientSecretCredential"
+      - "AZURE_TENANT_ID"
+      - "AZURE_CLIENT_SECRET"
+    forbidden_patterns:
+      - "client_secret=\""
+    tags:
+      - service-principal
+    mock_response: |
+      import os
+      from azure.identity import ClientSecretCredential
+
+      credential = ClientSecretCredential(
+          tenant_id=os.environ["AZURE_TENANT_ID"],
+          client_id=os.environ["AZURE_CLIENT_ID"],
+          client_secret=os.environ["AZURE_CLIENT_SECRET"],
+      )
+
+  - name: interactive_browser_credential
+    prompt: |
+      Provide an InteractiveBrowserCredential example with tenant_id and client_id.
+      Request a token for Azure Resource Manager.
+    expected_patterns:
+      - "InteractiveBrowserCredential"
+      - "tenant_id"
+      - "client_id"
+      - "get_token"
+    forbidden_patterns:
+      - "azure.identity.aio"
+    tags:
+      - interactive
+    mock_response: |
+      from azure.identity import InteractiveBrowserCredential
+
+      credential = InteractiveBrowserCredential(
+          tenant_id="<tenant-id>",
+          client_id="<client-id>",
+      )
+      token = credential.get_token("https://management.azure.com/.default")
+      print(token.token)
+
+  - name: chained_token_credential
+    prompt: |
+      Build a ChainedTokenCredential that tries ManagedIdentityCredential first
+      and then AzureCliCredential.
+    expected_patterns:
+      - "ChainedTokenCredential"
+      - "ManagedIdentityCredential"
+      - "AzureCliCredential"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+    tags:
+      - chained
+    mock_response: |
+      from azure.identity import ChainedTokenCredential, ManagedIdentityCredential, AzureCliCredential
+
+      credential = ChainedTokenCredential(
+          ManagedIdentityCredential(client_id="<user-assigned-mi-client-id>"),
+          AzureCliCredential(),
+      )
+
+  - name: token_cache_persistence
+    prompt: |
+      Show how to enable persistent token caching with DefaultAzureCredential.
+      Use TokenCachePersistenceOptions.
+    expected_patterns:
+      - "TokenCachePersistenceOptions"
+      - "cache_persistence_options"
+    forbidden_patterns:
+      - "token.txt"
+    tags:
+      - caching
+    mock_response: |
+      from azure.identity import DefaultAzureCredential, TokenCachePersistenceOptions
+
+      cache_options = TokenCachePersistenceOptions(
+          name="azure_identity_cache",
+          allow_unencrypted_storage=True,
+      )
+
+      credential = DefaultAzureCredential(
+          cache_persistence_options=cache_options,
+      )
+
+  - name: async_default_credential
+    prompt: |
+      Provide an async example using DefaultAzureCredential from azure.identity.aio.
+      Get a token and close the credential.
+    expected_patterns:
+      - "from azure.identity.aio import DefaultAzureCredential"
+      - "await credential.get_token"
+      - "await credential.close"
+    forbidden_patterns:
+      - "from azure.identity import DefaultAzureCredential"
+    tags:
+      - async
+    mock_response: |
+      import asyncio
+      from azure.identity.aio import DefaultAzureCredential
+
+      async def main():
+          credential = DefaultAzureCredential()
+          token = await credential.get_token("https://management.azure.com/.default")
+          print(token.expires_on)
+          await credential.close()
+
+      if __name__ == "__main__":
+          asyncio.run(main())
+
+  - name: async_interactive_browser
+    prompt: |
+      Provide an async InteractiveBrowserCredential example using azure.identity.aio.
+      Request a token and close the credential.
+    expected_patterns:
+      - "from azure.identity.aio import InteractiveBrowserCredential"
+      - "await credential.get_token"
+      - "await credential.close"
+    forbidden_patterns:
+      - "from azure.identity import InteractiveBrowserCredential"
+    tags:
+      - async
+      - interactive
+    mock_response: |
+      import asyncio
+      from azure.identity.aio import InteractiveBrowserCredential
+
+      async def main():
+          credential = InteractiveBrowserCredential()
+          token = await credential.get_token("https://management.azure.com/.default")
+          print(token.token)
+          await credential.close()
+
+      if __name__ == "__main__":
+          asyncio.run(main())

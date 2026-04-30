@@ -1,0 +1,26 @@
+{
+  "plugin_framework": {
+    "enabled": true,
+    "plugins": {
+      "builtin.basic": {
+        "enabled": true,
+        "allow_network": true,
+        "allowed_domains": [
+          "wttr.in",
+          "wikipedia.org",
+          "en.wikipedia.org",
+          "zh.wikipedia.org",
+          "hn.algolia.com"
+        ],
+        "allowed_commands": [
+          "plugins",
+          "echo",
+          "weather",
+          "wiki",
+          "news"
+        ],
+        "max_execution_ms": 12000
+      }
+    }
+  }
+}

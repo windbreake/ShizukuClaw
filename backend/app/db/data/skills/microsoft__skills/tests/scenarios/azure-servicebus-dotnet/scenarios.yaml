@@ -1,0 +1,491 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+# Test scenarios for azure-servicebus-dotnet skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: client_default_credential
+    prompt: |
+      Create a ServiceBusClient in .NET using DefaultAzureCredential for authentication.
+    expected_patterns:
+      - "using Azure.Identity"
+      - "using Azure.Messaging.ServiceBus"
+      - "DefaultAzureCredential"
+      - "ServiceBusClient"
+    forbidden_patterns:
+      - "connection string"
+      - "SharedAccessKey"
+    tags:
+      - authentication
+      - basic
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.ServiceBus;
+
+      string fullyQualifiedNamespace = Environment.GetEnvironmentVariable(
+          "AZURE_SERVICEBUS_FULLY_QUALIFIED_NAMESPACE");
+
+      await using ServiceBusClient client = new(
+          fullyQualifiedNamespace, 
+          new DefaultAzureCredential());
+
+  - name: send_single_message
+    prompt: |
+      Send a single message to a Service Bus queue.
+    expected_patterns:
+      - "ServiceBusSender"
+      - "ServiceBusMessage"
+      - "SendMessageAsync"
+      - "CreateSender"
+    forbidden_patterns:
+      - "CreateMessageBatchAsync"
+    tags:
+      - sending
+      - basic
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.ServiceBus;
+
+      string fullyQualifiedNamespace = "<namespace>.servicebus.windows.net";
+      await using ServiceBusClient client = new(fullyQualifiedNamespace, new DefaultAzureCredential());
+
+      ServiceBusSender sender = client.CreateSender("my-queue");
+
+      ServiceBusMessage message = new("Hello world!");
+      await sender.SendMessageAsync(message);
+
+      Console.WriteLine("Message sent successfully");
+
+  - name: send_batch_safe
+    prompt: |
+      Send a batch of messages to Service Bus using safe batching that respects size limits.
+    expected_patterns:
+      - "CreateMessageBatchAsync"
+      - "TryAddMessage"
+      - "SendMessagesAsync"
+      - "ServiceBusMessageBatch"
+    forbidden_patterns:
+      - "SendMessagesAsync(messages)"
+    tags:
+      - sending
+      - batching
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.ServiceBus;
+
+      await using ServiceBusClient client = new(fullyQualifiedNamespace, new DefaultAzureCredential());
+      ServiceBusSender sender = client.CreateSender("my-queue");
+
+      // Create a batch (respects size limits automatically)
+      using ServiceBusMessageBatch batch = await sender.CreateMessageBatchAsync();
+
+      var messages = new[] { "Message 1", "Message 2", "Message 3" };
+      foreach (var messageText in messages)
+      {
+          if (!batch.TryAddMessage(new ServiceBusMessage(messageText)))
+          {
+              // Batch is full - send it and create a new one
+              await sender.SendMessagesAsync(batch);
+              batch = await sender.CreateMessageBatchAsync();
+              
+              if (!batch.TryAddMessage(new ServiceBusMessage(messageText)))
+              {
+                  throw new Exception("Message too large for empty batch");
+              }
+          }
+      }
+
+      // Send remaining messages
+      if (batch.Count > 0)
+      {
+          await sender.SendMessagesAsync(batch);
+      }
+
+  - name: receive_and_complete
+    prompt: |
+      Receive a message from a Service Bus queue and complete it.
+    expected_patterns:
+      - "ServiceBusReceiver"
+      - "ReceiveMessageAsync"
+      - "CompleteMessageAsync"
+      - "CreateReceiver"
+    forbidden_patterns:
+      - "ServiceBusProcessor"
+    tags:
+      - receiving
+      - basic
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.ServiceBus;
+
+      await using ServiceBusClient client = new(fullyQualifiedNamespace, new DefaultAzureCredential());
+      ServiceBusReceiver receiver = client.CreateReceiver("my-queue");
+
+      ServiceBusReceivedMessage message = await receiver.ReceiveMessageAsync();
+
+      if (message != null)
+      {
+          string body = message.Body.ToString();
+          Console.WriteLine($"Received: {body}");
+
+          // Complete the message (removes from queue)
+          await receiver.CompleteMessageAsync(message);
+      }
+
+  - name: message_settlement_options
+    prompt: |
+      Show all message settlement options: complete, abandon, defer, and dead-letter.
+    expected_patterns:
+      - "CompleteMessageAsync"
+      - "AbandonMessageAsync"
+      - "DeferMessageAsync"
+      - "DeadLetterMessageAsync"
+    forbidden_patterns:
+      - "ServiceBusProcessor"
+    tags:
+      - settlement
+    mock_response: |
+      using Azure.Messaging.ServiceBus;
+
+      // Assume we have a receiver and received message
+      ServiceBusReceivedMessage message = await receiver.ReceiveMessageAsync();
+
+      // Complete - removes message from queue (success)
+      await receiver.CompleteMessageAsync(message);
+
+      // Abandon - releases lock, message can be received again (retry later)
+      await receiver.AbandonMessageAsync(message);
+
+      // Defer - prevents normal receive, must use ReceiveDeferredMessageAsync
+      await receiver.DeferMessageAsync(message);
+      // Later: await receiver.ReceiveDeferredMessageAsync(message.SequenceNumber);
+
+      // Dead Letter - moves to dead letter subqueue (permanent failure)
+      await receiver.DeadLetterMessageAsync(
+          message, 
+          "InvalidFormat", 
+          "Message body was not valid JSON");
+
+  - name: processor_background
+    prompt: |
+      Create a ServiceBusProcessor for continuous background message processing.
+    expected_patterns:
+      - "ServiceBusProcessor"
+      - "ProcessMessageAsync"
+      - "ProcessErrorAsync"
+      - "StartProcessingAsync"
+      - "StopProcessingAsync"
+      - "AutoCompleteMessages = false"
+    forbidden_patterns:
+      - "ReceiveMessageAsync"
+    tags:
+      - processor
+      - background
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.ServiceBus;
+
+      await using ServiceBusClient client = new(fullyQualifiedNamespace, new DefaultAzureCredential());
+
+      ServiceBusProcessor processor = client.CreateProcessor("my-queue", new ServiceBusProcessorOptions
+      {
+          AutoCompleteMessages = false,
+          MaxConcurrentCalls = 2
+      });
+
+      processor.ProcessMessageAsync += async (args) =>
+      {
+          try
+          {
+              string body = args.Message.Body.ToString();
+              Console.WriteLine($"Received: {body}");
+              await args.CompleteMessageAsync(args.Message);
+          }
+          catch (Exception ex)
+          {
+              Console.WriteLine($"Error processing: {ex.Message}");
+              await args.AbandonMessageAsync(args.Message);
+          }
+      };
+
+      processor.ProcessErrorAsync += (args) =>
+      {
+          Console.WriteLine($"Error source: {args.ErrorSource}");
+          Console.WriteLine($"Entity: {args.EntityPath}");
+          Console.WriteLine($"Exception: {args.Exception}");
+          return Task.CompletedTask;
+      };
+
+      await processor.StartProcessingAsync();
+
+      Console.WriteLine("Press any key to stop processing...");
+      Console.ReadKey();
+
+      await processor.StopProcessingAsync();
+
+  - name: session_messages
+    prompt: |
+      Send and receive session messages for ordered processing.
+    expected_patterns:
+      - "SessionId"
+      - "AcceptNextSessionAsync"
+      - "ServiceBusSessionReceiver"
+    forbidden_patterns:
+      - "CreateReceiver"
+    tags:
+      - sessions
+      - ordering
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.ServiceBus;
+
+      await using ServiceBusClient client = new(fullyQualifiedNamespace, new DefaultAzureCredential());
+
+      // Send session messages
+      ServiceBusSender sender = client.CreateSender("my-session-queue");
+      ServiceBusMessage message = new("Order item 1")
+      {
+          SessionId = "order-123"
+      };
+      await sender.SendMessageAsync(message);
+
+      // Receive from next available session
+      ServiceBusSessionReceiver receiver = await client.AcceptNextSessionAsync("my-session-queue");
+
+      // Or receive from specific session
+      // ServiceBusSessionReceiver receiver = await client.AcceptSessionAsync("my-session-queue", "order-123");
+
+      ServiceBusReceivedMessage receivedMessage = await receiver.ReceiveMessageAsync();
+      Console.WriteLine($"Session: {receiver.SessionId}, Message: {receivedMessage.Body}");
+
+      // Session state management
+      await receiver.SetSessionStateAsync(new BinaryData("processing"));
+      BinaryData state = await receiver.GetSessionStateAsync();
+
+      await receiver.CompleteMessageAsync(receivedMessage);
+
+  - name: dead_letter_queue
+    prompt: |
+      Receive and process messages from the dead letter queue.
+    expected_patterns:
+      - "SubQueue.DeadLetter"
+      - "ServiceBusReceiverOptions"
+      - "DeadLetterReason"
+      - "DeadLetterErrorDescription"
+    forbidden_patterns:
+      - "DeadLetterMessageAsync"
+    tags:
+      - dead-letter
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.ServiceBus;
+
+      await using ServiceBusClient client = new(fullyQualifiedNamespace, new DefaultAzureCredential());
+
+      // Create receiver for dead letter queue
+      ServiceBusReceiver dlqReceiver = client.CreateReceiver("my-queue", new ServiceBusReceiverOptions
+      {
+          SubQueue = SubQueue.DeadLetter
+      });
+
+      ServiceBusReceivedMessage dlqMessage = await dlqReceiver.ReceiveMessageAsync();
+
+      if (dlqMessage != null)
+      {
+          // Access dead letter metadata
+          string reason = dlqMessage.DeadLetterReason;
+          string description = dlqMessage.DeadLetterErrorDescription;
+          Console.WriteLine($"Dead letter reason: {reason}");
+          Console.WriteLine($"Description: {description}");
+          Console.WriteLine($"Body: {dlqMessage.Body}");
+
+          // Process or archive the dead letter message
+          await dlqReceiver.CompleteMessageAsync(dlqMessage);
+      }
+
+  - name: topics_subscriptions
+    prompt: |
+      Send messages to a topic and receive from a subscription.
+    expected_patterns:
+      - "CreateSender"
+      - "CreateReceiver"
+      - "my-topic"
+      - "my-subscription"
+    forbidden_patterns:
+      - "CreateQueueAsync"
+    tags:
+      - topics
+      - pub-sub
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.ServiceBus;
+
+      await using ServiceBusClient client = new(fullyQualifiedNamespace, new DefaultAzureCredential());
+
+      // Send to topic
+      ServiceBusSender topicSender = client.CreateSender("my-topic");
+      await topicSender.SendMessageAsync(new ServiceBusMessage("Broadcast message"));
+
+      // Receive from subscription
+      ServiceBusReceiver subReceiver = client.CreateReceiver("my-topic", "my-subscription");
+      ServiceBusReceivedMessage message = await subReceiver.ReceiveMessageAsync();
+
+      if (message != null)
+      {
+          Console.WriteLine($"Received: {message.Body}");
+          await subReceiver.CompleteMessageAsync(message);
+      }
+
+  - name: administration_create_queue
+    prompt: |
+      Create a Service Bus queue using the administration client.
+    expected_patterns:
+      - "ServiceBusAdministrationClient"
+      - "CreateQueueOptions"
+      - "CreateQueueAsync"
+      - "MaxDeliveryCount"
+      - "LockDuration"
+    forbidden_patterns:
+      - "ServiceBusClient"
+    tags:
+      - administration
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.ServiceBus.Administration;
+
+      var adminClient = new ServiceBusAdministrationClient(
+          fullyQualifiedNamespace, 
+          new DefaultAzureCredential());
+
+      var options = new CreateQueueOptions("my-queue")
+      {
+          MaxDeliveryCount = 10,
+          LockDuration = TimeSpan.FromSeconds(30),
+          RequiresSession = false,
+          DeadLetteringOnMessageExpiration = true,
+          DefaultMessageTimeToLive = TimeSpan.FromDays(14)
+      };
+
+      QueueProperties queue = await adminClient.CreateQueueAsync(options);
+      Console.WriteLine($"Queue created: {queue.Name}");
+
+  - name: cross_entity_transaction
+    prompt: |
+      Perform a cross-entity transaction between two queues.
+    expected_patterns:
+      - "EnableCrossEntityTransactions = true"
+      - "TransactionScope"
+      - "TransactionScopeAsyncFlowOption.Enabled"
+      - "ts.Complete()"
+    forbidden_patterns:
+      - "DefaultAzureCredential"
+    tags:
+      - transactions
+      - advanced
+    mock_response: |
+      using Azure.Messaging.ServiceBus;
+      using System.Transactions;
+
+      // Cross-entity transactions require connection string (not managed identity)
+      string connectionString = Environment.GetEnvironmentVariable("AZURE_SERVICEBUS_CONNECTION_STRING");
+
+      var options = new ServiceBusClientOptions { EnableCrossEntityTransactions = true };
+      await using var client = new ServiceBusClient(connectionString, options);
+
+      ServiceBusReceiver receiverA = client.CreateReceiver("queueA");
+      ServiceBusSender senderB = client.CreateSender("queueB");
+
+      ServiceBusReceivedMessage receivedMessage = await receiverA.ReceiveMessageAsync();
+
+      using (var ts = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
+      {
+          // Both operations succeed or both fail
+          await receiverA.CompleteMessageAsync(receivedMessage);
+          await senderB.SendMessageAsync(new ServiceBusMessage("Forwarded"));
+          ts.Complete();
+      }
+
+  - name: error_handling
+    prompt: |
+      Show proper error handling for Service Bus operations.
+    expected_patterns:
+      - "ServiceBusException"
+      - "ServiceBusFailureReason"
+      - "ex.Reason"
+    forbidden_patterns:
+      - "catch (Exception ex)"
+    tags:
+      - error-handling
+    mock_response: |
+      using Azure.Messaging.ServiceBus;
+
+      try
+      {
+          await sender.SendMessageAsync(message);
+      }
+      catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.ServiceBusy)
+      {
+          // Retry with backoff
+          Console.WriteLine("Service is busy, retrying...");
+          await Task.Delay(TimeSpan.FromSeconds(5));
+      }
+      catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.QuotaExceeded)
+      {
+          Console.WriteLine("Quota exceeded - check entity size limits");
+      }
+      catch (ServiceBusException ex) when (ex.IsTransient)
+      {
+          Console.WriteLine($"Transient error, safe to retry: {ex.Message}");
+      }
+      catch (ServiceBusException ex)
+      {
+          Console.WriteLine($"Service Bus Error: {ex.Reason} - {ex.Message}");
+      }
+
+  - name: aspnet_core_di
+    prompt: |
+      Configure Service Bus with dependency injection in ASP.NET Core.
+    expected_patterns:
+      - "AddAzureClients"
+      - "AddServiceBusClientWithNamespace"
+      - "UseCredential"
+      - "DefaultAzureCredential"
+    forbidden_patterns:
+      - "new ServiceBusClient"
+    tags:
+      - dependency-injection
+      - aspnet-core
+    mock_response: |
+      using Azure.Identity;
+      using Azure.Messaging.ServiceBus;
+      using Microsoft.Extensions.Azure;
+
+      // In Program.cs
+      builder.Services.AddAzureClients(clientBuilder =>
+      {
+          clientBuilder.AddServiceBusClientWithNamespace(
+              builder.Configuration["ServiceBus:Namespace"]);
+          clientBuilder.UseCredential(new DefaultAzureCredential());
+      });
+
+      // In a service class
+      public class MessageService
+      {
+          private readonly ServiceBusClient _client;
+          private readonly ServiceBusSender _sender;
+
+          public MessageService(ServiceBusClient client)
+          {
+              _client = client;
+              _sender = _client.CreateSender("my-queue");
+          }
+
+          public async Task SendAsync(string message)
+          {
+              await _sender.SendMessageAsync(new ServiceBusMessage(message));
+          }
+      }

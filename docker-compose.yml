@@ -1,0 +1,171 @@
+version: '3.9'
+
+services:
+  # Main Shizuku bot application
+  shizuku-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shizuku-bot
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - SHIZUKU_ENV=production
+    volumes:
+      - ./data:/app/data:rw
+      - ./agent_datas:/app/agent_datas:rw
+      - ./logs:/app/logs:rw
+    ports:
+      - "5000:5000"
+      - "8000:8000"
+    networks:
+      - shizuku-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only_root_filesystem: false
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    pids_limit: 512
+    ulimits:
+      nofile: 8192
+      nproc: 4096
+    labels:
+      co.elastic.logs/enabled: "true"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # Python code execution sandbox (reserved for heavy lifting)
+  python-sandbox:
+    image: python:3.12-alpine
+    container_name: shizuku-python-sandbox
+    restart: unless-stopped
+    volumes:
+      - ./agent_datas/workspace:/sandbox:rw
+    working_dir: /sandbox
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - shizuku-network
+    user: "1000:1000"
+    read_only_root_filesystem: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    pids_limit: 64
+    environment:
+      - PYTHONNOUSERSITE=1
+    profiles:
+      - debug
+
+  # JavaScript/Node.js sandbox with amala-sandbox
+  js-sandbox:
+    build:
+      context: ./src/runtimes/amala-sandbox
+      dockerfile: Dockerfile
+    container_name: shizuku-js-sandbox
+    restart: unless-stopped
+    volumes:
+      - ./agent_datas/workspace:/sandbox:rw
+    working_dir: /sandbox
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - shizuku-network
+    user: "1000:1000"
+    read_only_root_filesystem: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    pids_limit: 32
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 256M
+    profiles:
+      - debug
+
+  # Redis for caching and session management (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: shizuku-redis
+    restart: unless-stopped
+    networks:
+      - shizuku-network
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --requirepass shizuku_redis_pass
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "999:999"
+    ports:
+      - "127.0.0.1:6379:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    profiles:
+      - optional
+
+  # PostgreSQL database (optional, for production)
+  postgres:
+    image: postgres:16-alpine
+    container_name: shizuku-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=shizuku
+      - POSTGRES_USER=shizuku_user
+      - POSTGRES_PASSWORD=shizuku_secure_pass
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - shizuku-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "999:999"
+    ports:
+      - "127.0.0.1:5432:5432"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    profiles:
+      - optional
+
+networks:
+  shizuku-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local

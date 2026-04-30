@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="UTF-8">
+  <title>数据库管理</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { 
+      font-family: 'Microsoft YaHei', sans-serif; 
+      background-color: #f8f9fa;
+      padding: 20px;
+    }
+    .card {
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+      border: none;
+    }
+    .card-header {
+      background-color: #fff;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+      font-weight: bold;
+    }
+    .btn-primary {
+      background-color: #6f42c1;
+      border-color: #6f42c1;
+    }
+    .btn-primary:hover {
+      background-color: #5a32a3;
+      border-color: #5a32a3;
+    }
+    .navbar-brand {
+      font-weight: bold;
+    }
+    h1 {
+      color: #6f42c1;
+    }
+    .table-responsive {
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">📦 数据库管理</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="card">
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6">
+            <div class="input-group mb-3">
+              <input type="number" id="delN" class="form-control" placeholder="N">
+              <button class="btn btn-outline-danger" type="button" onclick="deleteFirstN()">删除前 N 条记录</button>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+              <button class="btn btn-outline-warning" type="button" onclick="clearAll()">清空所有记录</button>
+              <button class="btn btn-outline-info" type="button" onclick="refreshRecords()">刷新记录</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        数据记录
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-striped table-hover" id="records">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>记录详情</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // 加载聊天记录
+    async function refreshRecords(){
+      try {
+        const data = await fetch('/api/records?limit=200&offset=0').then(r=>r.json());
+        const tbody = document.querySelector('#records tbody');
+        if (tbody) {
+          tbody.innerHTML = '';
+          data.forEach((row,i)=>{
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${i+1}</td>
+                            <td>${JSON.stringify(row)}</td>
+                            <td><button class="btn btn-sm btn-danger" onclick="deleteRecord(${row[0]})">删除</button></td>`;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (e) {
+        console.error('加载记录失败:', e);
+        alert('加载记录失败: ' + e.message);
+      }
+    }
+
+    // 删除单条
+    async function deleteRecord(id){
+      if(!confirm('确认删除 ID='+id+'？')) return;
+      try {
+        await fetch('/api/delete_record',{
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({id})
+        });
+        refreshRecords();
+      } catch (e) {
+        console.error('删除记录失败:', e);
+        alert('删除记录失败: ' + e.message);
+      }
+    }
+
+    // 清空所有
+    async function clearAll(){
+      if(!confirm('确认清空所有聊天记录？')) return;
+      try {
+        await fetch('/api/clear_records',{method:'POST'});
+        refreshRecords();
+      } catch (e) {
+        console.error('清空记录失败:', e);
+        alert('清空记录失败: ' + e.message);
+      }
+    }
+
+    // 删除前 N 条
+    async function deleteFirstN(){
+      const n = parseInt(document.getElementById('delN').value);
+      if(!n || n<1){ alert('请输入有效 N'); return; }
+      try {
+        await fetch('/api/delete_first_n',{
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({n})
+        });
+        refreshRecords();
+      } catch (e) {
+        console.error('删除前N条记录失败:', e);
+        alert('删除前N条记录失败: ' + e.message);
+      }
+    }
+
+    // 页面加载完成后初始化
+    window.addEventListener('load', function() {
+      refreshRecords();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+{
+  "name": "示例数据查询插件",
+  "version": "1.0.0",
+  "description": "演示如何使用JSON Schema配置插件设置页面",
+  "author": "ShizukuClaw Team",
+  
+  "config_schema": {
+    "title": "数据查询插件配置",
+    "description": "配置数据源、API密钥和查询参数",
+    "version": "1.0.0",
+    
+    "sections": [
+      {
+        "title": "基础设置",
+        "description": "插件的基本功能开关",
+        "collapsed": false,
+        "fields": [
+          {
+            "key": "enabled",
+            "type": "switch",
+            "label": "启用插件",
+            "default": true,
+            "description": "开启或关闭数据查询功能"
+          },
+          {
+            "key": "debug_mode",
+            "type": "switch",
+            "label": "调试模式",
+            "default": false,
+            "description": "开启后会输出详细的调试日志"
+          }
+        ]
+      },
+      {
+        "title": "API配置",
+        "description": "配置外部数据源的连接信息",
+        "collapsed": false,
+        "fields": [
+          {
+            "key": "api_key",
+            "type": "password",
+            "label": "API密钥",
+            "placeholder": "请输入API Key",
+            "required": true,
+            "description": "从数据服务商获取的API密钥"
+          },
+          {
+            "key": "api_url",
+            "type": "url",
+            "label": "API地址",
+            "default": "https://api.example.com/v1",
+            "placeholder": "https://api.example.com/v1",
+            "description": "数据API的基础URL"
+          },
+          {
+            "key": "timeout",
+            "type": "number",
+            "label": "超时时间",
+            "default": 30,
+            "min": 1,
+            "max": 300,
+            "step": 1,
+            "description": "请求超时时间（秒）"
+          }
+        ]
+      },
+      {
+        "title": "查询设置",
+        "description": "配置默认查询参数",
+        "collapsed": false,
+        "fields": [
+          {
+            "key": "default_source",
+            "type": "select",
+            "label": "默认数据源",
+            "default": "database",
+            "options": [
+              {"value": "database", "label": "数据库"},
+              {"value": "api", "label": "外部API"},
+              {"value": "cache", "label": "缓存"},
+              {"value": "file", "label": "本地文件"}
+            ],
+            "description": "选择默认的数据来源"
+          },
+          {
+            "key": "max_results",
+            "type": "slider",
+            "label": "最大结果数",
+            "default": 50,
+            "min": 1,
+            "max": 200,
+            "step": 1,
+            "description": "每次查询返回的最大记录数"
+          },
+          {
+            "key": "cache_enabled",
+            "type": "switch",
+            "label": "启用缓存",
+            "default": true,
+            "description": "是否缓存查询结果以提高性能"
+          },
+          {
+            "key": "cache_ttl",
+            "type": "number",
+            "label": "缓存有效期",
+            "default": 300,
+            "min": 60,
+            "max": 3600,
+            "step": 60,
+            "description": "缓存过期时间（秒）",
+            "depends_on": {
+              "cache_enabled": true
+            }
+          }
+        ]
+      },
+      {
+        "title": "高级设置",
+        "description": "高级用户可调整的参数",
+        "collapsed": true,
+        "fields": [
+          {
+            "key": "retry_count",
+            "type": "number",
+            "label": "重试次数",
+            "default": 3,
+            "min": 0,
+            "max": 10,
+            "step": 1,
+            "description": "请求失败时的重试次数"
+          },
+          {
+            "key": "user_agent",
+            "type": "text",
+            "label": "User Agent",
+            "default": "ShizukuClaw/1.0",
+            "placeholder": "自定义User Agent字符串",
+            "description": "HTTP请求的User Agent标识"
+          },
+          {
+            "key": "theme_color",
+            "type": "color",
+            "label": "主题颜色",
+            "default": "#4CAF50",
+            "description": "插件界面的主题色"
+          },
+          {
+            "key": "custom_headers",
+            "type": "textarea",
+            "label": "自定义请求头",
+            "placeholder": "每行一个Header，格式: Key: Value",
+            "rows": 5,
+            "description": "添加额外的HTTP请求头"
+          }
+        ]
+      }
+    ]
+  }
+}

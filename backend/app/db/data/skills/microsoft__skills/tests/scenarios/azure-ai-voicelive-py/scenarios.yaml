@@ -1,0 +1,341 @@
+# Test scenarios for azure-ai-voicelive-py skill evaluation
+# Each scenario tests a specific usage pattern against acceptance criteria
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  # Session creation with RequestSession
+  - name: basic_session_setup
+    prompt: |
+      Create a minimal async Voice Live connection that configures a session
+      using RequestSession with instructions, modalities, and Server VAD.
+      Use DefaultAzureCredential and update the session.
+    expected_patterns:
+      - 'from azure\.ai\.voicelive\.aio import connect'
+      - 'RequestSession'
+      - 'session\.update'
+      - 'DefaultAzureCredential'
+    forbidden_patterns:
+      - 'websockets\.connect'
+      - 'openai\.'
+    tags:
+      - basic
+      - session
+    mock_response: |
+      import os
+      import asyncio
+      from azure.ai.voicelive.aio import connect
+      from azure.ai.voicelive.models import RequestSession, Modality, ServerVad
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def main():
+          async with connect(
+              endpoint=os.environ["AZURE_COGNITIVE_SERVICES_ENDPOINT"],
+              credential=DefaultAzureCredential(),
+              model="gpt-4o-realtime-preview",
+              credential_scopes=["https://cognitiveservices.azure.com/.default"],
+          ) as conn:
+              session = RequestSession(
+                  instructions="You are a helpful assistant.",
+                  modalities=[Modality.TEXT, Modality.AUDIO],
+                  voice="alloy",
+                  turn_detection=ServerVad(
+                      threshold=0.5,
+                      prefix_padding_ms=300,
+                      silence_duration_ms=500,
+                  ),
+              )
+              await conn.session.update(session=session)
+              await conn.response.create()
+      
+      asyncio.run(main())
+
+  # API key authentication
+  - name: api_key_authentication
+    prompt: |
+      Connect to Voice Live using AzureKeyCredential and configure a session
+      with text+audio modalities.
+    expected_patterns:
+      - 'AzureKeyCredential'
+      - 'connect'
+      - 'async with'
+    forbidden_patterns:
+      - 'OpenAI'
+      - 'requests\.'
+    tags:
+      - authentication
+      - basic
+    mock_response: |
+      import os
+      import asyncio
+      from azure.core.credentials import AzureKeyCredential
+      from azure.ai.voicelive.aio import connect
+      
+      async def main():
+          async with connect(
+              endpoint=os.environ["AZURE_COGNITIVE_SERVICES_ENDPOINT"],
+              credential=AzureKeyCredential(os.environ["AZURE_COGNITIVE_SERVICES_KEY"]),
+              model="gpt-4o-realtime-preview",
+          ) as conn:
+              await conn.session.update(session={
+                  "instructions": "Be concise.",
+                  "modalities": ["text", "audio"],
+                  "voice": "alloy",
+              })
+      
+      asyncio.run(main())
+
+  # WebSocket event loop
+  - name: websocket_event_loop
+    prompt: |
+      Show how to iterate over Voice Live server events using async for and
+      stop when a response.done event arrives.
+    expected_patterns:
+      - 'async for event in conn'
+      - 'event\.type'
+      - 'response\.done'
+    forbidden_patterns:
+      - 'websockets\.connect'
+      - 'openai\.'
+    tags:
+      - websocket
+      - events
+    mock_response: |
+      import os
+      import asyncio
+      from azure.ai.voicelive.aio import connect
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def main():
+          async with connect(
+              endpoint=os.environ["AZURE_COGNITIVE_SERVICES_ENDPOINT"],
+              credential=DefaultAzureCredential(),
+              model="gpt-4o-realtime-preview",
+              credential_scopes=["https://cognitiveservices.azure.com/.default"],
+          ) as conn:
+              await conn.session.update(session={"modalities": ["text"]})
+              await conn.response.create()
+              async for event in conn:
+                  if event.type == "response.done":
+                      break
+      
+      asyncio.run(main())
+
+  # Audio streaming roundtrip
+  - name: audio_streaming_roundtrip
+    prompt: |
+      Stream base64 PCM16 audio to the input buffer and play audio deltas
+      from response.audio.delta events.
+    expected_patterns:
+      - 'input_audio_buffer\.append'
+      - 'base64\.b64encode'
+      - 'response\.audio\.delta'
+    forbidden_patterns:
+      - 'input_audio_buffer\.append\(audio=chunk'
+      - 'audio=chunk'
+    tags:
+      - audio
+      - streaming
+    mock_response: |
+      import os
+      import asyncio
+      import base64
+      from azure.ai.voicelive.aio import connect
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def read_audio_chunks():
+          for _ in range(2):
+              yield b"\x00\x01\x02\x03"
+      
+      async def play_audio(data: bytes) -> None:
+          _ = data
+      
+      async def main():
+          async with connect(
+              endpoint=os.environ["AZURE_COGNITIVE_SERVICES_ENDPOINT"],
+              credential=DefaultAzureCredential(),
+              model="gpt-4o-realtime-preview",
+              credential_scopes=["https://cognitiveservices.azure.com/.default"],
+          ) as conn:
+              await conn.session.update(session={
+                  "modalities": ["text", "audio"],
+                  "voice": "alloy",
+              })
+              async for chunk in read_audio_chunks():
+                  b64_audio = base64.b64encode(chunk).decode()
+                  await conn.input_audio_buffer.append(audio=b64_audio)
+              await conn.input_audio_buffer.commit()
+              await conn.response.create()
+              async for event in conn:
+                  if event.type == "response.audio.delta":
+                      await play_audio(base64.b64decode(event.delta))
+                  elif event.type == "response.done":
+                      break
+      
+      asyncio.run(main())
+
+  # Server VAD configuration
+  - name: server_vad_configuration
+    prompt: |
+      Configure Server VAD in the session with threshold, prefix padding,
+      and silence duration.
+    expected_patterns:
+      - 'turn_detection'
+      - 'server_vad'
+      - 'silence_duration_ms'
+    forbidden_patterns:
+      - 'turn_detection"\s*:\s*"server_vad"'
+      - '"vad"'
+    tags:
+      - vad
+      - session
+    mock_response: |
+      import os
+      import asyncio
+      from azure.ai.voicelive.aio import connect
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def main():
+          async with connect(
+              endpoint=os.environ["AZURE_COGNITIVE_SERVICES_ENDPOINT"],
+              credential=DefaultAzureCredential(),
+              model="gpt-4o-realtime-preview",
+              credential_scopes=["https://cognitiveservices.azure.com/.default"],
+          ) as conn:
+              await conn.session.update(session={
+                  "modalities": ["text", "audio"],
+                  "voice": "alloy",
+                  "turn_detection": {
+                      "type": "server_vad",
+                      "threshold": 0.5,
+                      "prefix_padding_ms": 300,
+                      "silence_duration_ms": 500,
+                  },
+              })
+      
+      asyncio.run(main())
+
+  # Manual turn-based conversation
+  - name: manual_turn_control
+    prompt: |
+      Demonstrate manual turn control by disabling VAD, appending audio,
+      committing the buffer, and triggering a response.
+    expected_patterns:
+      - 'turn_detection": None'
+      - 'input_audio_buffer\.commit'
+      - 'response\.create'
+    forbidden_patterns:
+      - 'server_vad'
+    tags:
+      - turn-based
+      - audio
+    mock_response: |
+      import os
+      import asyncio
+      import base64
+      from azure.ai.voicelive.aio import connect
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def main():
+          async with connect(
+              endpoint=os.environ["AZURE_COGNITIVE_SERVICES_ENDPOINT"],
+              credential=DefaultAzureCredential(),
+              model="gpt-4o-realtime-preview",
+              credential_scopes=["https://cognitiveservices.azure.com/.default"],
+          ) as conn:
+              await conn.session.update(session={
+                  "modalities": ["text", "audio"],
+                  "voice": "alloy",
+                  "turn_detection": None,
+              })
+              audio = base64.b64encode(b"\x00\x01").decode()
+              await conn.input_audio_buffer.append(audio=audio)
+              await conn.input_audio_buffer.commit()
+              await conn.response.create()
+      
+      asyncio.run(main())
+
+  # Turn-based text conversation items
+  - name: conversation_item_text_turn
+    prompt: |
+      Create a turn by sending a text conversation item and then triggering
+      a response.
+    expected_patterns:
+      - 'conversation\.item\.create'
+      - 'input_text'
+      - 'response\.create'
+    forbidden_patterns:
+      - 'threads\.create'
+      - 'messages\.create'
+    tags:
+      - turn-based
+      - conversation
+    mock_response: |
+      import os
+      import asyncio
+      from azure.ai.voicelive.aio import connect
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def main():
+          async with connect(
+              endpoint=os.environ["AZURE_COGNITIVE_SERVICES_ENDPOINT"],
+              credential=DefaultAzureCredential(),
+              model="gpt-4o-realtime-preview",
+              credential_scopes=["https://cognitiveservices.azure.com/.default"],
+          ) as conn:
+              await conn.session.update(session={"modalities": ["text", "audio"]})
+              await conn.conversation.item.create(item={
+                  "type": "message",
+                  "role": "user",
+                  "content": [{"type": "input_text", "text": "Hello"}],
+              })
+              await conn.response.create()
+      
+      asyncio.run(main())
+
+  # Avatar integration
+  - name: avatar_integration
+    prompt: |
+      Configure an avatar-enabled session and send a session.avatar.connect
+      event, handling session.avatar.connecting events.
+    expected_patterns:
+      - 'avatar'
+      - 'session\.avatar\.connect'
+      - 'ice_servers'
+    forbidden_patterns:
+      - 'webrtc\.connect'
+    tags:
+      - avatar
+      - websocket
+    mock_response: |
+      import os
+      import asyncio
+      from azure.ai.voicelive.aio import connect
+      from azure.identity.aio import DefaultAzureCredential
+      
+      async def main():
+          async with connect(
+              endpoint=os.environ["AZURE_COGNITIVE_SERVICES_ENDPOINT"],
+              credential=DefaultAzureCredential(),
+              model="gpt-4o-realtime-preview",
+              credential_scopes=["https://cognitiveservices.azure.com/.default"],
+          ) as conn:
+              await conn.session.update(session={
+                  "modalities": ["text", "audio", "avatar"],
+                  "voice": "alloy",
+                  "avatar": {
+                      "type": "video-avatar",
+                      "character": "lisa",
+                      "output_protocol": "webrtc",
+                  },
+              })
+              await conn.send({"type": "session.avatar.connect"})
+              async for event in conn:
+                  if event.type == "session.avatar.connecting":
+                      _ = event.ice_servers
+                      break
+      
+      asyncio.run(main())

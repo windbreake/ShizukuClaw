@@ -1,0 +1,234 @@
+# yaml-language-server: $schema=https://json.schemastore.org/any.json
+# Test scenarios for azure-security-keyvault-secrets-java skill evaluation
+
+config:
+  model: gpt-4
+  max_tokens: 2000
+  temperature: 0.3
+
+scenarios:
+  - name: client_creation
+    prompt: |
+      Create Java code to set up the Azure Key Vault SecretClient
+      using DefaultAzureCredential authentication.
+    expected_patterns:
+      - "SecretClientBuilder"
+      - "DefaultAzureCredentialBuilder"
+      - "vaultUrl"
+      - "buildClient"
+      - 'System\.getenv\('
+    forbidden_patterns:
+      - 'vaultUrl\("https://'
+    tags:
+      - basic
+      - authentication
+    mock_response: |
+      import com.azure.security.keyvault.secrets.SecretClient;
+      import com.azure.security.keyvault.secrets.SecretClientBuilder;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ClientSetup {
+          public static void main(String[] args) {
+              String vaultUrl = System.getenv("AZURE_KEYVAULT_URL");
+              
+              SecretClient secretClient = new SecretClientBuilder()
+                  .vaultUrl(vaultUrl)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              System.out.println("Client initialized successfully");
+          }
+      }
+
+  - name: secret_crud
+    prompt: |
+      Create a Java example that demonstrates CRUD operations for
+      secrets: set, get, update properties, and delete.
+    expected_patterns:
+      - "setSecret"
+      - "getSecret"
+      - "updateSecretProperties"
+      - "beginDeleteSecret"
+      - "KeyVaultSecret"
+      - "getValue"
+    tags:
+      - secrets
+      - crud
+    mock_response: |
+      import com.azure.security.keyvault.secrets.SecretClient;
+      import com.azure.security.keyvault.secrets.SecretClientBuilder;
+      import com.azure.security.keyvault.secrets.models.*;
+      import com.azure.core.util.polling.SyncPoller;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class SecretCRUD {
+          public static void main(String[] args) {
+              String vaultUrl = System.getenv("AZURE_KEYVAULT_URL");
+              
+              SecretClient secretClient = new SecretClientBuilder()
+                  .vaultUrl(vaultUrl)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              // Set (create/update) secret
+              KeyVaultSecret secret = secretClient.setSecret("database-password", "P@ssw0rd123!");
+              System.out.println("Secret set: " + secret.getName());
+              
+              // Get secret
+              KeyVaultSecret retrieved = secretClient.getSecret("database-password");
+              System.out.println("Secret value: " + retrieved.getValue());
+              
+              // Update properties
+              retrieved.getProperties().setEnabled(false);
+              secretClient.updateSecretProperties(retrieved.getProperties());
+              System.out.println("Secret disabled");
+              
+              // Delete secret
+              SyncPoller<DeletedSecret, Void> deletePoller = secretClient.beginDeleteSecret("database-password");
+              deletePoller.waitForCompletion();
+              System.out.println("Secret deleted");
+          }
+      }
+
+  - name: list_secrets
+    prompt: |
+      Create a Java example that lists all secrets in a Key Vault
+      and their versions.
+    expected_patterns:
+      - "listPropertiesOfSecrets"
+      - "listPropertiesOfSecretVersions"
+      - "SecretProperties"
+      - "getName"
+      - "getVersion"
+    tags:
+      - secrets
+      - listing
+    mock_response: |
+      import com.azure.security.keyvault.secrets.SecretClient;
+      import com.azure.security.keyvault.secrets.SecretClientBuilder;
+      import com.azure.security.keyvault.secrets.models.SecretProperties;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ListSecrets {
+          public static void main(String[] args) {
+              String vaultUrl = System.getenv("AZURE_KEYVAULT_URL");
+              
+              SecretClient secretClient = new SecretClientBuilder()
+                  .vaultUrl(vaultUrl)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              // List all secrets
+              System.out.println("=== All Secrets ===");
+              for (SecretProperties props : secretClient.listPropertiesOfSecrets()) {
+                  System.out.println("Secret: " + props.getName());
+                  System.out.println("  Enabled: " + props.isEnabled());
+                  System.out.println("  Created: " + props.getCreatedOn());
+              }
+              
+              // List versions of a secret
+              System.out.println("\n=== Versions of 'my-secret' ===");
+              for (SecretProperties version : secretClient.listPropertiesOfSecretVersions("my-secret")) {
+                  System.out.println("Version: " + version.getVersion());
+                  System.out.println("  Created: " + version.getCreatedOn());
+              }
+          }
+      }
+
+  - name: secret_with_options
+    prompt: |
+      Create a Java example that creates a secret with metadata
+      including content type, expiration, and tags.
+    expected_patterns:
+      - "setSecret"
+      - "KeyVaultSecret"
+      - "setProperties"
+      - "SecretProperties"
+      - "setContentType"
+      - "setExpiresOn"
+      - "setTags"
+    tags:
+      - secrets
+      - metadata
+    mock_response: |
+      import com.azure.security.keyvault.secrets.SecretClient;
+      import com.azure.security.keyvault.secrets.SecretClientBuilder;
+      import com.azure.security.keyvault.secrets.models.*;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+      import java.time.OffsetDateTime;
+      import java.util.Map;
+
+      public class SecretWithOptions {
+          public static void main(String[] args) {
+              String vaultUrl = System.getenv("AZURE_KEYVAULT_URL");
+              
+              SecretClient secretClient = new SecretClientBuilder()
+                  .vaultUrl(vaultUrl)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              KeyVaultSecret secret = secretClient.setSecret(
+                  new KeyVaultSecret("api-key", "sk_live_abc123xyz")
+                      .setProperties(new SecretProperties()
+                          .setContentType("text/plain")
+                          .setExpiresOn(OffsetDateTime.now().plusYears(1))
+                          .setEnabled(true)
+                          .setTags(Map.of(
+                              "environment", "production",
+                              "service", "payment-api"
+                          ))
+                      )
+              );
+              
+              System.out.println("Secret created: " + secret.getName());
+              System.out.println("Content type: " + secret.getProperties().getContentType());
+              System.out.println("Expires: " + secret.getProperties().getExpiresOn());
+          }
+      }
+
+  - name: error_handling
+    prompt: |
+      Create a Java example showing proper error handling for
+      Key Vault secret operations.
+    expected_patterns:
+      - "ResourceNotFoundException"
+      - "HttpResponseException"
+      - "try"
+      - "catch"
+      - "getStatusCode"
+    tags:
+      - error-handling
+    mock_response: |
+      import com.azure.security.keyvault.secrets.SecretClient;
+      import com.azure.security.keyvault.secrets.SecretClientBuilder;
+      import com.azure.security.keyvault.secrets.models.KeyVaultSecret;
+      import com.azure.core.exception.HttpResponseException;
+      import com.azure.core.exception.ResourceNotFoundException;
+      import com.azure.identity.DefaultAzureCredentialBuilder;
+
+      public class ErrorHandling {
+          public static void main(String[] args) {
+              String vaultUrl = System.getenv("AZURE_KEYVAULT_URL");
+              
+              SecretClient secretClient = new SecretClientBuilder()
+                  .vaultUrl(vaultUrl)
+                  .credential(new DefaultAzureCredentialBuilder().build())
+                  .buildClient();
+              
+              try {
+                  KeyVaultSecret secret = secretClient.getSecret("non-existent-secret");
+                  System.out.println("Value: " + secret.getValue());
+              } catch (ResourceNotFoundException e) {
+                  System.err.println("Secret not found");
+              } catch (HttpResponseException e) {
+                  int status = e.getResponse().getStatusCode();
+                  if (status == 403) {
+                      System.err.println("Access denied - check permissions");
+                  } else if (status == 429) {
+                      System.err.println("Rate limited - retry later");
+                  } else {
+                      System.err.println("HTTP error: " + status);
+                  }
+              }
+          }
+      }
