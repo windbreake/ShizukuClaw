@@ -1666,6 +1666,7 @@ class AIChatSystem:
         # 【DeepSeek V4 兼容】根据配置启用思考模式（流式）
         chat_settings = (CONFIG.get('work_mode', {}) or {}).get('chat_settings', {})
         enable_thinking = bool(chat_settings.get('deepseek_thinking_mode', False))
+        preferred_model = 'deepseek-reasoner' if enable_thinking else None
         
         if enable_thinking:
             # 【官方文档】DeepSeek 思考模式的正确格式
@@ -1676,6 +1677,7 @@ class AIChatSystem:
 
         stream, selected_model = self._create_chat_completion_stream_with_retry(
             api_kwargs,
+            preferred_model=preferred_model,
             allow_fallback=bool(call_policy.get('allow_model_fallback')),
         )
         self._set_last_call_policy(
@@ -1713,22 +1715,28 @@ class AIChatSystem:
                     if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
                         chunk_thinking = str(delta.reasoning_content)
                         reasoning_content += chunk_thinking
-                        
+
                         # 记录开始时间
                         if thinking_start_time is None:
                             import time
                             thinking_start_time = time.time()
-                        
+
                         # 实时记录思考内容到短期记忆（用于前端实时更新）
                         try:
                             self.agent_manager.record_action(
-                                "assistant", 
-                                f"思考:\n{reasoning_content.strip()}", 
-                                persona_filename=effective_persona_filename
+                                "assistant",
+                                f"思考:\n{reasoning_content.strip()}",
+                                persona_filename=effective_persona_filename,
                             )
                         except Exception:
                             pass
-                    
+
+                        # 向上层暴露实时思考增量，供前端做流式预览
+                        yield {
+                            'type': 'thinking_delta',
+                            'text': chunk_thinking,
+                        }
+
                     # 提取普通内容
                     content = getattr(delta, 'content', '')
                     piece = str(content or '')
@@ -1761,7 +1769,8 @@ class AIChatSystem:
         try:
             if self.db and not self._should_skip_chat_history(user_input, final_reply):
                 print(f"[INFO] Saving chat to database: user_input={user_input[:50]}..., reply_length={len(final_reply)}")
-                self.db.save_chat(user_input or "[图片]", final_reply, None, persona_filename=effective_persona_filename)
+                thinking_text = f"思考:\n{reasoning_content.strip()}" if reasoning_content else None
+                self.db.save_chat(user_input or "[图片]", final_reply, None, persona_filename=effective_persona_filename, thinking=thinking_text)
                 print(f"[INFO] Chat saved successfully")
             elif not self.db:
                 print(f"[WARNING] self.db is None, cannot save chat")
@@ -2776,6 +2785,7 @@ If the request involves modifying existing code, output the full modified file c
             # 【DeepSeek V4 兼容】根据配置启用思考模式
             chat_settings = (CONFIG.get('work_mode', {}) or {}).get('chat_settings', {})
             enable_thinking = bool(chat_settings.get('deepseek_thinking_mode', False))
+            preferred_model = 'deepseek-reasoner' if enable_thinking else None
             
             if enable_thinking:
                 # 【官方文档】DeepSeek 思考模式的正确格式
@@ -2790,6 +2800,7 @@ If the request involves modifying existing code, output the full modified file c
 
             response, selected_model = self._create_chat_completion_with_retry(
                 api_kwargs,
+                preferred_model=preferred_model,
                 allow_fallback=bool(call_policy.get('allow_model_fallback'))
             )
             self._set_last_call_policy(

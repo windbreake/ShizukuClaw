@@ -47,20 +47,6 @@
             height: 560px;
         }
 
-        .api-key-card .api-card-meta {
-            font-size: 0.78rem;
-            min-height: 1.2rem;
-        }
-
-        .api-key-card .api-model-select {
-            min-width: 180px;
-        }
-
-        .api-key-card .btn-api-mini {
-            padding: 0.18rem 0.42rem;
-            line-height: 1.15;
-        }
-
         .h-300 { height: 300px; }
         .h-250 { height: 250px; }
         .h-100 { height: 100px; }
@@ -112,35 +98,6 @@
             flex-direction: column;
             overflow: hidden;
             margin-bottom: 0;
-        }
-
-        .sandbox-main-layout {
-            flex: 1 1 auto;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 0.65rem;
-        }
-
-        .sandbox-persona-toolbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 0.75rem;
-            flex-wrap: wrap;
-        }
-
-        .sandbox-persona-toolbar .sandbox-persona-select-wrap {
-            display: flex;
-            align-items: center;
-            gap: 0.45rem;
-            min-width: min(420px, 100%);
-            flex: 1 1 360px;
-        }
-
-        .sandbox-persona-toolbar .form-select {
-            min-width: 220px;
-            max-width: 460px;
         }
         
         .card-footer {
@@ -212,14 +169,17 @@
             transform: rotate(180deg);
         }
 
+        #sandbox-top-controls,
         #sandbox-persona-preview-collapse {
             transform-origin: top center;
         }
 
+        #sandbox-top-controls.collapse.show,
         #sandbox-persona-preview-collapse.collapse.show {
             animation: sandboxPanelReveal 0.2s ease;
         }
 
+        #sandbox-top-controls.collapsing,
         #sandbox-persona-preview-collapse.collapsing {
             transition: height 0.24s ease, opacity 0.18s ease;
             opacity: 0.4;
@@ -257,265 +217,6 @@
             flex: 1 1 auto;
             min-height: 220px;
         }
-
-        .sandbox-memory-window {
-            position: fixed;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.38);
-            z-index: 2000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 16px;
-        }
-
-        .sandbox-memory-window-card {
-            width: min(760px, 96vw);
-            max-height: min(78vh, 720px);
-            overflow: hidden;
-            border-radius: 14px;
-            border: 1px solid #d9e5ff;
-            background: #f8fbff;
-            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.24);
-            display: flex;
-            flex-direction: column;
-        }
-
-        .sandbox-memory-meta {
-            font-size: 12px;
-            color: #5b6474;
-        }
-
-        .sandbox-memory-list {
-            margin: 0;
-            padding: 0;
-            list-style: none;
-            overflow: auto;
-            display: grid;
-            gap: 8px;
-            max-height: min(56vh, 520px);
-        }
-
-        .sandbox-memory-item {
-            border: 1px solid #e6edf8;
-            border-radius: 10px;
-            background: #ffffff;
-            padding: 9px 10px;
-            display: grid;
-            grid-template-columns: 26px minmax(0, 1fr);
-            gap: 8px;
-            align-items: start;
-        }
-
-        .sandbox-memory-item-main {
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .sandbox-memory-item-actions {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-        }
-
-        .sandbox-memory-item-actions .btn {
-            padding: 2px 8px;
-            line-height: 1.2;
-        }
-
-        .sandbox-memory-item-index {
-            width: 24px;
-            height: 24px;
-            border-radius: 999px;
-            background: #e7f0ff;
-            color: #21569e;
-            font-size: 12px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .sandbox-memory-item-text {
-            white-space: pre-wrap;
-            word-break: break-word;
-            font-size: 13px;
-            color: #1f2937;
-            line-height: 1.45;
-        }
-
-        .sandbox-memory-item-text.is-collapsed {
-            max-height: 56px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .sandbox-memory-item-text.is-collapsed::after {
-            content: '';
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            height: 18px;
-            background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #ffffff 80%);
-            pointer-events: none;
-        }
-
-        .sandbox-memory-empty {
-            margin: 0;
-            border: 1px dashed #d6e3fb;
-            border-radius: 10px;
-            padding: 14px;
-            background: #ffffff;
-            font-size: 13px;
-            color: #6b7280;
-            text-align: center;
-        }
-
-        .sandbox-memory-btn {
-            position: relative;
-            border: 1px solid #c7d2fe;
-            border-radius: 999px;
-            padding: 0.45rem 0.8rem;
-            background: linear-gradient(135deg, #eff6ff 0%, #eef2ff 48%, #f5f3ff 100%);
-            color: #334155;
-            font-weight: 600;
-            letter-spacing: 0.01em;
-            box-shadow: 0 6px 18px rgba(79, 70, 229, 0.12);
-            transition: transform 0.2s ease, box-shadow 0.22s ease, border-color 0.22s ease, color 0.2s ease;
-            overflow: hidden;
-            isolation: isolate;
-        }
-
-        .sandbox-memory-btn::before {
-            content: '';
-            position: absolute;
-            inset: -1px;
-            background: linear-gradient(120deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
-            opacity: 0;
-            transition: opacity 0.2s ease;
-            z-index: -1;
-        }
-
-        .sandbox-memory-btn:hover {
-            transform: translateY(-1px);
-            border-color: #a5b4fc;
-            color: #1e293b;
-            box-shadow: 0 10px 24px rgba(79, 70, 229, 0.18);
-        }
-
-        .sandbox-memory-btn:hover::before {
-            opacity: 1;
-        }
-
-        .sandbox-memory-btn:focus-visible {
-            outline: none;
-            border-color: #818cf8;
-            box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.28), 0 10px 24px rgba(79, 70, 229, 0.18);
-        }
-
-        .sandbox-memory-btn.is-active {
-            border-color: #7c3aed;
-            color: #ffffff;
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 52%, #9333ea 100%);
-            box-shadow: 0 12px 28px rgba(91, 33, 182, 0.34);
-        }
-
-        .sandbox-memory-btn.is-active i {
-            color: #f5f3ff;
-        }
-
-        .sandbox-memory-btn .sandbox-memory-btn-text {
-            position: relative;
-            z-index: 1;
-        }
-
-        /* DeepSeek Thinking Mode Bar for Sandbox */
-        .sandbox-thinking-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            padding: 6px 10px;
-            border-radius: 6px;
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-            border: 1px solid #e2e8f0;
-            font-size: 0.85rem;
-            transition: all 0.2s ease;
-        }
-        .sandbox-thinking-bar:hover {
-            border-color: #cbd5e1;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-        }
-        .sandbox-thinking-label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            user-select: none;
-            margin: 0;
-        }
-        .sandbox-thinking-label input[type="checkbox"] {
-            appearance: none;
-            -webkit-appearance: none;
-            width: 36px;
-            height: 20px;
-            background: #cbd5e1;
-            border-radius: 10px;
-            position: relative;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            outline: none;
-        }
-        .sandbox-thinking-label input[type="checkbox"]::after {
-            content: '';
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 16px;
-            height: 16px;
-            background: #fff;
-            border-radius: 50%;
-            transition: all 0.3s ease;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-        }
-        .sandbox-thinking-label input[type="checkbox"]:checked {
-            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-        }
-        .sandbox-thinking-label input[type="checkbox"]:checked::after {
-            left: 18px;
-        }
-        .sandbox-thinking-label input[type="checkbox"]:hover {
-            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
-        }
-        .sandbox-thinking-text {
-            color: #475569;
-            font-weight: 500;
-            font-size: 0.85rem;
-            letter-spacing: 0.01em;
-        }
-        .sandbox-thinking-select {
-            padding: 3px 10px;
-            border: 1px solid #e2e8f0;
-            border-radius: 5px;
-            background: #fff;
-            color: #475569;
-            font-size: 0.82rem;
-            cursor: pointer;
-            outline: none;
-            min-width: 70px;
-            transition: all 0.2s ease;
-        }
-        .sandbox-thinking-select:hover {
-            border-color: #94a3b8;
-            background: #f8fafc;
-        }
-        .sandbox-thinking-select:focus {
-            border-color: #0ea5e9;
-            box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.1);
-        }
         
         .chat-box-body .chat-row {
             gap: 2px;
@@ -525,6 +226,44 @@
             max-width: 85%;
             padding: 8px 12px;
             word-break: break-word;
+        }
+
+        .bot-tts-spoken-wrap {
+            max-width: 85%;
+            margin-top: 6px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.04);
+            font-size: 0.85rem;
+            line-height: 1.45;
+        }
+        .bot-tts-spoken-label {
+            font-size: 0.7rem;
+            color: #6c757d;
+            margin-bottom: 2px;
+        }
+        .bot-tts-spoken-text {
+            color: #333;
+            word-break: break-word;
+        }
+        .bot-tts-audio-wrap {
+            max-width: 85%;
+            margin-top: 4px;
+        }
+        .bot-tts-audio-wrap.is-queue-playing {
+            outline: 1px solid rgba(13, 110, 253, 0.45);
+            border-radius: 8px;
+        }
+        .bot-tts-seq-label {
+            display: block;
+            font-size: 0.7rem;
+            color: #6c757d;
+            margin-bottom: 2px;
+        }
+        .bot-tts-hint {
+            display: block;
+            font-size: 0.68rem;
+            color: #adb5bd;
         }
         
         .chat-box-body .message img {
@@ -737,6 +476,31 @@
             gap: 0.6rem;
         }
 
+        .thinking-inline-panel {
+            border: 1px solid #dbe4ff;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        .thinking-inline-panel > summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: #2563eb;
+            background: #f4f8ff;
+            user-select: none;
+        }
+
+        .thinking-inline-panel > summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .thinking-inline-panel[open] > summary {
+            background: #eaf2ff;
+        }
+
         .trace-note {
             font-size: 0.76rem;
             color: #64748b;
@@ -823,6 +587,89 @@
         .typing-indicator-hidden { display: none; }
         .emoji-picker-popover { bottom: 80px; left: 10px; width: 300px; z-index: 1050; }
         .emoji-list-scroll { max-height: 200px; overflow-y: auto; }
+        .sandbox-chat-controls-row {
+            gap: 0.75rem;
+        }
+        .sandbox-chat-toggle-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 1rem;
+        }
+        .sandbox-chat-toggle-group .form-check {
+            margin: 0;
+        }
+        .sandbox-chat-input-group {
+            display: flex;
+            align-items: stretch;
+            gap: 0;
+        }
+        .sandbox-chat-input-actions {
+            display: inline-flex;
+            align-items: stretch;
+            flex: 0 0 auto;
+        }
+        .sandbox-chat-input-actions .btn {
+            min-width: 52px;
+            border-radius: 0;
+        }
+        .sandbox-chat-input-actions .btn:first-child {
+            border-top-left-radius: 0.5rem;
+            border-bottom-left-radius: 0.5rem;
+        }
+        .sandbox-chat-input-actions .btn:last-child {
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+        .sandbox-chat-input-box {
+            flex: 1 1 auto;
+            min-width: 0;
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+            resize: none;
+            min-height: 48px;
+        }
+        .sandbox-chat-send-btn {
+            flex: 0 0 auto;
+            min-width: 92px;
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+        .sandbox-chat-send-btn .fa-paper-plane {
+            font-size: 0.95em;
+        }
+        @media (max-width: 768px) {
+            .sandbox-chat-controls-row {
+                align-items: flex-start !important;
+            }
+            .sandbox-chat-toggle-group {
+                gap: 0.5rem;
+            }
+            .sandbox-chat-input-group {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            .sandbox-chat-input-actions {
+                width: 100%;
+                order: 1;
+            }
+            .sandbox-chat-input-box {
+                flex-basis: 100%;
+                order: 2;
+                border-top-left-radius: 0.5rem;
+                border-bottom-left-radius: 0.5rem;
+                border-top-right-radius: 0.5rem;
+                border-bottom-right-radius: 0.5rem;
+            }
+            .sandbox-chat-send-btn {
+                width: 100%;
+                order: 3;
+                border-top-left-radius: 0.5rem;
+                border-bottom-left-radius: 0.5rem;
+            }
+        }
         .sql-result-box {
             min-height: 80px;
             max-height: 300px;
@@ -867,184 +714,95 @@
             font-size: 0.9rem;
         }
         .onebot-ws-url { font-weight: 500; color: #0d6efd; }
-        /* AI 操作流程 - 简约现代风格 */
         .ai-trace-panel {
-            margin-top: 8px;
-            border: none;
-            border-radius: 8px;
-            background: transparent;
+            margin-top: 4px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            background: #f8f9fa;
             width: 100%;
-            max-width: 500px;
+            max-width: 400px;
         }
-        
         .ai-trace-panel > summary {
             cursor: pointer;
-            padding: 8px 12px;
-            font-size: 12px;
-            color: #64748b;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            -webkit-user-select: none;
-            user-select: none;
-            background: #f8fafc;
-            border-radius: 6px;
-            font-weight: 500;
-            border: 1px solid #e2e8f0;
-            transition: all 0.2s ease;
-        }
-        
-        .ai-trace-panel > summary:hover {
-            background: #f1f5f9;
-            border-color: #cbd5e1;
-        }
-        
-        .ai-trace-panel[open] > summary {
-            background: #eff6ff;
-            color: #0ea5e9;
-            border-color: #bae6fd;
-            border-bottom-left-radius: 0;
-            border-bottom-right-radius: 0;
-        }
-        
-        .ai-trace-panel > summary::marker {
-            display: none;
-        }
-        
-        .ai-trace-panel > summary::-webkit-details-marker {
-            display: none;
-        }
-        
-        .ai-trace-icon {
-            width: 16px;
-            height: 16px;
-            flex-shrink: 0;
-        }
-        
-        .ai-trace-title {
-            flex: 1;
-        }
-        
-        .ai-trace-time {
+            padding: 6px 10px;
             font-size: 11px;
-            color: #94a3b8;
-            font-weight: 400;
-        }
-        
-        .ai-trace-list {
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            max-height: 300px;
-            overflow-y: auto;
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-top: none;
-            border-bottom-left-radius: 6px;
-            border-bottom-right-radius: 6px;
-        }
-        
-        .ai-trace-list::-webkit-scrollbar {
-            width: 4px;
-        }
-        
-        .ai-trace-list::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        
-        .ai-trace-list::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 2px;
-        }
-        
-        .ai-trace-item {
-            border: none;
-            border-radius: 6px;
-            background: #f8fafc;
-            font-size: 12px;
-            transition: all 0.2s ease;
-        }
-        
-        .ai-trace-item:hover {
-            background: #f1f5f9;
-        }
-        
-        .ai-trace-item-head {
-            padding: 8px 10px;
-            border-bottom: none;
-            font-size: 11px;
-            color: #64748b;
+            color: #495057;
             display: flex;
             align-items: center;
             gap: 6px;
+            -webkit-user-select: none;
+            user-select: none;
+            background: #f0f0f0;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .ai-trace-panel[open] > summary {
+            background: #e7f3ff;
+            color: #0066cc;
+        }
+        .ai-trace-list {
+            padding: 6px 8px;
+            display: grid;
+            gap: 6px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .ai-trace-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .ai-trace-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .ai-trace-list::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 2px;
+        }
+        .ai-trace-list::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+        .ai-trace-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background: #fff;
+            font-size: 11px;
+        }
+        .ai-trace-item-head {
+            padding: 4px 6px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 10px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 4px;
             flex-wrap: wrap;
             font-weight: 500;
         }
-        
         .ai-trace-item-body {
             margin: 0;
-            padding: 8px 10px;
-            font-size: 11px;
-            line-height: 1.5;
+            padding: 4px 6px;
+            font-size: 10px;
+            line-height: 1.3;
             white-space: pre-wrap;
             word-break: break-word;
-            color: #475569;
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            max-height: 150px;
+            color: #333;
+            font-family: 'Consolas', 'Courier New', monospace;
+            max-height: 120px;
             overflow-y: auto;
-            background: #ffffff;
-            border-radius: 4px;
-            margin: 0 8px 8px 8px;
         }
-        
         .ai-trace-item-body::-webkit-scrollbar {
             width: 3px;
         }
-        
         .ai-trace-item-body::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
+            background: #ddd;
             border-radius: 1px;
         }
-        
-        /* 思考内容特殊样式 */
-        .ai-trace-item.thinking {
-            background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
-            border-left: 3px solid #0ea5e9;
-        }
-        
-        .ai-trace-item.thinking .ai-trace-item-head {
-            color: #0284c7;
-        }
-        
-        /* 工具调用特殊样式 */
-        .ai-trace-item.tool-call {
-            background: linear-gradient(135deg, #f0fdf4 0%, #f0fdf4 100%);
-            border-left: 3px solid #10b981;
-        }
-        
-        .ai-trace-item.tool-call .ai-trace-item-head {
-            color: #059669;
-        }
-        
-        /* 工具结果特殊样式 */
-        .ai-trace-item.tool-result {
-            background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
-            border-left: 3px solid #eab308;
-        }
-        
-        .ai-trace-item.tool-result .ai-trace-item-head {
-            color: #ca8a04;
-        }
-        
         .ai-trace-badge {
-            font-size: 10px;
-            color: #64748b;
-            border: 1px solid #e2e8f0;
+            font-size: 11px;
+            color: #6c757d;
+            border: 1px solid #ced4da;
             border-radius: 999px;
-            padding: 2px 8px;
-            background: #ffffff;
-            font-weight: 500;
+            padding: 0 6px;
+            background: #fff;
         }
 
         /* Main content area - flex layout */
@@ -1331,128 +1089,123 @@
 
         <!-- Sandbox Chat Tab -->
         <div class="tab-pane fade" id="v-sandbox" role="tabpanel">
-            <h3 class="mb-3">💬 沙箱对话测试</h3>
-
-            <div class="alert alert-warning d-flex justify-content-between align-items-center py-2 mb-3" role="alert">
-                <div>
-                    <i class="fas fa-shield-alt me-2"></i>
-                    沙箱工作模式：<span id="sandbox-workmode-badge" class="badge bg-secondary">关闭</span>
-                    <small class="text-muted ms-2">仅影响沙箱会话，不影响其他前端。</small>
-                </div>
-                <button id="sandbox-workmode-toggle-btn" class="btn btn-sm btn-outline-danger" onclick="onSandboxWorkModeClick()">开启沙箱工作模式</button>
+            <div class="d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">💬 沙箱对话测试</h3>
+                <button class="btn sandbox-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#sandbox-top-controls" aria-expanded="false" aria-controls="sandbox-top-controls">
+                    <i class="fas fa-sliders-h me-1"></i> 顶部设置
+                    <i class="fas fa-chevron-down ms-1"></i>
+                </button>
             </div>
 
-            <div class="sandbox-main-layout">
-                <div class="sandbox-persona-toolbar">
-                    <div class="sandbox-persona-select-wrap">
-                        <span class="small text-muted"><i class="fas fa-id-card me-1"></i>角色卡选择</span>
-                        <select id="sandbox-persona-select" class="form-select form-select-sm" onchange="onSandboxPersonaChange()" title="选择角色卡" aria-label="选择角色卡">
-                            <option value="">加载中...</option>
-                        </select>
-                        <button class="btn btn-sm btn-outline-secondary" type="button" onclick="loadSandboxPersonas(true)" title="刷新角色卡列表">
-                            <i class="fas fa-sync"></i>
-                        </button>
+            <div id="sandbox-top-controls" class="collapse">
+                <div class="alert alert-warning d-flex justify-content-between align-items-center py-2 mt-2" role="alert">
+                    <div>
+                        <i class="fas fa-shield-alt me-2"></i>
+                        沙箱工作模式：<span id="sandbox-workmode-badge" class="badge bg-secondary">关闭</span>
+                        <small class="text-muted ms-2">仅影响沙箱会话，不影响其他前端。</small>
                     </div>
-                    <button class="btn sandbox-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#sandbox-persona-preview-collapse" aria-expanded="false" aria-controls="sandbox-persona-preview-collapse">
-                        <i class="fas fa-address-card me-1"></i> 角色卡预览
-                        <i class="fas fa-chevron-down ms-1"></i>
-                    </button>
+                    <button id="sandbox-workmode-toggle-btn" class="btn btn-sm btn-outline-danger" onclick="onSandboxWorkModeClick()">开启沙箱工作模式</button>
                 </div>
-
-                <div id="sandbox-persona-preview-collapse" class="collapse">
-                    <div class="card border-0 sandbox-preview-card">
-                        <div class="card-header py-2"><i class="fas fa-id-card me-2 text-primary"></i>角色卡预览</div>
-                        <div class="card-body py-2">
-                            <div class="row g-2" id="sandbox-persona-cards">
-                                <div class="col-12 text-muted small">加载中...</div>
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-body py-2">
+                        <div class="row g-2 align-items-center">
+                            <div class="col-md-6">
+                                <label class="form-label small mb-1">当前角色卡</label>
+                                <select id="sandbox-persona-select" class="form-select form-select-sm" onchange="onSandboxPersonaChange()" title="选择当前角色卡" aria-label="选择当前角色卡">
+                                    <option value="">加载中...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-1">对话界面风格</label>
+                                <div id="sandbox-persona-theme" class="small text-muted">默认</div>
+                            </div>
+                            <div class="col-md-2 d-grid">
+                                <button class="btn btn-outline-secondary btn-sm mt-md-4" onclick="loadSandboxPersonas()"><i class="fas fa-sync me-1"></i> 刷新</button>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="card h-100 shadow-sm border-0 d-flex flex-column sandbox-chat-card">
-                    <div id="chat-box" class="card-body bg-light overflow-auto p-4 chat-box-body">
-                        <div class="chat-row bot-row" data-message-id="msg-initial-bot">
-                            <div class="message bot-message">喵~我是小雫，有什么可以帮你的吗？</div>
-                            <div class="message-meta">
-                                <span class="message-author">小雫</span>
-                                <span class="message-time">刚刚</span>
-                            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="small text-muted"><i class="fas fa-id-card me-1"></i>角色卡预览区域</div>
+                <button class="btn sandbox-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#sandbox-persona-preview-collapse" aria-expanded="false" aria-controls="sandbox-persona-preview-collapse">
+                    <i class="fas fa-address-card me-1"></i> 角色卡预览
+                    <i class="fas fa-chevron-down ms-1"></i>
+                </button>
+            </div>
+
+            <div id="sandbox-persona-preview-collapse" class="collapse">
+                <div class="card border-0 mb-3 sandbox-preview-card">
+                    <div class="card-header py-2"><i class="fas fa-id-card me-2 text-primary"></i>角色卡预览</div>
+                    <div class="card-body py-2">
+                        <div class="row g-2" id="sandbox-persona-cards">
+                            <div class="col-12 text-muted small">加载中...</div>
                         </div>
                     </div>
-                    <!-- Input Area -->
-                    <div class="card-footer bg-white border-top p-3 position-relative">
-                        <!-- File Previews -->
-                        <div id="file-preview-area" class="mb-2 d-flex flex-wrap gap-2"></div>
-                        
-                        <!-- Typing Indicator -->
-                        <div id="typing-indicator" class="text-muted small mb-2 typing-indicator-hidden">
-                            <i class="fas fa-pen-nib fa-spin me-1 text-primary"></i> 小雫正在回复...
+                </div>
+            </div>
+            <div class="card h-100 shadow-sm border-0 d-flex flex-column sandbox-chat-card">
+                <div id="chat-box" class="card-body bg-light overflow-auto p-4 chat-box-body">
+                    <div class="chat-row bot-row" data-message-id="msg-initial-bot">
+                        <div class="message bot-message">喵~我是小雫，有什么可以帮你的吗？</div>
+                        <div class="message-meta">
+                            <span class="message-author">小雫</span>
+                            <span class="message-time">刚刚</span>
                         </div>
+                    </div>
+                </div>
+                <!-- Input Area -->
+                <div class="card-footer bg-white border-top p-3 position-relative">
+                    <!-- File Previews -->
+                    <div id="file-preview-area" class="mb-2 d-flex flex-wrap gap-2"></div>
+                    
+                    <!-- Typing Indicator -->
+                    <div id="typing-indicator" class="text-muted small mb-2 typing-indicator-hidden">
+                        <i class="fas fa-pen-nib fa-spin me-1 text-primary"></i> 小雫正在回复...
+                    </div>
 
-                        <div class="input-group">
+                    <div class="d-flex justify-content-between align-items-center mb-2 sandbox-chat-controls-row flex-wrap">
+                        <div class="sandbox-chat-toggle-group">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="sandbox-chat-thinking-enabled" onchange="onSandboxChatThinkingToggle()">
+                                <label class="form-check-label" for="sandbox-chat-thinking-enabled">思考模式</label>
+                            </div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="sandbox-chat-tts-enabled" checked onchange="onSandboxChatTtsToggle()">
+                                <label class="form-check-label" for="sandbox-chat-tts-enabled">回复自动播放语音（译日 → SoVITS，无需工作模式）</label>
+                            </div>
+                        </div>
+                        <span id="sandbox-chat-tts-status" class="small text-muted ms-auto"></span>
+                    </div>
+
+                    <div class="sandbox-chat-input-group">
+                        <div class="sandbox-chat-input-actions">
                             <button class="btn btn-outline-secondary" type="button" onclick="triggerFileUpload()" title="Upload File/Image">
                                 <i class="fas fa-paperclip"></i>
                             </button>
                             <button class="btn btn-outline-secondary" type="button" onclick="toggleEmojiPicker()" title="Emoji">
                                 <i class="far fa-smile"></i>
                             </button>
-                            <input type="file" id="file-upload" class="d-none" multiple title="上传文件" aria-label="上传文件">
-                            <textarea id="chat-input" class="form-control" placeholder="输入消息...（Enter 发送，Shift+Enter 换行）" autocomplete="off" lang="zh-CN" spellcheck="false" rows="2"></textarea>
-                            <button id="sandbox-memory-btn" class="btn sandbox-memory-btn" type="button" onclick="toggleSandboxMemoryPanel()" title="查看当前角色长期记忆" aria-pressed="false">
-                                <i class="fas fa-brain me-1"></i><span class="sandbox-memory-btn-text">记忆</span>
-                            </button>
-                            <button class="btn btn-primary px-4" type="button" onclick="sendChat()">
-                                <i class="fas fa-paper-plane me-1"></i> 发送
-                            </button>
                         </div>
-
-                        <!-- DeepSeek Thinking Mode Toggle -->
-                        <div class="sandbox-thinking-bar mt-2">
-                            <label class="sandbox-thinking-label" title="启用后，DeepSeek 模型会输出思考过程">
-                                <input type="checkbox" id="sandbox-deepseek-thinking-toggle">
-                                <span class="sandbox-thinking-text">💭 思考模式</span>
-                            </label>
-                            <select id="sandbox-deepseek-reasoning-effort" class="sandbox-thinking-select" title="选择思考强度">
-                                <option value="high">High</option>
-                                <option value="max">Max</option>
-                            </select>
-                        </div>
-
-                        <!-- Emoji Picker Popover -->
-                        <div id="emoji-picker" class="d-none card position-absolute shadow-lg emoji-picker-popover">
-                            <div class="card-header bg-light py-2 small fw-bold d-flex justify-content-between align-items-center">
-                                <span>Emoji Picker</span>
-                                <button type="button" class="btn-close btn-close-sm" onclick="toggleEmojiPicker()" title="关闭表情面板" aria-label="关闭表情面板"></button>
-                            </div>
-                            <div class="card-body p-2">
-                                <div id="emoji-list" class="d-flex flex-wrap gap-1 justify-content-center emoji-list-scroll">
-                                    <!-- Emojis injected via JS -->
-                                </div>
-                            </div>
-                        </div>
+                        <input type="file" id="file-upload" class="d-none" multiple title="上传文件" aria-label="上传文件">
+                        <textarea id="chat-input" class="form-control sandbox-chat-input-box" placeholder="输入消息...（Enter 发送，Shift+Enter 换行）" autocomplete="off" lang="zh-CN" spellcheck="false" rows="2"></textarea>
+                        <button class="btn btn-primary sandbox-chat-send-btn" type="button" onclick="sendChat()">
+                            <i class="fas fa-paper-plane me-1"></i> 发送
+                        </button>
                     </div>
-                </div>
 
-                <div id="sandbox-memory-window" class="sandbox-memory-window d-none" role="dialog" aria-modal="true" aria-label="长期记忆窗口" onclick="onSandboxMemoryWindowBackdropClick(event)">
-                    <div class="sandbox-memory-window-card p-2 p-md-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <div class="small fw-semibold text-primary">
-                                <i class="fas fa-brain me-1"></i> 长期记忆
-                            </div>
-                            <div class="d-flex gap-1">
-                                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="loadSandboxLongTermMemory(true)" title="刷新长期记忆">
-                                    <i class="fas fa-sync"></i>
-                                </button>
-                                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="hideSandboxMemoryWindow()" title="关闭窗口">
-                                    <i class="fas fa-times"></i>
-                                </button>
+                    <!-- Emoji Picker Popover -->
+                    <div id="emoji-picker" class="d-none card position-absolute shadow-lg emoji-picker-popover">
+                        <div class="card-header bg-light py-2 small fw-bold d-flex justify-content-between align-items-center">
+                            <span>Emoji Picker</span>
+                            <button type="button" class="btn-close btn-close-sm" onclick="toggleEmojiPicker()" title="关闭表情面板" aria-label="关闭表情面板"></button>
+                        </div>
+                        <div class="card-body p-2">
+                            <div id="emoji-list" class="d-flex flex-wrap gap-1 justify-content-center emoji-list-scroll">
+                                <!-- Emojis injected via JS -->
                             </div>
                         </div>
-                        <div id="sandbox-memory-meta" class="sandbox-memory-meta mb-2">角色: -</div>
-                        <ul id="sandbox-memory-list" class="sandbox-memory-list">
-                            <li class="sandbox-memory-empty">点击“记忆”按钮加载内容...</li>
-                        </ul>
                     </div>
                 </div>
             </div>
@@ -1526,9 +1279,6 @@
                                         <div class="d-flex gap-2 flex-wrap mt-2">
                                             <button type="button" class="btn btn-outline-primary btn-sm" onclick="addApiKeySlot()">
                                                 <i class="fas fa-plus"></i> 添加服务密钥
-                                            </button>
-                                            <button type="button" class="btn btn-outline-info btn-sm" onclick="showApiTemplatesInfo()">
-                                                <i class="fas fa-info-circle"></i> 查看可用类型
                                             </button>
                                             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="runDiagnosis()">
                                                 <i class="fas fa-wave-square me-1"></i> 检查服务可用性
@@ -1675,18 +1425,6 @@
                                                 <input class="form-check-input" type="checkbox" id="chat-settings-sandbox-trace-collapsed" checked>
                                                 <label class="form-check-label" for="chat-settings-sandbox-trace-collapsed">默认折叠流程详情</label>
                                             </div>
-                                            <div class="form-check form-switch mb-2">
-                                                <input class="form-check-input" type="checkbox" id="chat-settings-deepseek-thinking-mode">
-                                                <label class="form-check-label" for="chat-settings-deepseek-thinking-mode">DeepSeek 思考模式（热启动）</label>
-                                            </div>
-                                            <div class="mt-2">
-                                                <label class="form-label small" for="chat-settings-deepseek-reasoning-effort">思考强度</label>
-                                                <select class="form-select form-select-sm" id="chat-settings-deepseek-reasoning-effort">
-                                                    <option value="high">High（高）</option>
-                                                    <option value="max">Max（最高）</option>
-                                                </select>
-                                                <div class="form-text">仅对 DeepSeek V4/R1/Reasoner 模型生效，启用后会在 API 调用时添加 thinking 参数。</div>
-                                            </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-check form-switch mb-2">
@@ -1704,11 +1442,6 @@
                                             <div class="mt-2">
                                                 <label class="form-label small" for="chat-settings-sandbox-trace-retention-days">临时流程文件保留天数（0 为不清理）</label>
                                                 <input class="form-control form-control-sm" type="number" min="0" max="3650" step="1" id="chat-settings-sandbox-trace-retention-days" value="7">
-                                            </div>
-                                            <div class="mt-2">
-                                                <label class="form-label small" for="chat-settings-long-term-refresh-interval">长期记忆自动提炼间隔（对话轮次）</label>
-                                                <input class="form-control form-control-sm" type="number" min="1" max="200" step="1" id="chat-settings-long-term-refresh-interval" value="8">
-                                                <div class="form-text">每累计 N 轮有效对话（assistant 回复）触发一次长期记忆自动提炼。</div>
                                             </div>
                                         </div>
                                     </div>
@@ -2165,39 +1898,6 @@
                 </div>
                 <div class="card-body bg-light">
                     <div id="plan-viewer" class="bg-white p-3 border rounded plan-viewer-box"></div>
-                    <div class="row g-3 mt-1">
-                        <div class="col-md-4">
-                            <div class="bg-white p-3 border rounded h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="fw-semibold"><i class="fas fa-brain me-2 text-primary"></i>长期记忆状态</span>
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="loadLongTermMemoryPanel(true)" title="刷新长期记忆"><i class="fas fa-sync"></i></button>
-                                </div>
-                                <div class="mb-2">
-                                    <label class="form-label small mb-1" for="agent-longterm-persona-select">角色</label>
-                                    <select id="agent-longterm-persona-select" class="form-select form-select-sm" onchange="loadLongTermMemoryPanel()">
-                                        <option value="">当前激活角色</option>
-                                    </select>
-                                </div>
-                                <div class="small text-muted">距自动提炼</div>
-                                <div class="fw-bold" id="agent-longterm-turns">-</div>
-                                <div class="small text-muted mt-2">累计对话轮次</div>
-                                <div class="fw-bold" id="agent-longterm-total">-</div>
-                                <div class="small text-muted mt-2">自动提炼阈值</div>
-                                <div class="fw-bold" id="agent-longterm-interval">-</div>
-                                <div class="small text-muted mt-2">上次提炼时间</div>
-                                <div class="fw-bold small" id="agent-longterm-updatedat">-</div>
-                            </div>
-                        </div>
-                        <div class="col-md-8">
-                            <div class="bg-white p-3 border rounded h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="fw-semibold"><i class="fas fa-book me-2 text-info"></i>长期记忆内容</span>
-                                    <span class="text-muted small" id="agent-longterm-persona-label">角色: -</span>
-                                </div>
-                                <pre id="agent-longterm-content" class="small mb-0" style="white-space: pre-wrap; max-height: 320px; overflow: auto;">加载中...</pre>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -2316,17 +2016,7 @@
                     <h3 class="mb-1"><i class="fas fa-plug me-2"></i>MCP 系统</h3>
                     <p class="text-muted small mb-0">管理 MCP 服务器、资源和工具定义，并支持市场一键接入。</p>
                 </div>
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <div class="form-check form-switch m-0" title="批量启用/禁用所有 MCP 服务">
-                        <input id="mcp-framework-toggle" class="form-check-input" type="checkbox" onchange="toggleAllMcpServersEnabled(this.checked)">
-                        <label class="form-check-label small" for="mcp-framework-toggle">MCP 总开关</label>
-                    </div>
-                    <div class="btn-group btn-group-sm" role="group" aria-label="mcp view mode">
-                        <button id="mcp-view-card-btn" class="btn btn-outline-primary" type="button" onclick="setMcpViewMode('card')"><i class="fas fa-th-large me-1"></i>卡片</button>
-                        <button id="mcp-view-table-btn" class="btn btn-outline-secondary" type="button" onclick="setMcpViewMode('table')"><i class="fas fa-table me-1"></i>表格</button>
-                    </div>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="loadMcpManager()"><i class="fas fa-sync me-1"></i> 刷新</button>
-                </div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadMcpManager()"><i class="fas fa-sync me-1"></i> 刷新</button>
             </div>
             <div class="row g-4">
                 <div class="col-lg-4">
@@ -2425,26 +2115,15 @@
                         </div>
                         </div>
                     </div>
-                    <div class="card shadow-sm border-0 mb-3" id="mcp-cards-panel">
-                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                            <span><i class="fas fa-th-large me-2 text-primary"></i>卡片视图</span>
-                            <span class="badge bg-primary" id="mcp-cards-count-badge">0</span>
-                        </div>
-                        <div class="card-body">
-                            <div id="mcp-cards" class="row g-3">
-                                <div class="col-12 text-muted">Loading...</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card shadow-sm border-0" id="mcp-table-panel">
+                    <div class="card shadow-sm border-0">
                         <div class="card-header bg-white d-flex justify-content-between align-items-center">
                             <span><i class="fas fa-network-wired me-2 text-info"></i>服务器列表</span>
                             <span class="badge bg-info" id="mcp-count-badge">0</span>
                         </div>
                         <div class="card-body p-0 table-responsive">
                             <table class="table table-hover mb-0 align-middle">
-                                <thead class="table-light"><tr><th>名称</th><th>类型</th><th>状态</th><th>启用</th><th>说明</th><th class="text-end">操作</th></tr></thead>
-                                <tbody id="mcp-body"><tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+                                <thead class="table-light"><tr><th>名称</th><th>类型</th><th>状态</th><th>说明</th><th class="text-end">操作</th></tr></thead>
+                                <tbody id="mcp-body"><tr><td colspan="5" class="text-center text-muted py-4">Loading...</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -2640,10 +2319,6 @@
                     <p class="text-muted small mb-0">兼容 OpenClaw/Astr 风格 SKILL.md 目录，支持接入 GitHub 开源市场与 SkillHub 商店。</p>
                 </div>
                 <div class="d-flex gap-2 align-items-center">
-                    <div class="form-check form-switch m-0" title="启用或禁用 Skill 框架">
-                        <input id="skills-framework-toggle" class="form-check-input" type="checkbox" onchange="toggleSkillFrameworkEnabled(this.checked)">
-                        <label class="form-check-label small" for="skills-framework-toggle">Skill 总开关</label>
-                    </div>
                     <div class="plugin-toolbar-search">
                         <i class="fas fa-search"></i>
                         <input id="skills-search-input" type="text" class="form-control form-control-sm" placeholder="搜索 skill...">
@@ -3009,19 +2684,8 @@
             <h3 class="mb-4">🗄️ 数据浏览</h3>
             <div class="card">
                 <div class="card-header">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span>History Records</span>
-                        <div class="d-flex gap-2 align-items-center">
-                            <!-- 角色选择器 -->
-                            <div class="input-group input-group-sm" style="width: auto;">
-                                <span class="input-group-text">👤 角色:</span>
-                                <select class="form-select" id="db-record-persona-select" onchange="refreshRecords()">
-                                    <option value="">所有角色</option>
-                                </select>
-                            </div>
-                            <button class="btn btn-primary btn-sm" onclick="refreshRecords()"><i class="fas fa-redo"></i> Refresh</button>
-                        </div>
-                    </div>
+                    <button class="btn btn-primary btn-sm float-end" onclick="refreshRecords()"><i class="fas fa-redo"></i> Refresh</button>
+                    History Records
                 </div>
                 <div class="card-body p-0 table-responsive">
                     <table class="table table-hover mb-0">
@@ -3372,217 +3036,17 @@
         }
     });
 
-    function parseSandboxLongTermMemoryItems(longTermText) {
-        const lines = String(longTermText || '')
-            .replace(/\r/g, '')
-            .split('\n')
-            .map(line => line.trim())
-            .filter(Boolean);
-
-        if (!lines.length) {
-            return [];
-        }
-
-        const items = [];
-        let paragraph = [];
-        const flushParagraph = () => {
-            if (!paragraph.length) return;
-            items.push(paragraph.join(' '));
-            paragraph = [];
-        };
-
-        lines.forEach((line) => {
-            if (/^#{1,6}\s+/.test(line)) {
-                flushParagraph();
-                items.push(line.replace(/^#{1,6}\s+/, '').trim());
-                return;
-            }
-
-            if (/^(\d+[.)]|[-*+])\s+/.test(line)) {
-                flushParagraph();
-                items.push(line.replace(/^(\d+[.)]|[-*+])\s+/, '').trim());
-                return;
-            }
-
-            if (/^(-{3,}|={3,})$/.test(line)) {
-                flushParagraph();
-                return;
-            }
-
-            paragraph.push(line);
-        });
-
-        flushParagraph();
-        return items.filter(text => text && text !== '暂无长期记忆。');
-    }
-
-    function renderSandboxLongTermMemoryItems(items) {
-        const listEl = document.getElementById('sandbox-memory-list');
-        if (!listEl) return;
-
-        if (!Array.isArray(items) || items.length === 0) {
-            listEl.innerHTML = '<li class="sandbox-memory-empty">暂无长期记忆内容。</li>';
-            return;
-        }
-
-        listEl.innerHTML = items.map((item, idx) => {
-            const safeText = escapeHtml(item).replace(/\n/g, '<br>');
-            const rawText = String(item || '');
-            const shouldCollapse = rawText.length > 160;
-            return `
-                <li class="sandbox-memory-item">
-                    <div class="sandbox-memory-item-index">${idx + 1}</div>
-                    <div class="sandbox-memory-item-main">
-                        <div id="sandbox-memory-item-text-${idx}" class="sandbox-memory-item-text ${shouldCollapse ? 'is-collapsed' : ''}">${safeText}</div>
-                        <div class="sandbox-memory-item-actions">
-                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copySandboxMemoryItem(${idx})">复制</button>
-                            ${shouldCollapse ? `<button type="button" id="sandbox-memory-toggle-${idx}" class="btn btn-sm btn-outline-primary" data-expanded="0" onclick="toggleSandboxMemoryItem(${idx})">展开</button>` : ''}
-                        </div>
-                    </div>
-                </li>
-            `;
-        }).join('');
-    }
-
-    function copySandboxMemoryItem(index) {
-        const textEl = document.getElementById(`sandbox-memory-item-text-${index}`);
-        if (!textEl) return;
-
-        const text = textEl.innerText || textEl.textContent || '';
-        if (!text.trim()) return;
-
-        const fallbackCopy = () => {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.setAttribute('readonly', 'readonly');
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            try {
-                document.execCommand('copy');
-                toastr.success('该条记忆已复制');
-            } catch (e) {
-                toastr.error('复制失败，请手动复制');
-            } finally {
-                ta.remove();
-            }
-        };
-
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text)
-                .then(() => toastr.success('该条记忆已复制'))
-                .catch(() => fallbackCopy());
-            return;
-        }
-
-        fallbackCopy();
-    }
-
-    function toggleSandboxMemoryItem(index) {
-        const textEl = document.getElementById(`sandbox-memory-item-text-${index}`);
-        const toggleBtn = document.getElementById(`sandbox-memory-toggle-${index}`);
-        if (!textEl || !toggleBtn) return;
-
-        const expanded = toggleBtn.getAttribute('data-expanded') === '1';
-        if (expanded) {
-            textEl.classList.add('is-collapsed');
-            toggleBtn.setAttribute('data-expanded', '0');
-            toggleBtn.textContent = '展开';
-            return;
-        }
-
-        textEl.classList.remove('is-collapsed');
-        toggleBtn.setAttribute('data-expanded', '1');
-        toggleBtn.textContent = '收起';
-    }
-
-    function hideSandboxMemoryWindow() {
-        const panel = document.getElementById('sandbox-memory-window');
-        if (panel) panel.classList.add('d-none');
-        syncSandboxMemoryButtonState();
-    }
-
-    function onSandboxMemoryWindowBackdropClick(event) {
-        if (event.target && event.target.id === 'sandbox-memory-window') {
-            hideSandboxMemoryWindow();
-        }
-    }
-
-    function syncSandboxMemoryButtonState() {
-        const panel = document.getElementById('sandbox-memory-window');
-        const btn = document.getElementById('sandbox-memory-btn');
-        if (!panel || !btn) return;
-
-        const isOpen = !panel.classList.contains('d-none');
-        btn.classList.toggle('is-active', isOpen);
-        btn.setAttribute('aria-pressed', isOpen ? 'true' : 'false');
-        btn.title = isOpen ? '关闭长期记忆窗口' : '查看当前角色长期记忆';
-    }
-
-    async function loadSandboxLongTermMemory(showToast = false) {
-        const panel = document.getElementById('sandbox-memory-window');
-        const listEl = document.getElementById('sandbox-memory-list');
-        const metaEl = document.getElementById('sandbox-memory-meta');
-        if (!panel || !listEl || !metaEl) return;
-
-        panel.classList.remove('d-none');
-        syncSandboxMemoryButtonState();
-        listEl.innerHTML = '<li class="sandbox-memory-empty">加载中...</li>';
-
-        const personaFilename = String(sandboxPersonaFilename || '').trim();
-        const query = personaFilename
-            ? `?persona_filename=${encodeURIComponent(personaFilename)}&include_meta=1`
-            : '?include_meta=1';
-
-        try {
-            const res = await fetch(`/api/agent/memory/long_term${query}`);
-            const data = await res.json();
-            if (!res.ok || !data.success) {
-                throw new Error(data.error || `HTTP ${res.status}`);
-            }
-
-            const persona = String(data.persona_filename || personaFilename || 'default');
-            const longTerm = String(data.long_term || '暂无长期记忆。').trim() || '暂无长期记忆。';
-            const meta = (data.meta && typeof data.meta === 'object') ? data.meta : {};
-            const turns = String(meta.dialog_turns_since_long_term_update ?? '-');
-            const total = String(meta.total_dialog_turns ?? '-');
-            const updatedAt = String(meta.last_long_term_update_at || '暂无');
-
-            metaEl.textContent = `角色: ${persona} | 增量轮次: ${turns} | 总轮次: ${total} | 最近更新: ${updatedAt}`;
-            const items = parseSandboxLongTermMemoryItems(longTerm);
-            renderSandboxLongTermMemoryItems(items);
-
-            if (showToast) {
-                toastr.success('长期记忆已刷新');
-            }
-        } catch (e) {
-            const msg = e && e.message ? e.message : String(e);
-            metaEl.textContent = `加载失败: ${msg}`;
-            listEl.innerHTML = '<li class="sandbox-memory-empty">暂无长期记忆。</li>';
-            if (showToast) {
-                toastr.error(`长期记忆刷新失败: ${msg}`);
-            }
-        }
-    }
-
-    function toggleSandboxMemoryPanel() {
-        const panel = document.getElementById('sandbox-memory-window');
-        if (!panel) return;
-
-        if (panel.classList.contains('d-none')) {
-            loadSandboxLongTermMemory(false);
-            return;
-        }
-        hideSandboxMemoryWindow();
-    }
-
     async function sendChat() {
         const input = document.getElementById('chat-input');
         const msg = input.value.trim();
         const fileInput = document.getElementById('file-upload');
         
         if (!msg && !fileInput.files.length) return;
+        if (sandboxChatInFlight) return;
+
+        sandboxChatInFlight = true;
+        resetSandboxTtsPlaybackQueue(true);
+        const requestSeq = ++sandboxChatRequestSeq;
 
         // File handling - read before UI update
         let attachments = [];
@@ -3610,14 +3074,16 @@
 
         // UI Update - pass attachments to appendMessage
         const pendingMessageId = appendMessage(msg, true, { status: '发送中', attachments: attachments });
-        const pendingBotMessageId = appendMessage('正在执行中...', false, {
+        const pendingBotMessageId = appendMessage(
+            sandboxTtsEnabled ? '正在生成回复与语音…' : '正在执行中...',
+            false, {
             debug: {
                 enabled: true,
                 collapsed: false,  // 改为false，让Agent追踪默认展开
                 events: [{
                     type: 'assistant_message',
                     label: '处理中',
-                    content: '正在处理中，请稍候。'
+                    content: '正在执行任务并收集详细过程，请稍候。'
                 }]
             }
         });
@@ -3628,7 +3094,11 @@
         document.getElementById('typing-indicator').style.display = 'none';
         document.getElementById('emoji-picker').classList.add('d-none');
 
-        postChat(msg, attachments, pendingMessageId, pendingBotMessageId);
+        try {
+            await postChat(msg, attachments, pendingMessageId, pendingBotMessageId, requestSeq);
+        } finally {
+            sandboxChatInFlight = false;
+        }
     }
 
     function readFileAsBase64(file) {
@@ -3642,11 +3112,18 @@
 
     let sandboxPersonaFilename = '';
     let sandboxPersonaDisplayName = '小雫';
+    let sandboxTtsEnabled = false;
+    const sandboxTtsQueue = {
+        items: [],
+        playing: false,
+        current: null,
+        activePlayer: null,
+        activeBlobUrl: '',
+    };
+    let sandboxTtsPlayToken = 0;
+    let sandboxChatRequestSeq = 0;
+    let sandboxChatInFlight = false;
     const sandboxPersonaChatStore = {};
-    const sandboxPersonaDetailCache = new Map();
-    let sandboxPersonasInflightPromise = null;
-    let sandboxPersonasCacheTs = 0;
-    const SANDBOX_PERSONAS_CACHE_TTL_MS = 30000;
     const sandboxPersonaThemeClassMap = {
         default: '',
         cute: 'chat-theme-cute',
@@ -3779,14 +3256,17 @@
         ordered.forEach((row, idx) => {
             let userText = '';
             let aiText = '';
+            let thinkingText = '';
             let createdAt = '';
             if (Array.isArray(row)) {
                 userText = row[1] || '';
                 aiText = row[2] || '';
+                thinkingText = row[4] || '';
                 createdAt = row[4] || '';
             } else if (row && typeof row === 'object') {
                 userText = row.user_input || row.message || '';
                 aiText = row.ai_response || row.response || '';
+                thinkingText = row.thinking || row.reasoning || '';
                 createdAt = row.created_at || '';
             }
 
@@ -3849,26 +3329,9 @@
         toastr.success(`已切换到角色卡: ${filename}`);
     }
 
-    async function loadSandboxPersonas(forceReload = false) {
-        if (!forceReload && sandboxPersonasInflightPromise) {
-            return sandboxPersonasInflightPromise;
-        }
-
-        const now = Date.now();
-        const canUseCache = !forceReload && (now - sandboxPersonasCacheTs) < SANDBOX_PERSONAS_CACHE_TTL_MS;
-        if (canUseCache) {
-            const select = document.getElementById('sandbox-persona-select');
-            if (select && select.options && select.options.length > 0) {
-                return;
-            }
-        }
-
-        sandboxPersonasInflightPromise = (async () => {
+    async function loadSandboxPersonas() {
         try {
             const res = await fetch('/api/personas');
-            if (!res.ok) {
-                throw new Error(`HTTP ${res.status}`);
-            }
             const data = await res.json();
             const personas = Array.isArray(data.personas) ? data.personas : [];
             const select = document.getElementById('sandbox-persona-select');
@@ -3877,15 +3340,24 @@
             select.innerHTML = '';
             const personaDetails = [];
             for (const p of personas) {
-                const cached = sandboxPersonaDetailCache.get(p.filename);
-                const detail = {
+                let detail = {
                     filename: p.filename,
-                    name: (cached && cached.name) || p.name || p.filename,
+                    name: p.name || p.filename,
                     description: p.description || '',
-                    ui_theme: (cached && cached.ui_theme) || 'default',
-                    avatar: (cached && cached.avatar) || '',
-                    summary: (cached && cached.summary) || p.description || ''
+                    ui_theme: 'default',
+                    avatar: '',
+                    summary: ''
                 };
+                try {
+                    const dRes = await fetch(`/api/personas/${encodeURIComponent(p.filename)}`);
+                    if (dRes.ok) {
+                        const dData = await dRes.json();
+                        detail.ui_theme = ((dData.meta && dData.meta.ui_theme) || 'default').toLowerCase();
+                        detail.avatar = (dData.meta && dData.meta.avatar) || '';
+                        detail.summary = (dData.meta && dData.meta.summary) || (dData.character && dData.character.personality) || p.description || '';
+                        detail.name = (dData.meta && dData.meta.name) || p.name || p.filename;
+                    }
+                } catch {}
                 personaDetails.push(detail);
 
                 const opt = document.createElement('option');
@@ -3911,88 +3383,7 @@
             }
         } catch (e) {
             console.warn('loadSandboxPersonas failed', e);
-            const container = document.getElementById('sandbox-persona-cards');
-            if (container) {
-                container.innerHTML = '<div class="col-12 text-danger small">角色卡加载失败，请刷新页面或检查后端接口 /api/personas</div>';
-            }
-        } finally {
-            sandboxPersonasCacheTs = Date.now();
-            sandboxPersonasInflightPromise = null;
         }
-        })();
-
-        return sandboxPersonasInflightPromise;
-    }
-
-    // DeepSeek Thinking Mode for Sandbox Chat
-    async function initSandboxThinkingMode() {
-        const toggle = document.getElementById('sandbox-deepseek-thinking-toggle');
-        const effortSelect = document.getElementById('sandbox-deepseek-reasoning-effort');
-        if (!toggle || !effortSelect) return;
-
-        // Load current settings
-        try {
-            const res = await fetch('/api/chat_settings/deepseek_thinking', { method: 'GET' });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success) {
-                    toggle.checked = data.thinking_mode || false;
-                    effortSelect.value = data.reasoning_effort || 'high';
-                }
-            }
-        } catch (e) {
-            console.warn('Failed to load thinking mode settings:', e);
-        }
-
-        // Toggle change handler
-        toggle.addEventListener('change', async function() {
-            const enable = this.checked;
-            const effort = effortSelect.value;
-            
-            try {
-                const resp = await fetch('/api/chat_settings/deepseek_thinking', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({enable, reasoning_effort: effort})
-                });
-                const data = await resp.json();
-                
-                if (!data.success) {
-                    alert('设置失败: ' + (data.error || '未知错误'));
-                    this.checked = !enable; // 恢复原状态
-                } else {
-                    console.log('[INFO] Sandbox DeepSeek thinking mode:', enable ? 'enabled' : 'disabled');
-                }
-            } catch (e) {
-                console.error('Failed to save thinking mode:', e);
-                alert('保存配置失败');
-                this.checked = !enable;
-            }
-        });
-
-        // Effort select change handler
-        effortSelect.addEventListener('change', async function() {
-            const enable = toggle.checked;
-            const effort = this.value;
-            
-            try {
-                const resp = await fetch('/api/chat_settings/deepseek_thinking', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({enable, reasoning_effort: effort})
-                });
-                const data = await resp.json();
-                
-                if (!data.success) {
-                    alert('设置失败: ' + (data.error || '未知错误'));
-                } else {
-                    console.log('[INFO] Sandbox DeepSeek reasoning effort:', effort);
-                }
-            } catch (e) {
-                console.error('Failed to save reasoning effort:', e);
-                alert('保存配置失败');
-            }
-        });
     }
 
     async function onSandboxPersonaChange() {
@@ -4016,12 +3407,6 @@
             const res = await fetch(`/api/personas/${encodeURIComponent(sandboxPersonaFilename)}`);
             const data = await res.json();
             const personaName = (data.meta && data.meta.name) || (data.character && data.character.name) || sandboxPersonaFilename;
-            sandboxPersonaDetailCache.set(sandboxPersonaFilename, {
-                name: personaName,
-                ui_theme: ((data.meta && data.meta.ui_theme) || 'default').toLowerCase(),
-                avatar: (data.meta && data.meta.avatar) || '',
-                summary: (data.meta && data.meta.summary) || (data.character && data.character.personality) || ''
-            });
             updateTypingIndicatorName(personaName);
             const theme = (data.meta && data.meta.ui_theme) ? String(data.meta.ui_theme).trim().toLowerCase() : 'default';
             applySandboxTheme(theme || 'default');
@@ -4035,7 +3420,11 @@
         }
     }
 
-    async function postChat(msg, attachments, pendingMessageId = null, pendingBotMessageId = null) {
+    function isStaleSandboxChatRequest(requestSeq) {
+        return requestSeq !== sandboxChatRequestSeq;
+    }
+
+    async function postChat(msg, attachments, pendingMessageId = null, pendingBotMessageId = null, requestSeq = 0) {
         try {
             // Adapt to backend API which expects 'image' for single image or we need to update backend
             // For now, let's send 'image' if there's one image, or 'attachments' list
@@ -4057,7 +3446,6 @@
                 payload.attachments = attachments;
             }
 
-            // 始终启用流式，避免短消息被降级为阻塞式返回。
             payload.stream = true;
 
             const res = await fetch('/chat', {
@@ -4069,139 +3457,111 @@
                 body: JSON.stringify(payload)
             });
             document.getElementById('typing-indicator').style.display = 'none';
+            if (isStaleSandboxChatRequest(requestSeq)) return;
 
             const contentType = (res.headers.get('content-type') || '').toLowerCase();
-            if (res.ok && contentType.includes('text/event-stream') && res.body) {
+            if (res.ok && (contentType.includes('text/plain') || contentType.includes('text/event-stream')) && res.body) {
                 const reader = res.body.getReader();
                 const decoder = new TextDecoder('utf-8');
-                let streamBuffer = '';
-                let renderedText = '';
-                let doneReply = '';
-                let doneDebug = null;
-                const streamTraceEvents = [];
+                let fullText = '';
+                let thinkingText = '';
+                let buffer = '';
+                let currentEvent = '';
+                let currentData = '';
 
-                const processSsePacket = (packet) => {
-                    const lines = String(packet || '').split(/\r?\n/);
-                    let eventName = 'message';
-                    const dataLines = [];
-                    lines.forEach((line) => {
-                        if (!line) return;
-                        if (line.startsWith('event:')) {
-                            eventName = line.slice(6).trim();
-                            return;
-                        }
-                        if (line.startsWith('data:')) {
-                            dataLines.push(line.slice(5).trimStart());
-                        }
-                    });
-                    if (!dataLines.length) return;
-
-                    const rawData = dataLines.join('\n');
-                    let payload = null;
+                const flushEvent = () => {
+                    const eventName = String(currentEvent || '').trim();
+                    const dataText = String(currentData || '').trim();
+                    currentEvent = '';
+                    currentData = '';
+                    if (!eventName || !dataText) return;
                     try {
-                        payload = JSON.parse(rawData);
-                    } catch {
-                        payload = { text: rawData };
-                    }
-
-                    if (eventName === 'delta') {
-                        const piece = (payload && typeof payload.text === 'string') ? payload.text : '';
-                        if (piece) {
-                            renderedText += piece;
-                            if (pendingBotMessageId) {
-                                updateBotMessage(pendingBotMessageId, renderedText);
+                        const payload = JSON.parse(dataText);
+                        if (eventName === 'thinking_delta') {
+                            const chunkThinking = String(payload.text || '');
+                            if (chunkThinking) {
+                                thinkingText += chunkThinking;
+                            }
+                            if (thinkingText && pendingBotMessageId) {
+                                const row = document.querySelector(`.chat-row[data-message-id="${pendingBotMessageId}"]`);
+                                if (row) {
+                                    applyThinkingPanel(row, thinkingText);
+                                }
+                            }
+                        } else if (eventName === 'delta') {
+                            const chunkText = String(payload.text || '');
+                            if (chunkText) {
+                                fullText += chunkText;
+                                if (pendingBotMessageId) {
+                                    updateBotMessage(pendingBotMessageId, fullText);
+                                }
+                            }
+                        } else if (eventName === 'done') {
+                            const finalReply = String((payload && payload.reply) || fullText || '').trim();
+                            if (finalReply) {
+                                fullText = finalReply;
+                                if (pendingBotMessageId) {
+                                    updateBotMessage(pendingBotMessageId, finalReply, {debug: payload.debug || null, thinking: payload.thinking || thinkingText});
+                                }
                             }
                         }
-                        return;
-                    }
-
-                    if (eventName === 'done') {
-                        if (payload && typeof payload.reply === 'string') {
-                            doneReply = payload.reply;
-                        }
-                        if (payload && payload.debug && typeof payload.debug === 'object') {
-                            doneDebug = payload.debug;
-                        }
-                        return;
-                    }
-
-                    if (eventName === 'trace') {
-                        if (payload && typeof payload === 'object') {
-                            streamTraceEvents.push(payload);
-                        }
-                        return;
-                    }
-
-                    if (eventName === 'error') {
-                        const msg = (payload && payload.error) ? String(payload.error) : 'stream error';
-                        renderedText += `\n[stream-error] ${msg}`;
-                        if (pendingBotMessageId) {
-                            updateBotMessage(pendingBotMessageId, renderedText);
-                        }
-                    }
+                    } catch (_) {}
                 };
 
                 while (true) {
                     const { value, done } = await reader.read();
                     if (done) break;
-                    streamBuffer += decoder.decode(value, { stream: true });
-
-                    let sepIndex = streamBuffer.indexOf('\n\n');
-                    while (sepIndex !== -1) {
-                        const packet = streamBuffer.slice(0, sepIndex);
-                        streamBuffer = streamBuffer.slice(sepIndex + 2);
-                        if (packet.trim()) processSsePacket(packet);
-                        sepIndex = streamBuffer.indexOf('\n\n');
+                    const chunk = decoder.decode(value, { stream: true });
+                    if (contentType.includes('text/event-stream')) {
+                        buffer += chunk;
+                        const lines = buffer.split(/\r?\n/);
+                        buffer = lines.pop() || '';
+                        for (const line of lines) {
+                            if (line.startsWith('event:')) {
+                                currentEvent = line.slice(6).trim();
+                            } else if (line.startsWith('data:')) {
+                                currentData += (currentData ? '\n' : '') + line.slice(5).trimStart();
+                            } else if (!line.trim()) {
+                                flushEvent();
+                            }
+                        }
+                    } else {
+                        fullText += chunk;
+                        if (pendingBotMessageId) {
+                            updateBotMessage(pendingBotMessageId, fullText);
+                        }
                     }
                 }
 
-                streamBuffer += decoder.decode();
-                if (streamBuffer.trim()) {
-                    const packets = streamBuffer.split(/\n\n+/);
-                    packets.forEach((packet) => {
-                        if (packet.trim()) processSsePacket(packet);
-                    });
-                }
-
-                const finalText = String(doneReply || renderedText || '').trim() || '（空回复）';
-                const finalDebug = doneDebug || (streamTraceEvents.length ? {
-                    enabled: true,
-                    collapsed: true,
-                    events: streamTraceEvents
-                } : null);
-                if (pendingBotMessageId) {
-                    updateBotMessage(pendingBotMessageId, finalText, {debug: finalDebug});
+                if (contentType.includes('text/event-stream')) {
+                    flushEvent();
+                    if (pendingBotMessageId && thinkingText) {
+                        const row = document.querySelector(`.chat-row[data-message-id="${pendingBotMessageId}"]`);
+                        if (row) {
+                            const sections = row.querySelectorAll('.trace-section-body');
+                            const thoughtBody = sections && sections[0] ? sections[0] : null;
+                            if (thoughtBody) thoughtBody.textContent = thinkingText;
+                        }
+                    }
                 } else {
-                    appendMessage(finalText, false, {debug: finalDebug});
-                }
-                if (pendingMessageId) updateMessageStatus(pendingMessageId, '已送达');
-                if (pendingMessageId) updateMessageStatus(pendingMessageId, '已读');
-                if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
-                return;
-            }
+                    fullText += decoder.decode();
+                    fullText = fullText.replace(/^正在生成回复，请稍候...\n?/, '');
 
-            // 兼容旧 text/plain 流式输出
-            if (res.ok && contentType.includes('text/plain') && res.body) {
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder('utf-8');
-                let fullText = '';
-
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    fullText += decoder.decode(value, { stream: true });
+                    const finalText = fullText.trim();
                     if (pendingBotMessageId) {
-                        updateBotMessage(pendingBotMessageId, fullText);
+                        updateBotMessage(pendingBotMessageId, finalText);
+                    } else {
+                        appendMessage(finalText, false);
                     }
+                    if (pendingMessageId) updateMessageStatus(pendingMessageId, '已送达');
+                    if (pendingMessageId) updateMessageStatus(pendingMessageId, '已读');
+                    if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
+                    return;
                 }
 
-                fullText += decoder.decode();
-                fullText = fullText.replace(/^正在生成回复，请稍候...\n?/, '');
-
-                if (pendingBotMessageId) {
-                    updateBotMessage(pendingBotMessageId, fullText.trim(), {debug: null});
-                } else {
-                    appendMessage(fullText.trim(), false);
+                const finalText = String(fullText || '').trim();
+                if (pendingBotMessageId && finalText) {
+                    updateBotMessage(pendingBotMessageId, finalText, {thinking: thinkingText});
                 }
                 if (pendingMessageId) updateMessageStatus(pendingMessageId, '已送达');
                 if (pendingMessageId) updateMessageStatus(pendingMessageId, '已读');
@@ -4210,13 +3570,29 @@
             }
 
             const data = await res.json();
+            if (isStaleSandboxChatRequest(requestSeq)) return;
             
             if(data.success) {
                 if (pendingMessageId) updateMessageStatus(pendingMessageId, '已送达');
                 if (pendingBotMessageId) {
-                    updateBotMessage(pendingBotMessageId, data.reply, {debug: data.debug || null});
+                    if (sandboxTtsEnabled && data.reply) {
+                        const ttsData = buildSandboxTtsDataFromChat(data);
+                        if (!ttsData.audio_url && !isStaleSandboxChatRequest(requestSeq)) {
+                            const err = (data.tts && (data.tts.translate_error || data.tts.error)) || '语音合成失败';
+                            showSandboxTtsError(err.length > 80 ? err.slice(0, 80) + '…' : err);
+                        }
+                        if (isStaleSandboxChatRequest(requestSeq)) return;
+                        revealSandboxBotReply(
+                            pendingBotMessageId,
+                            data.reply,
+                            {debug: data.debug || null, thinking: data.thinking || ''},
+                            ttsData
+                        );
+                    } else {
+                        updateBotMessage(pendingBotMessageId, data.reply, {debug: data.debug || null, thinking: data.thinking || ''});
+                    }
                 } else {
-                    appendMessage(data.reply, false, {debug: data.debug || null});
+                    appendMessage(data.reply, false, {debug: data.debug || null, thinking: data.thinking || ''});
                 }
                 if (pendingMessageId) updateMessageStatus(pendingMessageId, '已读');
                 if (sandboxPersonaFilename) snapshotSandboxChatForPersona(sandboxPersonaFilename);
@@ -4231,6 +3607,7 @@
             }
         } catch(e) {
             document.getElementById('typing-indicator').style.display = 'none';
+            if (isStaleSandboxChatRequest(requestSeq)) return;
             if (pendingMessageId) updateMessageStatus(pendingMessageId, '发送失败');
             if (pendingBotMessageId) {
                 updateBotMessage(pendingBotMessageId, "Network Error: " + e, null);
@@ -4260,111 +3637,120 @@
         details.className = 'ai-trace-panel';
         details.open = !debug.collapsed;
 
-        // 计算思考时间
-        let thinkingTime = '';
-        const thoughtEvents = debug.events.filter((event) => event && event.type === 'assistant_message');
-        if (thoughtEvents.length > 0 && thoughtEvents[0].timestamp) {
-            const firstTimestamp = thoughtEvents[0].timestamp;
-            const lastTimestamp = thoughtEvents[thoughtEvents.length - 1].timestamp;
-            
-            // 判断是秒级还是毫秒级时间戳
-            const isSeconds = firstTimestamp < 10000000000; // 小于100亿的是秒级
-            const multiplier = isSeconds ? 1000 : 1;
-            
-            const startTime = firstTimestamp * multiplier;
-            const endTime = lastTimestamp ? lastTimestamp * multiplier : Date.now();
-            const duration = ((endTime - startTime) / 1000).toFixed(1);
-            thinkingTime = `<span class="ai-trace-time">${duration}s</span>`;
-        }
-
         const summary = document.createElement('summary');
-        summary.innerHTML = `
-            <svg class="ai-trace-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-            <span class="ai-trace-title">AI 操作流程</span>
-            ${thinkingTime}
-        `;
+        summary.innerHTML =
+            '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3 5h18v2H3zm0 6h18v2H3zm0 6h18v2H3z"/></svg>' +
+            `<span>AI 操作流程（${debug.events.length} 条）</span>`;
         details.appendChild(summary);
 
         const list = document.createElement('div');
         list.className = 'ai-trace-list';
-        
-        // 渲染所有事件（思考和工具调用混合）
-        debug.events.forEach((event, index) => {
-            if (!event) return;
-            
-            const item = document.createElement('div');
-            
-            // 根据类型设置不同的样式
-            if (event.type === 'assistant_message') {
-                item.className = 'ai-trace-item thinking';
-            } else if (event.type === 'tool_call') {
-                item.className = 'ai-trace-item tool-call';
-            } else if (event.type === 'tool_result') {
-                item.className = 'ai-trace-item tool-result';
-            } else {
-                item.className = 'ai-trace-item';
-            }
-            
-            // 头部信息
-            const head = document.createElement('div');
-            head.className = 'ai-trace-item-head';
-            
-            // 图标和标签
-            let iconSvg = '';
-            let label = '';
-            if (event.type === 'assistant_message') {
-                iconSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
-                label = '💭 思考';
-            } else if (event.type === 'tool_call') {
-                iconSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>';
-                label = '🔧 调用';
-            } else if (event.type === 'tool_result') {
-                iconSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2l-3.5-3.5L4 14.2l5 5 11-11-1.5-1.5z"/></svg>';
-                label = '✅ 结果';
-            }
-            
-            head.innerHTML = `${iconSvg}<span>${label}</span>`;
-            
-            // 如果有工具名称，显示为徽章
-            if (event.tool_name) {
-                const badge = document.createElement('span');
-                badge.className = 'ai-trace-badge';
-                badge.textContent = event.tool_name;
-                head.appendChild(badge);
-            }
-            
-            item.appendChild(head);
-            
-            // 内容主体
-            const body = document.createElement('pre');
-            body.className = 'ai-trace-item-body';
-            
-            // 格式化内容
-            let content = event.content || '';
-            if (typeof content === 'string' && content.startsWith('思考:\n')) {
-                content = content.substring(4); // 移除 "思考:" 前缀
-            }
-            
-            // 对于工具调用，只显示摘要
-            if (event.type === 'tool_call' && content.length > 200) {
-                try {
-                    const parsed = JSON.parse(content);
-                    const args = parsed.arguments || parsed.args || {};
-                    const argsStr = Object.keys(args).length > 0 ? JSON.stringify(args).substring(0, 150) : '{}';
-                    content = `参数: ${argsStr}${Object.keys(args).length > 0 ? '...' : ''}`;
-                } catch (e) {
-                    content = content.substring(0, 200) + '...';
-                }
-            }
-            
-            body.textContent = content;
-            item.appendChild(body);
-            
-            list.appendChild(item);
+        const tracePath = (debug.trace_md && debug.trace_md.path) ? debug.trace_md.path : '';
+        const thoughtEvents = debug.events.filter((event) => {
+            if (!event) return false;
+            if (event.type === 'assistant_message') return true;
+            const text = String(event.content || '').trim();
+            return text.startsWith('思考:') || text.startsWith('Thought:') || text.startsWith('[THINK]');
         });
+        const toolEvents = debug.events.filter((event) => event && (event.type === 'tool_call' || event.type === 'tool_result'));
+        const references = collectTraceReferences(debug.events, tracePath);
+
+        if (tracePath) {
+            const traceMeta = document.createElement('div');
+            traceMeta.className = 'trace-note';
+            traceMeta.innerHTML = `${iconForTrace('tool_result')}<span>临时过程文件：<span class="ai-trace-badge">${escapeHtml(tracePath)}</span></span>`;
+            list.appendChild(traceMeta);
+        }
+
+        const thoughtSection = document.createElement('details');
+        thoughtSection.className = 'trace-section';
+        thoughtSection.open = !debug.collapsed && (thoughtEvents.length > 0 || String(debug.thinking || '').trim());
+        const thoughtSummary = document.createElement('summary');
+        const thoughtText = String(debug.thinking || '').trim() || thoughtEvents.map((event) => String(event.content || '')).join('');
+        thoughtSummary.innerHTML = `<span>思考内容</span><span class="ai-trace-badge">${escapeHtml(String(thoughtText ? 1 : 0))}</span>`;
+        const thoughtBody = document.createElement('div');
+        thoughtBody.className = 'trace-section-body';
+        if (!thoughtText) {
+            thoughtBody.innerHTML = '<div class="trace-note">当前模型未输出可见思考内容，或后端未提供该段信息。</div>';
+        } else {
+            thoughtBody.textContent = thoughtText;
+        }
+        thoughtSection.appendChild(thoughtSummary);
+        thoughtSection.appendChild(thoughtBody);
+        list.appendChild(thoughtSection);
+
+        const operationSection = document.createElement('details');
+        operationSection.className = 'trace-section';
+        operationSection.open = true;
+        const operationCount = toolEvents.filter((event) => event && event.type === 'tool_call').length || toolEvents.length;
+        const operationSummary = document.createElement('summary');
+        operationSummary.innerHTML = `<span>实际操作</span><span class="ai-trace-badge">${escapeHtml(String(operationCount))}</span>`;
+        const operationBody = document.createElement('div');
+        operationBody.className = 'trace-section-body';
+        if (!toolEvents.length) {
+            operationBody.innerHTML = '<div class="trace-note">没有检测到工具调用记录。</div>';
+        } else {
+            toolEvents.forEach((event, index) => {
+                operationBody.appendChild(createTraceEntry(event, index));
+            });
+        }
+        operationSection.appendChild(operationSummary);
+        operationSection.appendChild(operationBody);
+        list.appendChild(operationSection);
+
+        const referenceSection = document.createElement('details');
+        referenceSection.className = 'trace-section';
+        referenceSection.open = !debug.collapsed && references.length > 0;
+        const referenceSummary = document.createElement('summary');
+        referenceSummary.innerHTML = `<span>引用依据</span><span class="ai-trace-badge">${escapeHtml(String(references.length))}</span>`;
+        const referenceBody = document.createElement('div');
+        referenceBody.className = 'trace-section-body';
+        if (!references.length) {
+            referenceBody.innerHTML = '<div class="trace-note">当前消息没有可提取的外部引用链接，或引用信息未在 trace 中显式暴露。</div>';
+        } else {
+            const refWrap = document.createElement('div');
+            refWrap.className = 'trace-reference-list';
+            references.forEach((ref) => {
+                const chip = document.createElement('span');
+                chip.className = 'citation-chip';
+                if (ref.meta === 'trace_md') {
+                    chip.innerHTML = `<span>${escapeHtml(ref.meta || 'ref')}</span><span>${escapeHtml(ref.label || ref.url)}</span>`;
+                } else {
+                    chip.innerHTML = `<span>${escapeHtml(ref.meta || 'ref')}</span><a href="${escapeHtml(ref.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(ref.label || ref.url)}</a>`;
+                }
+                refWrap.appendChild(chip);
+            });
+            referenceBody.appendChild(refWrap);
+        }
+        referenceSection.appendChild(referenceSummary);
+        referenceSection.appendChild(referenceBody);
+        list.appendChild(referenceSection);
 
         details.appendChild(list);
         return details;
+    }
+
+    function applyThinkingPanel(row, thinkingText) {
+        if (!row) return;
+        const text = String(thinkingText || '').trim();
+        const oldPanel = row.querySelector('.thinking-inline-panel');
+        if (oldPanel) oldPanel.remove();
+        if (!text) return;
+
+        const panel = document.createElement('details');
+        panel.className = 'thinking-inline-panel';
+        panel.open = false;
+        const summary = document.createElement('summary');
+        summary.textContent = '思考内容';
+        const body = document.createElement('div');
+        body.className = 'trace-section-body';
+        body.textContent = text;
+        panel.appendChild(summary);
+        panel.appendChild(body);
+
+        const meta = row.querySelector('.message-meta');
+        if (meta) row.insertBefore(panel, meta);
+        else row.appendChild(panel);
     }
 
     function normalizeEmojiText(text) {
@@ -5051,6 +4437,304 @@
         return messageId;
     }
 
+    function getTtsSpokenJapanese(ttsMeta) {
+        if (!ttsMeta) return '';
+        return String(
+            ttsMeta.display_spoken_text
+            || ttsMeta.spoken_text
+            || ttsMeta.japanese_text
+            || ''
+        ).trim();
+    }
+
+    function bindSandboxTtsToRow(row, ttsData) {
+        if (!row || !ttsData) return;
+        const spoken = getTtsSpokenJapanese(ttsData);
+        if (spoken) row.dataset.ttsSpokenText = spoken;
+        const sovits = String(ttsData.sovits_input_text || spoken).trim();
+        if (sovits) row.dataset.ttsSovitsText = sovits;
+        if (ttsData.audio_url) row.dataset.ttsAudioUrl = ttsData.audio_url;
+        if (ttsData.synthesis_id) row.dataset.ttsSynthesisId = ttsData.synthesis_id;
+        if (ttsData.audio_seq != null && ttsData.audio_seq !== '') {
+            row.dataset.ttsAudioSeq = String(ttsData.audio_seq);
+        }
+        if (ttsData.audio_local_relpath) {
+            row.dataset.ttsLocalPath = ttsData.audio_local_relpath;
+        }
+    }
+
+    function isSandboxTtsPlaybackIdle() {
+        return !sandboxTtsQueue.playing && sandboxTtsQueue.items.length === 0;
+    }
+
+    function updateSandboxTtsPlaybackStatus() {
+        const idle = isSandboxTtsPlaybackIdle();
+        const statusEl = document.getElementById('sandbox-chat-tts-status');
+        if (!statusEl) return;
+        if (!idle) {
+            statusEl.textContent = '语音播放中…';
+            statusEl.className = 'small text-muted';
+            statusEl.title = '';
+        } else if (statusEl.classList.contains('text-muted') && statusEl.textContent === '语音播放中…') {
+            statusEl.textContent = 'SoVITS 已连接';
+            statusEl.className = 'small text-success';
+            statusEl.title = '';
+        }
+    }
+
+    function buildSandboxTtsDataFromChat(data) {
+        const tts = (data && data.tts) || {};
+        const displayText = String(
+            (data && data.spoken_text)
+            || tts.spoken_text
+            || tts.japanese_text
+            || tts.display_spoken_text
+            || ''
+        ).trim();
+        return Object.assign({}, tts, {
+            display_spoken_text: displayText,
+            spoken_text: displayText,
+            sovits_input_text: String(tts.sovits_input_text || displayText).trim(),
+            synthesis_id: (data && data.tts_synthesis_id) || tts.synthesis_id || '',
+            audio_seq: (data && data.audio_seq != null) ? data.audio_seq : tts.audio_seq,
+            audio_local_relpath: (data && data.audio_local_relpath) || tts.audio_local_relpath || '',
+            success: !!(data && data.audio_url) || !!tts.success,
+            audio_url: (data && data.audio_url) || tts.audio_url || '',
+        });
+    }
+
+    function attachTtsSpokenTextToMessage(messageId, spokenLine) {
+        if (!spokenLine) return;
+        const row = messageId
+            ? document.querySelector(`.chat-row[data-message-id="${messageId}"]`)
+            : document.querySelector('#chat-box .chat-row.bot-row:last-child');
+        if (!row) return;
+
+        const old = row.querySelector('.bot-tts-spoken-wrap');
+        if (old) old.remove();
+
+        const wrap = document.createElement('div');
+        wrap.className = 'bot-tts-spoken-wrap';
+        const label = document.createElement('div');
+        label.className = 'bot-tts-spoken-label';
+        label.textContent = '朗读的日语文本';
+        const body = document.createElement('div');
+        body.className = 'bot-tts-spoken-text';
+        body.textContent = spokenLine;
+        wrap.appendChild(label);
+        wrap.appendChild(body);
+
+        const audioWrap = row.querySelector('.bot-tts-audio-wrap');
+        const meta = row.querySelector('.message-meta');
+        if (audioWrap) row.insertBefore(wrap, audioWrap);
+        else if (meta) row.insertBefore(wrap, meta);
+        else row.appendChild(wrap);
+    }
+
+    function sandboxTtsPlayUrl(audioUrl, meta) {
+        if (!audioUrl) return '';
+        const bust = audioUrl.includes('?') ? '&' : '?';
+        const seq = meta && meta.audioSeq != null && meta.audioSeq !== '' ? String(meta.audioSeq) : '';
+        const sid = meta && meta.synthesisId ? String(meta.synthesisId) : '';
+        const parts = [`t=${Date.now()}`];
+        if (seq) parts.push(`seq=${encodeURIComponent(seq)}`);
+        if (sid) parts.push(`sid=${encodeURIComponent(sid)}`);
+        return `${audioUrl}${bust}${parts.join('&')}`;
+    }
+
+    function stopSandboxTtsActivePlayer() {
+        const player = sandboxTtsQueue.activePlayer;
+        if (player) {
+            player.pause();
+            try { player.currentTime = 0; } catch (_) {}
+            player.src = '';
+        }
+        if (sandboxTtsQueue.activeBlobUrl) {
+            try { URL.revokeObjectURL(sandboxTtsQueue.activeBlobUrl); } catch (_) {}
+        }
+        sandboxTtsQueue.activePlayer = null;
+        sandboxTtsQueue.activeBlobUrl = '';
+    }
+
+    function setSandboxTtsPlayingHighlight(messageId) {
+        document.querySelectorAll('.bot-tts-audio-wrap.is-queue-playing').forEach((el) => {
+            el.classList.remove('is-queue-playing');
+        });
+        if (!messageId) return;
+        const row = document.querySelector(`.chat-row[data-message-id="${messageId}"]`);
+        const wrap = row && row.querySelector('.bot-tts-audio-wrap');
+        if (wrap) wrap.classList.add('is-queue-playing');
+    }
+
+    function finishSandboxTtsQueueItem() {
+        setSandboxTtsPlayingHighlight(null);
+        sandboxTtsQueue.playing = false;
+        sandboxTtsQueue.current = null;
+        updateSandboxTtsPlaybackStatus();
+        pumpSandboxTtsQueue();
+    }
+
+    async function pumpSandboxTtsQueue() {
+        if (sandboxTtsQueue.playing) return;
+        const next = sandboxTtsQueue.items.shift();
+        if (!next) return;
+
+        const row = next.messageId
+            ? document.querySelector(`.chat-row[data-message-id="${next.messageId}"]`)
+            : null;
+        if (row && next.synthesisId && row.dataset.ttsSynthesisId && row.dataset.ttsSynthesisId !== next.synthesisId) {
+            pumpSandboxTtsQueue();
+            return;
+        }
+
+        const audioUrl = (row && row.dataset.ttsAudioUrl) || next.audioUrl;
+        if (!audioUrl) {
+            pumpSandboxTtsQueue();
+            return;
+        }
+
+        const playToken = next.playToken;
+        sandboxTtsQueue.playing = true;
+        sandboxTtsQueue.current = next;
+        setSandboxTtsPlayingHighlight(next.messageId);
+        updateSandboxTtsPlaybackStatus();
+        stopSandboxTtsActivePlayer();
+
+        const playUrl = sandboxTtsPlayUrl(audioUrl, next);
+        try {
+            const resp = await fetch(playUrl, {cache: 'no-store'});
+            if (playToken !== sandboxTtsPlayToken || sandboxTtsQueue.current !== next) {
+                finishSandboxTtsQueueItem();
+                return;
+            }
+            if (!resp.ok) {
+                finishSandboxTtsQueueItem();
+                return;
+            }
+            const blob = await resp.blob();
+            if (playToken !== sandboxTtsPlayToken || sandboxTtsQueue.current !== next) {
+                finishSandboxTtsQueueItem();
+                return;
+            }
+            const blobUrl = URL.createObjectURL(blob);
+            const player = new Audio(blobUrl);
+            sandboxTtsQueue.activePlayer = player;
+            sandboxTtsQueue.activeBlobUrl = blobUrl;
+            const cleanup = () => {
+                if (sandboxTtsQueue.current !== next) return;
+                stopSandboxTtsActivePlayer();
+                finishSandboxTtsQueueItem();
+            };
+            player.addEventListener('ended', cleanup, {once: true});
+            player.addEventListener('error', cleanup, {once: true});
+            await player.play();
+        } catch (_) {
+            if (sandboxTtsQueue.current === next) {
+                stopSandboxTtsActivePlayer();
+                finishSandboxTtsQueueItem();
+            }
+        }
+    }
+
+    function enqueueSandboxTtsPlayback(audioUrl, messageId, spokenText, synthesisId) {
+        const row = messageId
+            ? document.querySelector(`.chat-row[data-message-id="${messageId}"]`)
+            : null;
+        const url = (row && row.dataset.ttsAudioUrl) || audioUrl;
+        if (!url) return;
+        resetSandboxTtsPlaybackQueue(true);
+        const playToken = sandboxTtsPlayToken;
+        sandboxTtsQueue.items.push({
+            audioUrl: url,
+            messageId: messageId || null,
+            spokenText: (row && row.dataset.ttsSpokenText) || spokenText || '',
+            synthesisId: (row && row.dataset.ttsSynthesisId) || synthesisId || '',
+            audioSeq: (row && row.dataset.ttsAudioSeq) || '',
+            playToken,
+        });
+        updateSandboxTtsPlaybackStatus();
+        pumpSandboxTtsQueue();
+    }
+
+    function resetSandboxTtsPlaybackQueue(stopCurrent) {
+        sandboxTtsPlayToken++;
+        sandboxTtsQueue.items = [];
+        setSandboxTtsPlayingHighlight(null);
+        sandboxTtsQueue.playing = false;
+        sandboxTtsQueue.current = null;
+        if (stopCurrent) stopSandboxTtsActivePlayer();
+        updateSandboxTtsPlaybackStatus();
+    }
+
+    function attachAudioToMessage(messageId, audioUrl, ttsMeta = null) {
+        const url = audioUrl || (ttsMeta && ttsMeta.audio_url);
+        if (!url) return;
+        const row = messageId
+            ? document.querySelector(`.chat-row[data-message-id="${messageId}"]`)
+            : document.querySelector('#chat-box .chat-row.bot-row:last-child');
+        if (!row) return;
+
+        bindSandboxTtsToRow(row, ttsMeta || {audio_url: url});
+
+        const old = row.querySelector('.bot-tts-audio-wrap');
+        if (old) old.remove();
+
+        const wrap = document.createElement('div');
+        wrap.className = 'bot-tts-audio-wrap';
+        const audioSeq = (ttsMeta && ttsMeta.audio_seq != null)
+            ? ttsMeta.audio_seq
+            : row.dataset.ttsAudioSeq;
+        if (audioSeq != null && audioSeq !== '') {
+            const seqLabel = document.createElement('span');
+            seqLabel.className = 'bot-tts-seq-label';
+            seqLabel.textContent = `语音 #${String(audioSeq).padStart(6, '0')}（已缓存本地）`;
+            wrap.appendChild(seqLabel);
+        }
+        const hint = document.createElement('span');
+        hint.className = 'bot-tts-hint';
+        hint.textContent = '回复时自动播放（不支持手动重播）';
+        wrap.appendChild(hint);
+        const localPath = (ttsMeta && ttsMeta.audio_local_relpath) || row.dataset.ttsLocalPath || '';
+        if (localPath) {
+            wrap.title = `本地文件: ${localPath}`;
+        }
+        if (ttsMeta && !ttsMeta.success && ttsMeta.error) {
+            wrap.title = ttsMeta.error;
+        }
+        updateSandboxTtsPlaybackStatus();
+
+        const meta = row.querySelector('.message-meta');
+        if (meta) row.insertBefore(wrap, meta);
+        else row.appendChild(wrap);
+
+        const spokenText = getTtsSpokenJapanese(ttsMeta) || row.dataset.ttsSpokenText || '';
+        const synthesisId = (ttsMeta && ttsMeta.synthesis_id) || row.dataset.ttsSynthesisId || '';
+        enqueueSandboxTtsPlayback(url, messageId, spokenText, synthesisId);
+    }
+
+    function showSandboxTtsError(message) {
+        const statusEl = document.getElementById('sandbox-chat-tts-status');
+        if (!statusEl) return;
+        statusEl.textContent = message || '语音合成失败';
+        statusEl.className = 'small text-danger';
+        statusEl.title = message || '';
+    }
+
+    function revealSandboxBotReply(messageId, text, options = {}, ttsData = null) {
+        const row = messageId
+            ? document.querySelector(`.chat-row[data-message-id="${messageId}"]`)
+            : null;
+        updateBotMessage(messageId, text, options);
+        if (row && ttsData) bindSandboxTtsToRow(row, ttsData);
+        const spokenLine = getTtsSpokenJapanese(ttsData);
+        if (spokenLine) {
+            attachTtsSpokenTextToMessage(messageId, spokenLine);
+        }
+        if (ttsData && ttsData.audio_url) {
+            attachAudioToMessage(messageId, ttsData.audio_url, ttsData);
+        }
+    }
+
     function updateBotMessage(messageId, text, options = {}) {
         const row = document.querySelector(`.chat-row[data-message-id="${messageId}"]`);
         if (!row) {
@@ -5079,6 +4763,9 @@
                 }
             }
         }
+
+        applyThinkingPanel(row, options && options.thinking);
+
     }
 
     
@@ -5106,7 +4793,6 @@
         const k = String(keyName || '').trim().toLowerCase();
         const nameMap = {
             deepseek_chat: '聊天 API (ChatAPI)',
-            programming_chat: '编程对话 API (Programming)',
             search: '搜索 API (SearchAPI)',
             image_recognition: '图像识别 API (VisionAPI)',
             image_generation: '图像生成 API (ImageGenAPI)',
@@ -5136,656 +4822,39 @@
                     <div class="col-md-3">
                         <input type="password" class="form-control form-control-sm api-key" placeholder="API Key" value="${config.key || ''}">
                     </div>
-                    <div class="col-md-3">
-                        <div class="input-group input-group-sm">
-                            <input type="text" class="form-control form-control-sm api-url" placeholder="Base URL" value="${config.base_url || ''}">
-                            <button type="button" class="btn btn-outline-secondary btn-api-mini" title="解析 URL" onclick="applyApiUrlHeuristicFromButton(this)"><i class="fas fa-magic"></i></button>
-                        </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control form-control-sm api-url" placeholder="Base URL" value="${config.base_url || ''}">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <input type="text" class="form-control form-control-sm api-model" placeholder="Model (optional)" value="${config.model || ''}">
                     </div>
                     <div class="col-md-1 text-end">
                         <button type="button" class="btn btn-sm text-danger" onclick="this.closest('.card').remove()"><i class="fas fa-times"></i></button>
                     </div>
                 </div>
-                <div class="row g-2 mt-1 align-items-center">
-                    <div class="col-md-4">
-                        <div class="api-card-meta text-muted">尚未检测模型列表</div>
-                    </div>
-                    <div class="col-md-5">
-                        <select class="form-select form-select-sm api-model-select" onchange="onApiModelSelectChange(this)">
-                            <option value="">从 API 获取模型后可选择...</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3 d-flex gap-1 justify-content-md-end">
-                        <button type="button" class="btn btn-outline-secondary btn-sm btn-api-mini" onclick="discoverModelsForCard(this)"><i class="fas fa-list me-1"></i>模型</button>
-                        <button type="button" class="btn btn-outline-primary btn-sm btn-api-mini" onclick="hotSwitchModelForCard(this)"><i class="fas fa-bolt me-1"></i>热切换</button>
-                    </div>
-                </div>
             </div>
         `;
-
-        const urlInput = div.querySelector('.api-url');
-        if (urlInput) {
-            urlInput.addEventListener('blur', () => applyApiUrlHeuristicFromInput(urlInput));
-        }
-
-        const modelInput = div.querySelector('.api-model');
-        if (modelInput) {
-            modelInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    hotSwitchModelForCard(modelInput);
-                }
-            });
-        }
-
         return div;
     }
 
-    function _normalizeApiBaseUrlFrontend(rawUrl) {
-        let raw = String(rawUrl || '').trim();
-        if (!raw) return '';
-        if (!raw.includes('://')) {
-            raw = `https://${raw}`;
-        }
-        raw = raw.replace(/\/+$/, '');
-        raw = raw.replace(/\/(chat\/completions|completions|responses|messages|models)$/i, '');
-        if (!/\/v\d+$/i.test(raw)) {
-            raw = `${raw}/v1`;
-        }
-        return raw;
-    }
-
-    function _guessProviderByUrl(baseUrl) {
-        const url = String(baseUrl || '').toLowerCase();
-        if (url.includes('api.deepseek.com')) return 'DeepSeek';
-        if (url.includes('api.openai.com')) return 'OpenAI';
-        if (url.includes('openrouter.ai')) return 'OpenRouter';
-        if (url.includes('api.moonshot.cn')) return 'Moonshot';
-        if (url.includes('api.minimaxi.com')) return 'MiniMax';
-        if (url.includes('api.anthropic.com')) return 'Anthropic';
-        return 'OpenAI-Compatible';
-    }
-
-    function _setApiCardMeta(card, text, tone = 'muted') {
-        const meta = card ? card.querySelector('.api-card-meta') : null;
-        if (!meta) return;
-        meta.className = 'api-card-meta';
-        if (tone === 'success') meta.classList.add('text-success');
-        else if (tone === 'danger') meta.classList.add('text-danger');
-        else if (tone === 'warning') meta.classList.add('text-warning');
-        else meta.classList.add('text-muted');
-        meta.textContent = String(text || '');
-    }
-
-    function applyApiUrlHeuristicFromInput(inputEl) {
-        const card = inputEl ? inputEl.closest('.api-key-card') : null;
-        if (!card || !inputEl) return;
-        const normalized = _normalizeApiBaseUrlFrontend(inputEl.value);
-        if (!normalized) return;
-        inputEl.value = normalized;
-        const provider = _guessProviderByUrl(normalized);
-        _setApiCardMeta(card, `URL 已解析为 ${provider} 风格：${normalized}`, 'muted');
-    }
-
-    function applyApiUrlHeuristicFromButton(btn) {
-        if (!btn) return;
-        const card = btn.closest('.api-key-card');
-        if (!card) return;
-        const input = card.querySelector('.api-url');
-        applyApiUrlHeuristicFromInput(input);
-    }
-
-    async function discoverModelsForCard(triggerEl) {
-        const card = triggerEl ? triggerEl.closest('.api-key-card') : null;
-        if (!card) return;
-
-        const serviceKey = (card.querySelector('.api-service-key')?.value || '').trim();
-        const key = (card.querySelector('.api-key')?.value || '').trim();
-        const urlInput = card.querySelector('.api-url');
-        const modelSelect = card.querySelector('.api-model-select');
-        const modelInput = card.querySelector('.api-model');
-        if (!urlInput || !modelSelect || !modelInput) return;
-
-        applyApiUrlHeuristicFromInput(urlInput);
-        const baseUrl = (urlInput.value || '').trim();
-        if (!baseUrl) {
-            _setApiCardMeta(card, '请先填写 Base URL', 'warning');
-            return;
-        }
-
-        _setApiCardMeta(card, '正在获取模型列表...', 'muted');
-        modelSelect.innerHTML = '<option value="">加载中...</option>';
-
-        try {
-            const res = await fetch('/api/config/model-discovery', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({service_key: serviceKey, base_url: baseUrl, key})
-            });
-            const data = await res.json();
-
-            const models = Array.isArray(data.models) ? data.models : [];
-            if (!data.success && !models.length) {
-                modelSelect.innerHTML = '<option value="">未获取到模型</option>';
-                _setApiCardMeta(card, `获取失败：${data.error || '未知错误'}`, 'danger');
-                return;
-            }
-
-            if (data.normalized_base_url) {
-                urlInput.value = data.normalized_base_url;
-            }
-
-            modelSelect.innerHTML = '<option value="">选择模型...</option>';
-            models.forEach((modelName) => {
-                const opt = document.createElement('option');
-                opt.value = modelName;
-                opt.textContent = modelName;
-                if (String(modelInput.value || '').trim() === String(modelName).trim()) {
-                    opt.selected = true;
-                }
-                modelSelect.appendChild(opt);
-            });
-
-            const providerHint = data.provider_hint ? ` · ${data.provider_hint}` : '';
-            _setApiCardMeta(card, `已获取 ${models.length} 个模型${providerHint}`, 'success');
-        } catch (e) {
-            modelSelect.innerHTML = '<option value="">未获取到模型</option>';
-            _setApiCardMeta(card, `请求失败：${e.message || e}`, 'danger');
-        }
-    }
-
-    async function hotSwitchModelForCard(triggerEl) {
-        const card = triggerEl ? triggerEl.closest('.api-key-card') : null;
-        if (!card) return;
-
-        const serviceKey = (card.querySelector('.api-service-key')?.value || '').trim();
-        const modelInput = card.querySelector('.api-model');
-        const urlInput = card.querySelector('.api-url');
-        const keyInput = card.querySelector('.api-key');
-        if (!serviceKey || !modelInput || !urlInput || !keyInput) return;
-
-        const model = (modelInput.value || '').trim();
-        if (!model) {
-            _setApiCardMeta(card, '请先输入或选择模型', 'warning');
-            return;
-        }
-
-        applyApiUrlHeuristicFromInput(urlInput);
-        const payload = {
-            service_key: serviceKey,
-            model,
-            base_url: (urlInput.value || '').trim(),
-            key: (keyInput.value || '').trim()
-        };
-
-        _setApiCardMeta(card, `正在热切换到 ${model}...`, 'muted');
-        try {
-            const res = await fetch('/api/config/hot-switch-model', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success) {
-                _setApiCardMeta(card, `热切换失败：${data.error || '未知错误'}`, 'danger');
-                return;
-            }
-            _setApiCardMeta(card, `已热切换：${data.active_runtime_model || model}`, 'success');
-        } catch (e) {
-            _setApiCardMeta(card, `热切换失败：${e.message || e}`, 'danger');
-        }
-    }
-
-    function onApiModelSelectChange(selectEl) {
-        const card = selectEl ? selectEl.closest('.api-key-card') : null;
-        if (!card || !selectEl) return;
-        const chosen = String(selectEl.value || '').trim();
-        if (!chosen) return;
-        const modelInput = card.querySelector('.api-model');
-        if (modelInput) {
-            modelInput.value = chosen;
-        }
-        hotSwitchModelForCard(selectEl);
-    }
-
-    // 预设的API服务类型（暴露到window供插件使用）
-    window.API_SERVICE_TEMPLATES = [
-        { key: 'deepseek_chat', name: '聊天 API (DeepSeek)', description: '用于日常对话的API' },
-        { key: 'programming_chat', name: '编程对话 API (Programming)', description: '用于编程相关的对话（非Agent模式）' },
-        { key: 'search', name: '搜索 API (SearchAPI)', description: '用于网络搜索的API' },
-        { key: 'image_recognition', name: '图像识别 API (VisionAPI)', description: '用于图片理解的API' },
-        { key: 'image_generation', name: '图像生成 API (ImageGenAPI)', description: '用于图片生成的API' },
-        { key: 'video_generation', name: '视频生成 API (VideoGenAPI)', description: '用于视频生成的API' },
-        { key: 'speech_to_text', name: '语音转文本 API (STT)', description: '用于语音识别的API' },
-        { key: 'text_to_speech', name: '文本转语音 API (TTS)', description: '用于语音合成的API' },
-        { key: 'coder', name: '代码助手 API (CoderAPI)', description: '用于代码生成的Agent API' },
-        { key: 'kimi_coder', name: '代码助手 API (Kimi方案)', description: 'Kimi Coder Agent方案' },
-        { key: 'minimax_coder', name: '代码助手 API (MiniMax方案)', description: 'MiniMax Coder Agent方案' },
-        { key: 'claude_coder', name: '代码助手 API (Claude方案)', description: 'Claude Coder Agent方案' }
-    ];
-    
-    // 主流AI提供商预设配置（参考OpenClaw、LangChain等项目）
-    window.AI_PROVIDER_PRESETS = {
-        // OpenAI系列
-        'openai': {
-            name: 'OpenAI',
-            base_url: 'https://api.openai.com/v1',
-            models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-            icon: '🟢',
-            category: 'cloud'
-        },
-        'anthropic': {
-            name: 'Anthropic (Claude)',
-            base_url: 'https://api.anthropic.com/v1',
-            models: ['claude-3-7-sonnet', 'claude-3-5-sonnet', 'claude-3-opus', 'claude-3-haiku'],
-            icon: '🟣',
-            category: 'cloud'
-        },
-        
-        // 国内主流
-        'deepseek': {
-            name: 'DeepSeek (深度求索)',
-            base_url: 'https://api.deepseek.com/v1',
-            models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'],
-            icon: '🔵',
-            category: 'domestic'
-        },
-        'moonshot': {
-            name: 'Moonshot (月之暗面/Kimi)',
-            base_url: 'https://api.moonshot.cn/v1',
-            models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k', 'kimi-latest'],
-            icon: '🌙',
-            category: 'domestic'
-        },
-        'qwen': {
-            name: 'Qwen (通义千问)',
-            base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-            models: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen-long'],
-            icon: '🟠',
-            category: 'domestic'
-        },
-        'zhipu': {
-            name: 'Zhipu (智谱AI/GLM)',
-            base_url: 'https://open.bigmodel.cn/api/paas/v4',
-            models: ['glm-4', 'glm-4-plus', 'glm-4-air', 'glm-4-flash'],
-            icon: '🔴',
-            category: 'domestic'
-        },
-        'minimax': {
-            name: 'MiniMax',
-            base_url: 'https://api.minimaxi.com/v1',
-            models: ['abab6.5-chat', 'abab6.5s-chat', 'abab5.5-chat'],
-            icon: '⚡',
-            category: 'domestic'
-        },
-        'doubao': {
-            name: 'Doubao (豆包/字节)',
-            base_url: 'https://ark.cn-beijing.volces.com/api/v3',
-            models: ['doubao-pro-32k', 'doubao-lite-32k', 'doubao-pro-128k'],
-            icon: '🟤',
-            category: 'domestic'
-        },
-        
-        // 国际平台
-        'groq': {
-            name: 'Groq',
-            base_url: 'https://api.groq.com/openai/v1',
-            models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
-            icon: '⚡',
-            category: 'international'
-        },
-        'gemini': {
-            name: 'Google Gemini',
-            base_url: 'https://generativelanguage.googleapis.com/v1beta',
-            models: ['gemini-2.0-flash', 'gemini-2.0-pro', 'gemini-1.5-pro'],
-            icon: '🔮',
-            category: 'international'
-        },
-        'openrouter': {
-            name: 'OpenRouter',
-            base_url: 'https://openrouter.ai/api/v1',
-            models: ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.0-flash'],
-            icon: '🌐',
-            category: 'aggregator'
-        },
-        
-        // 本地部署
-        'ollama': {
-            name: 'Ollama (本地)',
-            base_url: 'http://localhost:11434/v1',
-            models: ['llama3.2', 'llama3.1', 'qwen2.5', 'deepseek-r1', 'mistral'],
-            icon: '🦙',
-            category: 'local',
-            requires_key: false
-        },
-        'vllm': {
-            name: 'vLLM (本地)',
-            base_url: 'http://localhost:8000/v1',
-            models: ['custom-model'],
-            icon: '🚀',
-            category: 'local',
-            requires_key: false
-        },
-        'lmstudio': {
-            name: 'LM Studio (本地)',
-            base_url: 'http://localhost:1234/v1',
-            models: ['local-model'],
-            icon: '💻',
-            category: 'local',
-            requires_key: false
-        }
-    };
-    
-    // 插件钩子：当添加新的API服务时触发
-    window.onApiServiceAdded = null;  // 插件可以覆盖此函数
-    
-    const API_SERVICE_TEMPLATES = window.API_SERVICE_TEMPLATES;  // 内部引用
-
-    // 显示API模板信息（供用户查看）
-    function showApiTemplatesInfo() {
-        const templatesList = API_SERVICE_TEMPLATES.map(t => 
-            `<tr><td><code>${t.key}</code></td><td>${t.name}</td><td>${t.description}</td></tr>`
-        ).join('');
-        
-        const modalHtml = `
-            <div class="modal fade" id="apiTemplatesInfoModal" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">📋 可用的 API 服务类型</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="alert alert-info small mb-3">
-                                <i class="fas fa-lightbulb"></i> 
-                                <strong>插件开发者提示：</strong> 你的插件可以通过 <code>API_SERVICE_TEMPLATES</code> 变量或 
-                                <code>/api/config/api-templates</code> 接口获取此列表。
-                            </div>
-                            <table class="table table-sm table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>服务键名</th>
-                                        <th>显示名称</th>
-                                        <th>描述</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${templatesList}
-                                </tbody>
-                            </table>
-                            <div class="mt-3">
-                                <h6>插件集成示例：</h6>
-                                <pre class="bg-light p-2 rounded small"><code>// 在插件中访问模板列表
-const templates = window.API_SERVICE_TEMPLATES || [];
-
-// 或者通过API获取
-fetch('/api/config/api-templates')
-  .then(res => res.json())
-  .then(data => console.log(data.templates));</code></pre>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">知道了</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        const existingModal = document.getElementById('apiTemplatesInfoModal');
-        if (existingModal) {
-            existingModal.remove();
-        }
-
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        const modal = new bootstrap.Modal(document.getElementById('apiTemplatesInfoModal'));
-        modal.show();
-
-        document.getElementById('apiTemplatesInfoModal').addEventListener('hidden.bs.modal', function() {
-            this.remove();
-        });
-    }
-
     async function addApiKeySlot() {
-        // 创建自定义弹窗HTML
-        const modalHtml = `
-            <div class="modal fade" id="addApiServiceModal" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">➕ 添加 API 服务</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <!-- 第一步：选择服务类型 -->
-                            <div class="mb-3">
-                                <label class="form-label">① 选择服务类型</label>
-                                <select class="form-select" id="api-service-template-select">
-                                    <option value="">-- 从列表选择 --</option>
-                                    ${API_SERVICE_TEMPLATES.map(t => 
-                                        `<option value="${t.key}" data-desc="${t.description}">${t.name}</option>`
-                                    ).join('')}
-                                    <option value="__custom__">✏️ 自定义服务</option>
-                                </select>
-                                <div class="form-text" id="api-service-desc"></div>
-                            </div>
-                            
-                            <!-- 第二步：选择提供商预设（可选） -->
-                            <div class="mb-3" id="provider-preset-section" style="display:none;">
-                                <label class="form-label">② 选择提供商预设（快速配置）</label>
-                                <div class="row g-2">
-                                    <div class="col-md-6">
-                                        <select class="form-select" id="provider-category-select">
-                                            <option value="">-- 选择分类 --</option>
-                                            <option value="domestic">🇨🇳 国内主流</option>
-                                            <option value="international">🌍 国际平台</option>
-                                            <option value="cloud">☁️ 云服务</option>
-                                            <option value="local">💻 本地部署</option>
-                                            <option value="aggregator">🔗 聚合平台</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <select class="form-select" id="provider-preset-select" disabled>
-                                            <option value="">-- 先选择分类 --</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="mt-2 p-2 bg-light rounded" id="provider-info-box" style="display:none;">
-                                    <div class="small"><strong>Base URL:</strong> <code id="preset-base-url"></code></div>
-                                    <div class="small mt-1"><strong>推荐模型:</strong> <span id="preset-models"></span></div>
-                                    <div class="small text-muted mt-1" id="preset-note"></div>
-                                </div>
-                            </div>
-                            
-                            <!-- 自定义服务名称 -->
-                            <div class="mb-3" id="custom-service-name-group" style="display:none;">
-                                <label class="form-label">自定义服务名称</label>
-                                <input type="text" class="form-control" id="custom-service-name" placeholder="例如: my_custom_api">
-                                <div class="form-text">使用小写字母和下划线，例如: deepseek_chat</div>
-                            </div>
-                            
-                            <div class="alert alert-info small">
-                                <i class="fas fa-info-circle"></i> 
-                                选择服务类型后，可通过提供商预设快速填充 Base URL，也可以手动填写。
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                            <button type="button" class="btn btn-primary" id="api-service-confirm-btn" disabled>添加</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // 移除已存在的modal
-        const existingModal = document.getElementById('addApiServiceModal');
-        if (existingModal) {
-            existingModal.remove();
+        const name = await showUnifiedActionModal({
+            title: '新增服务密钥',
+            message: '请输入服务名称（例如 deepseek_chat）。',
+            level: 'info',
+            confirmText: '添加',
+            cancelText: '取消',
+            confirmClass: 'btn-primary',
+            input: {
+                value: 'new_service',
+                placeholder: 'deepseek_chat',
+                errorText: '服务名称不能为空'
+            },
+            inputRequired: true
+        });
+        if(name) {
+            document.getElementById('api-keys-container').appendChild(createApiKeySlot(name));
         }
-
-        // 添加新的modal到body
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-        const modal = new bootstrap.Modal(document.getElementById('addApiServiceModal'));
-        const templateSelect = document.getElementById('api-service-template-select');
-        const customNameGroup = document.getElementById('custom-service-name-group');
-        const customNameInput = document.getElementById('custom-service-name');
-        const descEl = document.getElementById('api-service-desc');
-        const confirmBtn = document.getElementById('api-service-confirm-btn');
-        
-        // 提供商预设相关元素
-        const providerPresetSection = document.getElementById('provider-preset-section');
-        const categorySelect = document.getElementById('provider-category-select');
-        const providerSelect = document.getElementById('provider-preset-select');
-        const infoBox = document.getElementById('provider-info-box');
-        const baseUrlEl = document.getElementById('preset-base-url');
-        const modelsEl = document.getElementById('preset-models');
-        const noteEl = document.getElementById('preset-note');
-
-        let selectedServiceKey = '';
-        let selectedProviderKey = '';
-
-        // 监听服务类型选择变化
-        templateSelect.addEventListener('change', function() {
-            const value = this.value;
-            if (value === '__custom__') {
-                customNameGroup.style.display = 'block';
-                providerPresetSection.style.display = 'none';
-                descEl.textContent = '请输入自定义的服务名称';
-                selectedServiceKey = '';
-                confirmBtn.disabled = true;
-            } else if (value) {
-                customNameGroup.style.display = 'none';
-                providerPresetSection.style.display = 'block';
-                const template = API_SERVICE_TEMPLATES.find(t => t.key === value);
-                descEl.textContent = template ? template.description : '';
-                selectedServiceKey = value;
-                confirmBtn.disabled = false;
-                
-                // 重置提供商选择
-                categorySelect.value = '';
-                providerSelect.innerHTML = '<option value="">-- 先选择分类 --</option>';
-                providerSelect.disabled = true;
-                infoBox.style.display = 'none';
-                selectedProviderKey = '';
-            } else {
-                customNameGroup.style.display = 'none';
-                providerPresetSection.style.display = 'none';
-                descEl.textContent = '';
-                selectedServiceKey = '';
-                confirmBtn.disabled = true;
-            }
-        });
-        
-        // 监听分类选择变化
-        categorySelect.addEventListener('change', function() {
-            const category = this.value;
-            providerSelect.innerHTML = '<option value="">-- 选择提供商 --</option>';
-            
-            if (!category) {
-                providerSelect.disabled = true;
-                infoBox.style.display = 'none';
-                selectedProviderKey = '';
-                return;
-            }
-            
-            // 筛选该分类下的提供商
-            const providers = Object.entries(window.AI_PROVIDER_PRESETS)
-                .filter(([key, preset]) => preset.category === category)
-                .sort((a, b) => a[1].name.localeCompare(b[1].name));
-            
-            providers.forEach(([key, preset]) => {
-                const option = document.createElement('option');
-                option.value = key;
-                option.textContent = `${preset.icon} ${preset.name}`;
-                providerSelect.appendChild(option);
-            });
-            
-            providerSelect.disabled = false;
-            infoBox.style.display = 'none';
-            selectedProviderKey = '';
-        });
-        
-        // 监听提供商选择变化
-        providerSelect.addEventListener('change', function() {
-            const providerKey = this.value;
-            if (!providerKey) {
-                infoBox.style.display = 'none';
-                selectedProviderKey = '';
-                return;
-            }
-            
-            const preset = window.AI_PROVIDER_PRESETS[providerKey];
-            if (preset) {
-                baseUrlEl.textContent = preset.base_url;
-                modelsEl.textContent = preset.models.join(', ');
-                noteEl.textContent = preset.requires_key === false ? '本地部署，无需API Key' : '需要API Key，请前往官网申请';
-                infoBox.style.display = 'block';
-                selectedProviderKey = providerKey;
-            }
-        });
-
-        // 监听自定义名称输入
-        customNameInput.addEventListener('input', function() {
-            const value = this.value.trim().toLowerCase().replace(/\s+/g, '_');
-            this.value = value;
-            if (value && /^[a-z][a-z0-9_]*$/.test(value)) {
-                selectedServiceKey = value;
-                confirmBtn.disabled = false;
-            } else {
-                selectedServiceKey = '';
-                confirmBtn.disabled = true;
-            }
-        });
-
-        // 确认按钮
-        confirmBtn.addEventListener('click', function() {
-            if (selectedServiceKey) {
-                // 检查是否已存在
-                const existingCard = document.querySelector(`.api-service-key[value="${selectedServiceKey}"]`);
-                if (existingCard) {
-                    alert(`服务 "${selectedServiceKey}" 已存在！`);
-                    return;
-                }
-                
-                // 添加到容器
-                const newCard = createApiKeySlot(selectedServiceKey);
-                document.getElementById('api-keys-container').appendChild(newCard);
-                
-                // 如果选择了提供商预设，自动填充 Base URL
-                if (selectedProviderKey && window.AI_PROVIDER_PRESETS[selectedProviderKey]) {
-                    const preset = window.AI_PROVIDER_PRESETS[selectedProviderKey];
-                    const urlInput = newCard.querySelector('.api-url');
-                    if (urlInput) {
-                        urlInput.value = preset.base_url;
-                        // 触发URL解析逻辑
-                        setTimeout(() => {
-                            applyApiUrlHeuristicFromInput(urlInput);
-                        }, 100);
-                    }
-                }
-                
-                // 关闭modal
-                modal.hide();
-                
-                // 触发插件钩子（如果存在）
-                if (window.onApiServiceAdded && typeof window.onApiServiceAdded === 'function') {
-                    window.onApiServiceAdded(selectedServiceKey, selectedProviderKey);
-                }
-            }
-        });
-
-        // 显示modal
-        modal.show();
-
-        // 监听modal关闭事件，清理DOM
-        document.getElementById('addApiServiceModal').addEventListener('hidden.bs.modal', function() {
-            this.remove();
-        });
     }
 
     // --- Main Load function ---
@@ -5838,7 +4907,7 @@ fetch('/api/config/api-templates')
             // General API Keys
             const container = document.getElementById('api-keys-container');
             container.innerHTML = '';
-            const defaultKeys = ['deepseek_chat', 'programming_chat', 'search', 'image_recognition', 'image_generation', 'video_generation', 'speech_to_text', 'text_to_speech', 'coder', 'kimi_coder', 'minimax_coder', 'claude_coder'];
+            const defaultKeys = ['deepseek_chat', 'search', 'image_recognition', 'image_generation', 'video_generation', 'speech_to_text', 'text_to_speech', 'coder', 'kimi_coder', 'minimax_coder', 'claude_coder'];
             const currentKeys = data.api_keys || {};
 
             // Inject coder_api providers into api_keys view for unified editing.
@@ -6291,7 +5360,7 @@ fetch('/api/config/api-templates')
 
             // Load details of selected
             await loadSelectedPersona();
-            await loadSandboxPersonas(true);
+            await loadSandboxPersonas();
             
         } catch(e) {
             select.innerHTML = '<option disabled>Error loading list</option>';
@@ -6955,6 +6024,119 @@ fetch('/api/config/api-templates')
         }
     }
 
+    async function loadSandboxChatTtsSettings() {
+        const toggle = document.getElementById('sandbox-chat-tts-enabled');
+        const statusEl = document.getElementById('sandbox-chat-tts-status');
+        try {
+            const res = await fetch('/api/tts/settings');
+            const data = await res.json();
+            if (!data.success) {
+                if (statusEl) statusEl.textContent = 'TTS 配置加载失败';
+                return;
+            }
+            sandboxTtsEnabled = !!data.voice_reply_enabled;
+            if (toggle) toggle.checked = sandboxTtsEnabled;
+            if (sandboxTtsEnabled) {
+                try {
+                    const persona = sandboxPersonaFilename ? `?persona_filename=${encodeURIComponent(sandboxPersonaFilename)}` : '';
+                    await fetch(`/api/tts/status${persona}&autostart=1`);
+                } catch (_) {}
+            }
+            if (statusEl) {
+                if (!data.ref_audio_exists) {
+                    statusEl.textContent = '缺少参考音频';
+                    statusEl.className = 'small text-danger';
+                    statusEl.title = data.ref_audio_path || '';
+                } else if (data.service_online) {
+                    statusEl.textContent = 'SoVITS 已连接';
+                    statusEl.className = 'small text-success';
+                    statusEl.title = data.ref_audio_path || '';
+                } else {
+                    statusEl.textContent = 'SoVITS 未就绪（将尝试自动启动）';
+                    statusEl.className = 'small text-warning';
+                    statusEl.title = '';
+                }
+            }
+        } catch (e) {
+            if (statusEl) statusEl.textContent = 'TTS 状态未知';
+            console.warn('loadSandboxChatTtsSettings failed', e);
+        }
+    }
+
+    async function loadSandboxChatThinkingSettings() {
+        const toggle = document.getElementById('sandbox-chat-thinking-enabled');
+        try {
+            const res = await fetch('/api/chat_settings/deepseek_thinking');
+            const data = await res.json();
+            if (!data.success) return;
+            if (toggle) toggle.checked = !!data.thinking_mode;
+        } catch (e) {
+            console.warn('loadSandboxChatThinkingSettings failed', e);
+        }
+    }
+
+    async function onSandboxChatTtsToggle() {
+        const toggle = document.getElementById('sandbox-chat-tts-enabled');
+        const enabled = !!toggle?.checked;
+        sandboxTtsEnabled = enabled;
+        try {
+            const res = await fetch('/api/tts/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ voice_reply_enabled: enabled })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                await showUnifiedActionModal({
+                    title: '保存失败',
+                    message: data.error || '无法保存语音设置',
+                    level: 'warning'
+                });
+                return;
+            }
+            sandboxTtsEnabled = !!data.voice_reply_enabled;
+            if (toggle) toggle.checked = sandboxTtsEnabled;
+            if (sandboxTtsEnabled) {
+                try {
+                    await fetch('/api/tts/start', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({persona_filename: sandboxPersonaFilename || ''}),
+                    });
+                } catch (_) {}
+            }
+            await loadSandboxChatTtsSettings();
+        } catch (e) {
+            console.warn('onSandboxChatTtsToggle failed', e);
+        }
+    }
+
+    async function onSandboxChatThinkingToggle() {
+        const toggle = document.getElementById('sandbox-chat-thinking-enabled');
+        const enabled = !!toggle?.checked;
+        try {
+            const res = await fetch('/api/chat_settings/deepseek_thinking', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ enable: enabled, reasoning_effort: 'high' })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                await showUnifiedActionModal({
+                    title: '保存失败',
+                    message: data.error || '无法保存思考模式设置',
+                    level: 'warning'
+                });
+                if (toggle) toggle.checked = !enabled;
+                return;
+            }
+            if (toggle) toggle.checked = !!data.thinking_mode;
+        } catch (e) {
+            console.warn('onSandboxChatThinkingToggle failed', e);
+            if (toggle) toggle.checked = !enabled;
+        }
+    }
+
     async function loadWorkModeStatus() {
         try {
             const res = await fetch('/api/work_mode/status');
@@ -7023,10 +6205,6 @@ fetch('/api/config/api-templates')
                 const useDocker = document.getElementById('chat-settings-sandbox-use-docker');
                 const agentAutonomous = document.getElementById('chat-settings-sandbox-agent-autonomous');
                 const traceRetentionDays = document.getElementById('chat-settings-sandbox-trace-retention-days');
-                const longTermRefreshInterval = document.getElementById('chat-settings-long-term-refresh-interval');
-                const deepseekThinkingMode = document.getElementById('chat-settings-deepseek-thinking-mode');
-                const deepseekReasoningEffort = document.getElementById('chat-settings-deepseek-reasoning-effort');
-                
                 if (traceEnabled) traceEnabled.checked = !!chatSettings.sandbox_show_agent_trace;
                 if (traceCollapsed) traceCollapsed.checked = !!chatSettings.sandbox_trace_collapsed;
                 if (backToTop) backToTop.checked = !!chatSettings.sandbox_show_back_to_top;
@@ -7035,15 +6213,6 @@ fetch('/api/config/api-templates')
                 if (traceRetentionDays) {
                     const days = Number.parseInt(chatSettings.sandbox_trace_retention_days, 10);
                     traceRetentionDays.value = Number.isFinite(days) && days >= 0 ? String(days) : '7';
-                }
-                if (longTermRefreshInterval) {
-                    const interval = Number.parseInt(chatSettings.long_term_refresh_interval, 10);
-                    longTermRefreshInterval.value = Number.isFinite(interval) && interval >= 1 ? String(interval) : '8';
-                }
-                if (deepseekThinkingMode) deepseekThinkingMode.checked = !!chatSettings.deepseek_thinking_mode;
-                if (deepseekReasoningEffort) {
-                    const effort = chatSettings.deepseek_reasoning_effort || 'high';
-                    deepseekReasoningEffort.value = ['high', 'max'].includes(effort) ? effort : 'high';
                 }
             }
 
@@ -7224,14 +6393,6 @@ fetch('/api/config/api-templates')
         const retentionInput = document.getElementById('chat-settings-sandbox-trace-retention-days');
         const retentionRaw = Number.parseInt(retentionInput?.value || '7', 10);
         const sandboxTraceRetentionDays = Number.isFinite(retentionRaw) ? Math.min(3650, Math.max(0, retentionRaw)) : 7;
-        const longTermIntervalInput = document.getElementById('chat-settings-long-term-refresh-interval');
-        const longTermIntervalRaw = Number.parseInt(longTermIntervalInput?.value || '8', 10);
-        const longTermRefreshInterval = Number.isFinite(longTermIntervalRaw) ? Math.min(200, Math.max(1, longTermIntervalRaw)) : 8;
-        
-        // DeepSeek 思考模式配置
-        const deepseekThinkingMode = !!document.getElementById('chat-settings-deepseek-thinking-mode')?.checked;
-        const deepseekReasoningEffort = document.getElementById('chat-settings-deepseek-reasoning-effort')?.value || 'high';
-        
         const replyPolicy = {
             group_mode: document.getElementById('wm-reply-group-mode')?.value || 'mention_or_keyword',
             private_mode: document.getElementById('wm-reply-private-mode')?.value || 'always',
@@ -7257,10 +6418,7 @@ fetch('/api/config/api-templates')
                 sandbox_show_back_to_top: sandboxBackToTop,
                 sandbox_use_docker_runtime: sandboxUseDocker,
                 sandbox_agent_autonomous: sandboxAgentAutonomous,
-                sandbox_trace_retention_days: sandboxTraceRetentionDays,
-                long_term_refresh_interval: longTermRefreshInterval,
-                deepseek_thinking_mode: deepseekThinkingMode,
-                deepseek_reasoning_effort: deepseekReasoningEffort
+                sandbox_trace_retention_days: sandboxTraceRetentionDays
             },
             reply_policy: replyPolicy
         };
@@ -7432,9 +6590,6 @@ fetch('/api/config/api-templates')
         data: []
     };
     let mcpServersCache = [];
-    let mcpViewMode = 'card';
-    let mcpToggleBusy = false;
-    let skillFrameworkToggleBusy = false;
     let difyMarketCache = [];
     let difyMarketPageState = {
         page: 1,
@@ -7458,39 +6613,6 @@ fetch('/api/config/api-templates')
         query: ''
     };
 
-
-    function _computeAdaptivePollDelay(state, success = true) {
-        const hiddenBase = 3000;
-        const visibleBase = 1000;
-        const baseDelay = document.visibilityState === 'hidden' ? hiddenBase : visibleBase;
-
-        if (success) {
-            state._pollFailures = 0;
-            return baseDelay;
-        }
-
-        const currentFailures = Number(state._pollFailures || 0);
-        const nextFailures = Math.min(currentFailures + 1, 4);
-        state._pollFailures = nextFailures;
-        return Math.min(baseDelay * Math.pow(2, nextFailures), 15000);
-    }
-
-    function _scheduleJobPoll(state, pollFn, options = {}) {
-        const immediate = !!(options && options.immediate);
-        const success = (options && Object.prototype.hasOwnProperty.call(options, 'success')) ? !!options.success : true;
-        if (!state || typeof pollFn !== 'function') return;
-
-        if (state.pollTimer) {
-            clearTimeout(state.pollTimer);
-            state.pollTimer = null;
-        }
-        if (state.active === false && !immediate) {
-            return;
-        }
-
-        const delay = immediate ? 0 : _computeAdaptivePollDelay(state, success);
-        state.pollTimer = setTimeout(pollFn, delay);
-    }
     // 安全的 toastr 包装
     if (typeof toastr === 'undefined') {
         window.toastr = {
@@ -8293,31 +7415,6 @@ fetch('/api/config/api-templates')
         }
     }
 
-    async function toggleSkillFrameworkEnabled(enabled) {
-        if (skillFrameworkToggleBusy) return;
-        skillFrameworkToggleBusy = true;
-        const toggle = document.getElementById('skills-framework-toggle');
-        if (toggle) toggle.disabled = true;
-        try {
-            const data = await fetchJsonSafe('/api/skills/framework_enabled', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({enabled: !!enabled})
-            });
-            if (!data.success) throw new Error(data.error || 'toggle failed');
-            toastr.success(`Skill 框架已${enabled ? '启用' : '禁用'}`);
-            await loadSkillStatus();
-        } catch (e) {
-            if (toggle && skillStatusCache && typeof skillStatusCache.enabled === 'boolean') {
-                toggle.checked = !!skillStatusCache.enabled;
-            }
-            toastr.error('Skill 总开关操作失败: ' + e.message);
-        } finally {
-            skillFrameworkToggleBusy = false;
-            if (toggle) toggle.disabled = false;
-        }
-    }
-
     async function loadSkillStatus() {
         const cards = document.getElementById('skills-cards');
         if (cards) cards.innerHTML = '<div class="col-12 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>加载中...</div>';
@@ -8333,10 +7430,6 @@ fetch('/api/config/api-templates')
             if (badge) {
                 badge.textContent = status.enabled ? 'Enabled' : 'Disabled';
                 badge.className = `badge ${status.enabled ? 'bg-success' : 'bg-secondary'}`;
-            }
-            const toggle = document.getElementById('skills-framework-toggle');
-            if (toggle) {
-                toggle.checked = !!status.enabled;
             }
 
             // 如果 skills 为空，显示空状态
@@ -8546,18 +7639,14 @@ fetch('/api/config/api-templates')
 
     function _difyInstallStopPolling() {
         if (difyInstallJobState.pollTimer) {
-            clearTimeout(difyInstallJobState.pollTimer);
+            clearInterval(difyInstallJobState.pollTimer);
             difyInstallJobState.pollTimer = null;
         }
-        difyInstallJobState._pollInFlight = false;
     }
 
     async function _difyInstallPollJob() {
         const jobId = difyInstallJobState.jobId;
-        if (!jobId || difyInstallJobState._pollInFlight) return;
-        difyInstallJobState._pollInFlight = true;
-        let shouldContinue = true;
-        let pollSuccess = true;
+        if (!jobId) return;
         try {
             const ctl = new AbortController();
             const timer = setTimeout(() => ctl.abort(), 8000);
@@ -8570,26 +7659,18 @@ fetch('/api/config/api-templates')
             if (job.status === 'success') {
                 _difyInstallStopPolling();
                 difyInstallJobState.active = false;
-                shouldContinue = false;
                 toastr.success(job.message || 'Dify CLI 安装完成');
                 await checkDifyCliStatus(false);
             } else if (job.status === 'error') {
                 _difyInstallStopPolling();
                 difyInstallJobState.active = false;
-                shouldContinue = false;
                 toastr.error(job.message || 'Dify CLI 安装失败');
             }
         } catch (e) {
-            pollSuccess = false;
             const badge = document.getElementById('dify-install-status-badge');
             if (badge) {
                 badge.textContent = '轮询失败';
                 badge.className = 'badge bg-warning text-dark';
-            }
-        } finally {
-            difyInstallJobState._pollInFlight = false;
-            if (shouldContinue && difyInstallJobState.active) {
-                _scheduleJobPoll(difyInstallJobState, _difyInstallPollJob, {success: pollSuccess});
             }
         }
     }
@@ -8605,7 +7686,8 @@ fetch('/api/config/api-templates')
         difyInstallJobState.modal = modal;
         modal.show();
         _difyInstallStopPolling();
-        _scheduleJobPoll(difyInstallJobState, _difyInstallPollJob, {immediate: true, success: true});
+        difyInstallJobState.pollTimer = setInterval(_difyInstallPollJob, 1000);
+        _difyInstallPollJob();
     }
 
     function closeDifyInstallToBackground() {
@@ -8703,19 +7785,15 @@ fetch('/api/config/api-templates')
 
     function _extraCliInstallStopPolling() {
         if (extraCliInstallJobState.pollTimer) {
-            clearTimeout(extraCliInstallJobState.pollTimer);
+            clearInterval(extraCliInstallJobState.pollTimer);
             extraCliInstallJobState.pollTimer = null;
         }
-        extraCliInstallJobState._pollInFlight = false;
     }
 
     async function _extraCliInstallPollJob() {
         const jobId = extraCliInstallJobState.jobId;
         const cliName = extraCliInstallJobState.cliName;
-        if (!jobId || !cliName || extraCliInstallJobState._pollInFlight) return;
-        extraCliInstallJobState._pollInFlight = true;
-        let shouldContinue = true;
-        let pollSuccess = true;
+        if (!jobId || !cliName) return;
         try {
             const encodedName = encodeURIComponent(cliName);
             const encodedJobId = encodeURIComponent(jobId);
@@ -8729,26 +7807,18 @@ fetch('/api/config/api-templates')
             if (job.status === 'success') {
                 _extraCliInstallStopPolling();
                 extraCliInstallJobState.active = false;
-                shouldContinue = false;
                 toastr.success(job.message || `${_extraCliLabel(cliName)} 安装完成`);
                 await checkExtraCliStatus(cliName, false);
             } else if (job.status === 'error') {
                 _extraCliInstallStopPolling();
                 extraCliInstallJobState.active = false;
-                shouldContinue = false;
                 toastr.error(job.message || `${_extraCliLabel(cliName)} 安装失败`);
             }
         } catch (e) {
-            pollSuccess = false;
             const badge = document.getElementById('extra-cli-install-status-badge');
             if (badge) {
                 badge.textContent = '轮询失败';
                 badge.className = 'badge bg-warning text-dark';
-            }
-        } finally {
-            extraCliInstallJobState._pollInFlight = false;
-            if (shouldContinue && extraCliInstallJobState.active) {
-                _scheduleJobPoll(extraCliInstallJobState, _extraCliInstallPollJob, {success: pollSuccess});
             }
         }
     }
@@ -8766,7 +7836,8 @@ fetch('/api/config/api-templates')
         extraCliInstallJobState.modal = modal;
         modal.show();
         _extraCliInstallStopPolling();
-        _scheduleJobPoll(extraCliInstallJobState, _extraCliInstallPollJob, {immediate: true, success: true});
+        extraCliInstallJobState.pollTimer = setInterval(_extraCliInstallPollJob, 1000);
+        _extraCliInstallPollJob();
     }
 
     function closeExtraCliInstallToBackground() {
@@ -9259,18 +8330,14 @@ fetch('/api/config/api-templates')
 
     function _skillhubInstallStopPolling() {
         if (skillhubInstallJobState.pollTimer) {
-            clearTimeout(skillhubInstallJobState.pollTimer);
+            clearInterval(skillhubInstallJobState.pollTimer);
             skillhubInstallJobState.pollTimer = null;
         }
-        skillhubInstallJobState._pollInFlight = false;
     }
 
     async function _skillhubInstallPollJob() {
         const jobId = skillhubInstallJobState.jobId;
-        if (!jobId || skillhubInstallJobState._pollInFlight) return;
-        skillhubInstallJobState._pollInFlight = true;
-        let shouldContinue = true;
-        let pollSuccess = true;
+        if (!jobId) return;
         try {
             const data = await fetchJsonSafe(`/api/skills/market/skillhub/cli/install/jobs/${encodeURIComponent(jobId)}`);
             if (!data.success) throw new Error(data.error || 'poll failed');
@@ -9278,25 +8345,17 @@ fetch('/api/config/api-templates')
             if (data.status === 'success') {
                 _skillhubInstallStopPolling();
                 skillhubInstallJobState.active = false;
-                shouldContinue = false;
                 toastr.success(data.message || 'SkillHub CLI 安装完成');
             } else if (data.status === 'error') {
                 _skillhubInstallStopPolling();
                 skillhubInstallJobState.active = false;
-                shouldContinue = false;
                 toastr.error(data.message || 'SkillHub CLI 安装失败');
             }
         } catch (e) {
-            pollSuccess = false;
             const badge = document.getElementById('skillhub-install-status-badge');
             if (badge) {
                 badge.textContent = '轮询失败';
                 badge.className = 'badge bg-warning text-dark';
-            }
-        } finally {
-            skillhubInstallJobState._pollInFlight = false;
-            if (shouldContinue && skillhubInstallJobState.active) {
-                _scheduleJobPoll(skillhubInstallJobState, _skillhubInstallPollJob, {success: pollSuccess});
             }
         }
     }
@@ -9312,7 +8371,8 @@ fetch('/api/config/api-templates')
         skillhubInstallJobState.modal = modal;
         modal.show();
         _skillhubInstallStopPolling();
-        _scheduleJobPoll(skillhubInstallJobState, _skillhubInstallPollJob, {immediate: true, success: true});
+        skillhubInstallJobState.pollTimer = setInterval(_skillhubInstallPollJob, 1000);
+        _skillhubInstallPollJob();
     }
 
     function closeSkillhubInstallToBackground() {
@@ -9447,18 +8507,14 @@ fetch('/api/config/api-templates')
 
     function _agentDeployStopPolling() {
         if (agentDeployJobState.pollTimer) {
-            clearTimeout(agentDeployJobState.pollTimer);
+            clearInterval(agentDeployJobState.pollTimer);
             agentDeployJobState.pollTimer = null;
         }
-        agentDeployJobState._pollInFlight = false;
     }
 
     async function _agentDeployPollJob() {
         const jobId = agentDeployJobState.jobId;
-        if (!jobId || agentDeployJobState._pollInFlight) return;
-        agentDeployJobState._pollInFlight = true;
-        let shouldContinue = true;
-        let pollSuccess = true;
+        if (!jobId) return;
         try {
             const data = await fetchJsonSafe(`/api/skills/market/agent-deploy/jobs/${encodeURIComponent(jobId)}`);
             if (!data.success) throw new Error(data.error || 'poll failed');
@@ -9466,27 +8522,19 @@ fetch('/api/config/api-templates')
             if (data.status === 'success') {
                 _agentDeployStopPolling();
                 agentDeployJobState.active = false;
-                shouldContinue = false;
                 toastr.success(data.message || 'Agent 一键部署完成');
                 await loadSkillStatus();
             } else if (data.status === 'error') {
                 _agentDeployStopPolling();
                 agentDeployJobState.active = false;
-                shouldContinue = false;
                 toastr.error(data.message || 'Agent 一键部署失败');
                 await loadSkillStatus();
             }
         } catch (e) {
-            pollSuccess = false;
             const badge = document.getElementById('agent-deploy-status-badge');
             if (badge) {
                 badge.textContent = '轮询失败';
                 badge.className = 'badge bg-warning text-dark';
-            }
-        } finally {
-            agentDeployJobState._pollInFlight = false;
-            if (shouldContinue && agentDeployJobState.active) {
-                _scheduleJobPoll(agentDeployJobState, _agentDeployPollJob, {success: pollSuccess});
             }
         }
     }
@@ -9502,7 +8550,8 @@ fetch('/api/config/api-templates')
         agentDeployJobState.modal = modal;
         modal.show();
         _agentDeployStopPolling();
-        _scheduleJobPoll(agentDeployJobState, _agentDeployPollJob, {immediate: true, success: true});
+        agentDeployJobState.pollTimer = setInterval(_agentDeployPollJob, 1000);
+        _agentDeployPollJob();
     }
 
     function closeAgentDeployToBackground() {
@@ -9640,38 +8689,6 @@ fetch('/api/config/api-templates')
         opsSubmenuCollapse.show();
     }
 
-    function bindNavGroupHeaderInteraction({ groupId, parentTabId = '', defaultSubTabId = '', collapseGetter }) {
-        const navGroup = document.getElementById(groupId);
-        if (!navGroup) return;
-
-        const headerEl = navGroup.querySelector('.nav-group-header');
-        if (!headerEl) return;
-
-        const toggleBtn = navGroup.querySelector('.nav-submenu-toggle');
-        if (!toggleBtn) return;
-
-        if (headerEl.dataset.headerInteractiveBound === '1') return;
-        headerEl.dataset.headerInteractiveBound = '1';
-
-        headerEl.addEventListener('click', (event) => {
-            const target = event.target;
-            if (!(target instanceof Element)) return;
-
-            if (target.closest('.nav-submenu-toggle')) return;
-
-            const parentTabEl = parentTabId ? document.getElementById(parentTabId) : null;
-            const clickedParentTab = !!(parentTabEl && target.closest(`#${parentTabId}`));
-            if (!clickedParentTab) {
-                const tabIdToOpen = parentTabId || defaultSubTabId;
-                const tabEl = tabIdToOpen ? document.getElementById(tabIdToOpen) : null;
-                if (tabEl) tabEl.click();
-            }
-
-            const collapse = typeof collapseGetter === 'function' ? collapseGetter() : null;
-            if (collapse) collapse.show();
-        });
-    }
-
     function initAgentSubmenu() {
         const submenuEl = document.getElementById('agent-submenu');
         const toggleBtn = document.querySelector('[data-bs-target="#agent-submenu"]');
@@ -9687,12 +8704,6 @@ fetch('/api/config/api-templates')
         submenuEl.addEventListener('shown.bs.collapse', () => updateToggle(true));
         submenuEl.addEventListener('hidden.bs.collapse', () => updateToggle(false));
         updateToggle(submenuEl.classList.contains('show'));
-
-        bindNavGroupHeaderInteraction({
-            groupId: 'agent-nav-group',
-            parentTabId: 'v-agent-tab',
-            collapseGetter: () => agentSubmenuCollapse
-        });
 
         const activeTabId = document.querySelector('#v-pills-tab a.nav-link.active')?.id || '';
         ensureAgentSubmenuVisibleForTab(activeTabId);
@@ -9714,12 +8725,6 @@ fetch('/api/config/api-templates')
         submenuEl.addEventListener('shown.bs.collapse', () => updateToggle(true));
         submenuEl.addEventListener('hidden.bs.collapse', () => updateToggle(false));
         updateToggle(submenuEl.classList.contains('show'));
-
-        bindNavGroupHeaderInteraction({
-            groupId: 'ops-nav-group',
-            defaultSubTabId: 'v-config-tab',
-            collapseGetter: () => opsSubmenuCollapse
-        });
 
         const activeTabId = document.querySelector('#v-pills-tab a.nav-link.active')?.id || '';
         ensureOpsSubmenuVisibleForTab(activeTabId);
@@ -9748,12 +8753,6 @@ fetch('/api/config/api-templates')
         submenuEl.addEventListener('hidden.bs.collapse', () => updateToggle(false));
         updateToggle(submenuEl.classList.contains('show'));
 
-        bindNavGroupHeaderInteraction({
-            groupId: 'extensions-nav-group',
-            defaultSubTabId: 'v-plugins-tab',
-            collapseGetter: () => extensionsSubmenuCollapse
-        });
-
         const activeTabId = document.querySelector('#v-pills-tab a.nav-link.active')?.id || '';
         ensureExtensionsSubmenuVisibleForTab(activeTabId);
         setExtensionsSubmenuParentState(activeTabId);
@@ -9761,19 +8760,11 @@ fetch('/api/config/api-templates')
 
     // 3. Monitoring & Charts
     let mainChart, diskChart, detailCpuChart, detailMemChart;
-    let monitorLoopTimer = null;
-    let monitorLoopInFlight = false;
-    let monitorLoopStarted = false;
-    let chartFallbackLoading = false;
     document.addEventListener('DOMContentLoaded', () => {
         try {
             ensureIconFallbacks();
-            const hasChartJs = typeof Chart !== 'undefined';
-            if (!hasChartJs) {
-                console.warn('Chart.js not available, skip chart initialization');
-            }
             // Dashboard Main Chart
-            if(hasChartJs && document.getElementById('mainChart')) {
+            if(document.getElementById('mainChart')) {
                 const ctx = document.getElementById('mainChart').getContext('2d');
                 mainChart = new Chart(ctx, {
                     type: 'line',
@@ -9795,7 +8786,7 @@ fetch('/api/config/api-templates')
             }
 
             // Dashboard Disk Chart
-            if(hasChartJs && document.getElementById('diskChart')) {
+            if(document.getElementById('diskChart')) {
                 const dCtx = document.getElementById('diskChart').getContext('2d');
                 diskChart = new Chart(dCtx, {
                     type: 'doughnut',
@@ -9805,7 +8796,7 @@ fetch('/api/config/api-templates')
             }
 
             // System Tab Detailed Charts
-            if(hasChartJs && document.getElementById('detailCpuChart')) {
+            if(document.getElementById('detailCpuChart')) {
                 detailCpuChart = new Chart(document.getElementById('detailCpuChart').getContext('2d'), {
                     type: 'line',
                     data: {
@@ -9816,7 +8807,7 @@ fetch('/api/config/api-templates')
                 });
             }
 
-            if(hasChartJs && document.getElementById('detailMemChart')) {
+            if(document.getElementById('detailMemChart')) {
                 detailMemChart = new Chart(document.getElementById('detailMemChart').getContext('2d'), {
                     type: 'line',
                     data: {
@@ -9865,9 +8856,10 @@ fetch('/api/config/api-templates')
             refreshRecords();
             loadConfig(); // Load config on startup as well
             loadWorkModeStatus();
+            loadSandboxChatThinkingSettings();
+            loadSandboxChatTtsSettings();
             loadRealtimeSearchPanel();
             loadSandboxPersonas();
-            initSandboxThinkingMode();
             const pluginSearch = document.getElementById('plugins-search-input');
             if (pluginSearch) {
                 pluginSearch.addEventListener('input', () => {
@@ -9884,7 +8876,6 @@ fetch('/api/config/api-templates')
             }
             loadPluginStatus();
             loadSkillStatus();
-            setMcpViewMode('card');
         } catch (e) {
             console.error("Initialization Error:", e);
         }
@@ -9999,6 +8990,7 @@ fetch('/api/config/api-templates')
                 id: row[0],
                 userText: row[1] || '',
                 aiText: row[2] || '',
+                thinking: row[3] || '',
                 createdAt: row[4] || ''
             };
         }
@@ -10006,6 +8998,7 @@ fetch('/api/config/api-templates')
             id: row.id,
             userText: row.user_input || row.message || '',
             aiText: row.ai_response || row.response || '',
+            thinking: row.thinking || row.reasoning || '',
             createdAt: row.created_at || row.createdAt || ''
         };
     }
@@ -10091,35 +9084,19 @@ fetch('/api/config/api-templates')
     }
 
     function monitorLoop() {
-        if (monitorLoopStarted) {
-            return;
-        }
-
         if (typeof Chart === 'undefined') {
             console.warn("Chart.js failed to load. Will retry.");
-            if (!chartFallbackLoading) {
-                chartFallbackLoading = true;
-                const script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
-                script.onload = () => {
-                    chartFallbackLoading = false;
-                    console.log("Chart.js loaded via fallback.");
-                    monitorLoop();
-                };
-                script.onerror = () => {
-                    chartFallbackLoading = false;
-                };
-                document.head.appendChild(script);
-            }
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+            script.onload = () => {
+                console.log("Chart.js loaded via fallback.");
+                document.dispatchEvent(new Event('DOMContentLoaded')); // Re-init
+            };
+            document.head.appendChild(script);
             return;
         }
 
-        monitorLoopStarted = true;
-        const pollMonitoring = async () => {
-            if (document.visibilityState === 'hidden' || monitorLoopInFlight) {
-                return;
-            }
-            monitorLoopInFlight = true;
+        setInterval(async () => {
             try {
                 const res = await fetch('/api/monitoring');
                 if (!res.ok) throw new Error('Network response was not ok');
@@ -10236,13 +9213,8 @@ fetch('/api/config/api-templates')
 
             } catch(e) {
                 console.error("Monitor Loop Error:", e);
-            } finally {
-                monitorLoopInFlight = false;
             }
-        };
-
-        monitorLoopTimer = setInterval(pollMonitoring, 2000);
-        pollMonitoring();
+        }, 2000);
     }
     
     function escapeHtml(value) {
@@ -10262,84 +9234,6 @@ fetch('/api/config/api-templates')
     // 4. Other Utils (Agent, Logs, DB)
     async function fetchAgentStatus() {
         return loadSystemCenterStatus();
-    }
-
-    async function loadAgentLongTermPersonaOptions() {
-        const select = document.getElementById('agent-longterm-persona-select');
-        if (!select) return;
-
-        try {
-            const res = await fetch('/api/personas');
-            const data = await res.json();
-            const personas = Array.isArray(data.personas) ? data.personas : [];
-            const prev = (select.value || '').trim();
-
-            select.innerHTML = '<option value="">当前激活角色</option>';
-            personas.forEach(p => {
-                const filename = String(p.filename || '').trim();
-                if (!filename) return;
-                const opt = document.createElement('option');
-                opt.value = filename;
-                opt.textContent = `${p.name || filename} (${filename})`;
-                select.appendChild(opt);
-            });
-
-            if (prev && Array.from(select.options).some(opt => opt.value === prev)) {
-                select.value = prev;
-            }
-        } catch (e) {
-            console.warn('loadAgentLongTermPersonaOptions failed', e);
-        }
-    }
-
-    function _resolveLongTermPersonaFilename() {
-        const explicit = (document.getElementById('agent-longterm-persona-select')?.value || '').trim();
-        if (explicit) return explicit;
-        return (document.getElementById('chat-settings-persona-select')?.value || '').trim();
-    }
-
-    async function loadLongTermMemoryPanel(showToast = false) {
-        const contentEl = document.getElementById('agent-longterm-content');
-        const personaLabelEl = document.getElementById('agent-longterm-persona-label');
-        const turnsEl = document.getElementById('agent-longterm-turns');
-        const totalEl = document.getElementById('agent-longterm-total');
-        const intervalEl = document.getElementById('agent-longterm-interval');
-        const updatedAtEl = document.getElementById('agent-longterm-updatedat');
-        if (!contentEl) return;
-
-        contentEl.textContent = '加载中...';
-        const personaFilename = _resolveLongTermPersonaFilename();
-        const query = personaFilename
-            ? `?persona_filename=${encodeURIComponent(personaFilename)}&include_meta=1`
-            : '?include_meta=1';
-
-        try {
-            const res = await fetch(`/api/agent/memory/long_term${query}`);
-            const data = await res.json();
-            if (!res.ok || !data.success) {
-                throw new Error(data.error || `HTTP ${res.status}`);
-            }
-
-            const persona = String(data.persona_filename || personaFilename || 'default');
-            const longTerm = String(data.long_term || '暂无长期记忆。').trim() || '暂无长期记忆。';
-            const meta = (data.meta && typeof data.meta === 'object') ? data.meta : {};
-
-            if (personaLabelEl) personaLabelEl.textContent = `角色: ${persona}`;
-            if (turnsEl) turnsEl.textContent = String(meta.dialog_turns_since_long_term_update ?? '-');
-            if (totalEl) totalEl.textContent = String(meta.total_dialog_turns ?? '-');
-            if (intervalEl) intervalEl.textContent = String(meta.long_term_update_interval ?? '-');
-            if (updatedAtEl) updatedAtEl.textContent = String(meta.last_long_term_update_at || '暂无');
-            contentEl.textContent = longTerm;
-
-            if (showToast) {
-                toastr.success('长期记忆已刷新');
-            }
-        } catch (e) {
-            contentEl.textContent = `加载失败: ${e.message || e}`;
-            if (showToast) {
-                toastr.error(`长期记忆刷新失败: ${e.message || e}`);
-            }
-        }
     }
 
     async function loadSystemCenterStatus() {
@@ -10393,9 +9287,6 @@ fetch('/api/config/api-templates')
                     </div>
                 `;
             }
-
-            await loadAgentLongTermPersonaOptions();
-            await loadLongTermMemoryPanel();
 
             return stats;
         } catch(e) {
@@ -10718,9 +9609,6 @@ fetch('/api/config/api-templates')
         }
 
         realtimeAutoTimer = setInterval(() => {
-            if (document.visibilityState === 'hidden') {
-                return;
-            }
             pollRealtimeUpdates(false);
         }, 8000);
 
@@ -10772,20 +9660,14 @@ fetch('/api/config/api-templates')
             const marketItems = [...marketItemsCn];
             const body = document.getElementById('mcp-body');
             const badge = document.getElementById('mcp-count-badge');
-            const cardsBadge = document.getElementById('mcp-cards-count-badge');
             const marketBadge = document.getElementById('mcp-market-count-badge');
             const marketSearch = (document.getElementById('mcp-market-search')?.value || '').trim().toLowerCase();
             const marketTag = (document.getElementById('mcp-market-tag-filter')?.value || '').trim().toLowerCase();
             const uninstalledOnly = !!document.getElementById('mcp-market-installed-only')?.checked;
             
             if (badge) badge.textContent = servers.length;
-            if (cardsBadge) cardsBadge.textContent = servers.length;
             if (marketBadge) marketBadge.textContent = marketItems.length;
             if (!body) return;
-
-            syncMcpFrameworkToggle(servers);
-            renderMcpServerCards(servers);
-            applyMcpViewMode();
 
             const existingNames = new Set(servers.map(s => String(s.name || '').trim().toLowerCase()));
             const filteredMarket = marketItems.filter(item => {
@@ -10812,7 +9694,7 @@ fetch('/api/config/api-templates')
             if (!servers.length) {
                 body.innerHTML = `
                     <tr>
-                        <td colspan="6" class="text-center py-5">
+                        <td colspan="5" class="text-center py-5">
                             <i class="fas fa-cube fa-2x text-muted opacity-50 mb-2 d-block"></i>
                             <small class="text-muted">暂无 MCP 服务器 - 从市场安装或快速创建</small>
                         </td>
@@ -10825,17 +9707,6 @@ fetch('/api/config/api-templates')
                     <td>${escapeHtml(server.name || '')}</td>
                     <td><span class="badge bg-light text-dark border">${escapeHtml(server.type || '')}</span></td>
                     <td><span class="badge ${server.status === 'connected' ? 'bg-success' : server.status === 'error' ? 'bg-danger' : 'bg-secondary'}">${escapeHtml(server.status || '')}</span></td>
-                    <td>
-                        <div class="form-check form-switch m-0">
-                            <input
-                                class="form-check-input"
-                                type="checkbox"
-                                role="switch"
-                                ${server.enabled ? 'checked' : ''}
-                                title="启用/禁用 ${escapeHtml(server.name || server.id || '')}"
-                                onchange="toggleMcpServerEnabled('${escapeForAttr(server.id)}', this.checked)">
-                        </div>
-                    </td>
                     <td class="small text-muted">${escapeHtml(server.description || server.command || server.url || '-')}</td>
                     <td class="text-end">
                         <div class="btn-group btn-group-sm" role="group" aria-label="mcp actions">
@@ -10848,167 +9719,6 @@ fetch('/api/config/api-templates')
         } catch (e) {
             console.error('MCP manager error:', e);
             toastr.error('加载 MCP 失败: ' + e.message);
-        }
-    }
-
-    function renderMcpServerCards(servers) {
-        const cards = document.getElementById('mcp-cards');
-        if (!cards) return;
-
-        const list = Array.isArray(servers) ? servers : [];
-        if (!list.length) {
-            cards.innerHTML = `
-                <div class="col-12">
-                    <div class="text-center py-4 text-muted">
-                        <i class="fas fa-cube fa-2x opacity-50 mb-2 d-block"></i>
-                        暂无 MCP 服务器
-                    </div>
-                </div>
-            `;
-            return;
-        }
-
-        cards.innerHTML = list.map(server => {
-            const statusClass = server.status === 'connected'
-                ? 'bg-success'
-                : (server.status === 'error' ? 'bg-danger' : 'bg-secondary');
-            const endpoint = server.type === 'http' || server.type === 'sse'
-                ? (server.url || '-')
-                : (server.command || '-');
-
-            return `
-                <div class="col-xl-4 col-md-6">
-                    <div class="card h-100 plugin-card plugin-entry-card">
-                        <div class="card-body d-flex flex-column">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="d-flex align-items-start gap-2 flex-grow-1 plugin-title-wrap">
-                                    <div class="plugin-icon"><i class="fas fa-plug"></i></div>
-                                    <div class="plugin-title-meta">
-                                        <h6 class="mb-1 plugin-name" title="${escapeHtml(server.name || '')}">${escapeHtml(server.name || 'MCP Server')}</h6>
-                                        <div class="d-flex gap-1 flex-wrap">
-                                            <span class="badge text-bg-light plugin-mini-badge">${escapeHtml(server.type || '-')}</span>
-                                            <span class="badge ${statusClass}">${escapeHtml(server.status || 'unknown')}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="form-check form-switch m-0 ms-2">
-                                    <input
-                                        class="form-check-input"
-                                        type="checkbox"
-                                        role="switch"
-                                        ${server.enabled ? 'checked' : ''}
-                                        title="启用/禁用 ${escapeHtml(server.name || server.id || '')}"
-                                        onchange="toggleMcpServerEnabled('${escapeForAttr(server.id)}', this.checked)">
-                                </div>
-                            </div>
-                            <div class="small text-muted mb-2">${escapeHtml(server.description || '无描述')}</div>
-                            <div class="small text-muted mb-3 text-break">${escapeHtml(endpoint)}</div>
-                            <div class="mt-auto d-flex justify-content-end gap-2">
-                                <button class="btn btn-sm btn-outline-primary" type="button" onclick="openMcpServerSettingsModal('${escapeForAttr(server.id)}')"><i class="fas fa-cog me-1"></i>设置</button>
-                                <button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteMcpServerById('${escapeForAttr(server.id)}')"><i class="far fa-trash-can me-1"></i>删除</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    function applyMcpViewMode() {
-        const cardPanel = document.getElementById('mcp-cards-panel');
-        const tablePanel = document.getElementById('mcp-table-panel');
-        const cardBtn = document.getElementById('mcp-view-card-btn');
-        const tableBtn = document.getElementById('mcp-view-table-btn');
-
-        if (cardPanel) cardPanel.classList.toggle('d-none', mcpViewMode !== 'card');
-        if (tablePanel) tablePanel.classList.toggle('d-none', mcpViewMode !== 'table');
-        if (cardBtn) {
-            cardBtn.classList.toggle('btn-primary', mcpViewMode === 'card');
-            cardBtn.classList.toggle('btn-outline-primary', mcpViewMode !== 'card');
-        }
-        if (tableBtn) {
-            tableBtn.classList.toggle('btn-primary', mcpViewMode === 'table');
-            tableBtn.classList.toggle('btn-outline-secondary', mcpViewMode !== 'table');
-            tableBtn.classList.toggle('btn-secondary', false);
-        }
-    }
-
-    function setMcpViewMode(mode) {
-        mcpViewMode = mode === 'table' ? 'table' : 'card';
-        applyMcpViewMode();
-    }
-
-    function syncMcpFrameworkToggle(servers) {
-        const toggle = document.getElementById('mcp-framework-toggle');
-        if (!toggle) return;
-        const list = Array.isArray(servers) ? servers : [];
-        if (!list.length) {
-            toggle.checked = false;
-            toggle.indeterminate = false;
-            return;
-        }
-        const enabledCount = list.filter(s => !!s.enabled).length;
-        toggle.indeterminate = enabledCount > 0 && enabledCount < list.length;
-        toggle.checked = enabledCount === list.length;
-    }
-
-    async function toggleMcpServerEnabled(serverId, enabled, silent = false) {
-        try {
-            const res = await fetch(`/api/systems/mcp/servers/${encodeURIComponent(serverId)}`, {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({enabled: !!enabled})
-            });
-            const data = await res.json();
-            if (!res.ok || data.code !== 0) {
-                throw new Error(data.message || '更新失败');
-            }
-            if (!silent) {
-                const server = getMcpServerById(serverId) || {};
-                const label = server.name || serverId;
-                toastr.success(`MCP ${label} 已${enabled ? '启用' : '禁用'}`);
-                await loadMcpManager();
-            }
-            return true;
-        } catch (e) {
-            if (!silent) toastr.error('MCP 开关操作失败: ' + e.message);
-            return false;
-        }
-    }
-
-    async function toggleAllMcpServersEnabled(enabled) {
-        if (mcpToggleBusy) return;
-        mcpToggleBusy = true;
-        const toggle = document.getElementById('mcp-framework-toggle');
-        if (toggle) toggle.disabled = true;
-        try {
-            const servers = Array.isArray(mcpServersCache) ? mcpServersCache : [];
-            if (!servers.length) {
-                toastr.info('当前没有 MCP 服务器可切换');
-                return;
-            }
-
-            const changed = servers.filter(s => !!s.enabled !== !!enabled);
-            if (!changed.length) {
-                toastr.info('MCP 总开关状态无需变更');
-                return;
-            }
-
-            let okCount = 0;
-            for (const server of changed) {
-                const ok = await toggleMcpServerEnabled(server.id, enabled, true);
-                if (ok) okCount += 1;
-            }
-
-            await loadMcpManager();
-            if (okCount === changed.length) {
-                toastr.success(`已${enabled ? '启用' : '禁用'}全部 MCP 服务（${okCount}/${changed.length}）`);
-            } else {
-                toastr.warning(`部分 MCP 服务切换失败（成功 ${okCount}/${changed.length}）`);
-            }
-        } finally {
-            mcpToggleBusy = false;
-            if (toggle) toggle.disabled = false;
         }
     }
 
@@ -11125,18 +9835,14 @@ fetch('/api/config/api-templates')
 
     function _smitheryInstallStopPolling() {
         if (smitheryInstallJobState.pollTimer) {
-            clearTimeout(smitheryInstallJobState.pollTimer);
+            clearInterval(smitheryInstallJobState.pollTimer);
             smitheryInstallJobState.pollTimer = null;
         }
-        smitheryInstallJobState._pollInFlight = false;
     }
 
     async function _smitheryInstallPollJob() {
         const jobId = smitheryInstallJobState.jobId;
-        if (!jobId || smitheryInstallJobState._pollInFlight) return;
-        smitheryInstallJobState._pollInFlight = true;
-        let shouldContinue = true;
-        let pollSuccess = true;
+        if (!jobId) return;
         try {
             const res = await fetch(`/api/systems/mcp/market/smithery/cli/install/jobs/${encodeURIComponent(jobId)}`);
             const data = await res.json();
@@ -11146,25 +9852,17 @@ fetch('/api/config/api-templates')
             if (job.status === 'success') {
                 _smitheryInstallStopPolling();
                 smitheryInstallJobState.active = false;
-                shouldContinue = false;
                 toastr.success(job.message || 'Smithery CLI 安装完成');
             } else if (job.status === 'error') {
                 _smitheryInstallStopPolling();
                 smitheryInstallJobState.active = false;
-                shouldContinue = false;
                 toastr.error(job.message || 'Smithery CLI 安装失败');
             }
         } catch (e) {
-            pollSuccess = false;
             const badge = document.getElementById('smithery-install-status-badge');
             if (badge) {
                 badge.textContent = '轮询失败';
                 badge.className = 'badge bg-warning text-dark';
-            }
-        } finally {
-            smitheryInstallJobState._pollInFlight = false;
-            if (shouldContinue && smitheryInstallJobState.active) {
-                _scheduleJobPoll(smitheryInstallJobState, _smitheryInstallPollJob, {success: pollSuccess});
             }
         }
     }
@@ -11180,7 +9878,8 @@ fetch('/api/config/api-templates')
         smitheryInstallJobState.modal = modal;
         modal.show();
         _smitheryInstallStopPolling();
-        _scheduleJobPoll(smitheryInstallJobState, _smitheryInstallPollJob, {immediate: true, success: true});
+        smitheryInstallJobState.pollTimer = setInterval(_smitheryInstallPollJob, 1000);
+        _smitheryInstallPollJob();
     }
 
     function closeSmitheryInstallToBackground() {
@@ -11474,73 +10173,75 @@ fetch('/api/config/api-templates')
         const links = (setupInstructions.links || []).filter(l => l.url);
         
         const linksHtml = links.map(link => 
-            '<a href="' + escapeHtml(link.url) + '" target="_blank" class="btn btn-sm btn-outline-primary me-2 mb-2"><i class="fas fa-external-link-alt me-1"></i>' + escapeHtml(link.title || '链接') + '</a>'
+            `<a href="${escapeHtml(link.url)}" target="_blank" class="btn btn-sm btn-outline-primary me-2 mb-2"><i class="fas fa-external-link-alt me-1"></i>${escapeHtml(link.title || '链接')}</a>`
         ).join('');
         
         const fieldsHtml = (setupInstructions.config_fields || []).map(field =>
-            '<li><code>' + escapeHtml(field) + '</code></li>'
+            `<li><code>${escapeHtml(field)}</code></li>`
         ).join('');
         
-        // 构建条件 HTML 片段
-        let authorHtml = '';
-        if (serverInfo.author) {
-            authorHtml = '<div class="col-md-6"><p class="small text-muted mb-1">作者/维护者</p><p class="small">' + escapeHtml(serverInfo.author) + '</p></div>';
-        }
-        
-        let licenseHtml = '';
-        if (serverInfo.license) {
-            licenseHtml = '<div class="col-md-6"><p class="small text-muted mb-1">许可证</p><p class="small">' + escapeHtml(serverInfo.license) + '</p></div>';
-        }
-        
-        let noteHtml = '';
-        if (setupInstructions.note) {
-            noteHtml = '<p class="alert alert-info alert-sm small">' + escapeHtml(setupInstructions.note) + '</p>';
-        }
-        
-        let fieldsSectionHtml = '';
-        if (fieldsHtml) {
-            fieldsSectionHtml = '<div class="mb-3"><h6 class="fw-bold mb-2">通常需要配置的参数</h6><ul class="small">' + fieldsHtml + '</ul></div>';
-        }
-        
-        const modalContent =
-            '<div class="modal-header">' +
-                '<h5 class="modal-title"><i class="fas fa-cogs me-2"></i>' + escapeHtml(item.name || '') + '</h5>' +
-                '<button type="button" class="btn-close" data-bs-dismiss="modal"></button>' +
-            '</div>' +
-            '<div class="modal-body">' +
-                '<div class="mb-3">' +
-                    '<h6 class="fw-bold mb-2">服务器信息</h6>' +
-                    '<div class="row">' +
-                        '<div class="col-md-6">' +
-                            '<p class="small text-muted mb-1">描述</p>' +
-                            '<p class="small">' + escapeHtml(serverInfo.description || item.description || '-') + '</p>' +
-                        '</div>' +
-                        '<div class="col-md-6">' +
-                            '<p class="small text-muted mb-1">协议版本</p>' +
-                            '<p class="small">' + escapeHtml(serverInfo.protocol_version || '1.0') + '</p>' +
-                        '</div>' +
-                        authorHtml +
-                        licenseHtml +
-                    '</div>' +
-                '</div>' +
-                '<div class="mb-3">' +
-                    '<h6 class="fw-bold mb-2">官方资源</h6>' +
-                    '<div>' + (linksHtml || '<p class="text-muted small">暂无链接</p>') + '</div>' +
-                '</div>' +
-                '<div class="mb-3">' +
-                    '<h6 class="fw-bold mb-2">配置指导</h6>' +
-                    '<p class="small text-muted">' + (setupInstructions.description || '请向官方文档了解详细的连接参数和配置方法。') + '</p>' +
-                    noteHtml +
-                '</div>' +
-                fieldsSectionHtml +
-                '<div class="alert alert-secondary small">' +
-                    '<p class="mb-2"><strong>类似 VSCode 的配置方式</strong></p>' +
-                    '<p class="text-muted mb-0">大多数 MCP 服务器可以通过 JSON 配置文件来集成，类似于 VSCode 中的 settings.json。请根据服务器的具体文档进行配置。</p>' +
-                '</div>' +
-            '</div>' +
-            '<div class="modal-footer">' +
-                '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>' +
-            '</div>';
+        const modalContent = `
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-cogs me-2"></i>${escapeHtml(item.name || '')}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- 基本信息 -->
+                <div class="mb-3">
+                    <h6 class="fw-bold mb-2">服务器信息</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="small text-muted mb-1">描述</p>
+                            <p class="small">${escapeHtml(serverInfo.description || item.description || '-')}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="small text-muted mb-1">协议版本</p>
+                            <p class="small">${escapeHtml(serverInfo.protocol_version || '1.0')}</p>
+                        </div>
+                        ${serverInfo.author ? `
+                        <div class="col-md-6">
+                            <p class="small text-muted mb-1">作者/维护者</p>
+                            <p class="small">${escapeHtml(serverInfo.author)}</p>
+                        </div>
+                        ` : ''}
+                        ${serverInfo.license ? `
+                        <div class="col-md-6">
+                            <p class="small text-muted mb-1">许可证</p>
+                            <p class="small">${escapeHtml(serverInfo.license)}</p>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                <!-- 重要链接 -->
+                <div class="mb-3">
+                    <h6 class="fw-bold mb-2">官方资源</h6>
+                    <div>${linksHtml || '<p class="text-muted small">暂无链接</p>'}</div>
+                </div>
+                
+                <!-- 配置指导 -->
+                <div class="mb-3">
+                    <h6 class="fw-bold mb-2">配置指导</h6>
+                    <p class="small text-muted">${setupInstructions.description || '请向官方文档了解详细的连接参数和配置方法。'}</p>
+                    ${setupInstructions.note ? `<p class="alert alert-info alert-sm small">${escapeHtml(setupInstructions.note)}</p>` : ''}
+                </div>
+                
+                <!-- 需要配置的字段 -->
+                ${fieldsHtml ? `<div class="mb-3">
+                    <h6 class="fw-bold mb-2">通常需要配置的参数</h6>
+                    <ul class="small">${fieldsHtml}</ul>
+                </div>` : ''}
+                
+                <!-- VSCode 风格配置提示 -->
+                <div class="alert alert-secondary small">
+                    <p class="mb-2"><strong>类似 VSCode 的配置方式</strong></p>
+                    <p class="text-muted mb-0">大多数 MCP 服务器可以通过 JSON 配置文件来集成，类似于 VSCode 中的 settings.json。请根据服务器的具体文档进行配置。</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        `;
         
         // 创建或更新模态框
         let modal = document.getElementById('mcp-config-modal');
@@ -11552,12 +10253,13 @@ fetch('/api/config/api-templates')
             document.body.appendChild(modal);
         }
         
-        modal.innerHTML =
-            '<div class="modal-dialog modal-lg modal-dialog-scrollable">' +
-                '<div class="modal-content">' +
-                    modalContent +
-                '</div>' +
-            '</div>';
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    ${modalContent}
+                </div>
+            </div>
+        `;
         
         new bootstrap.Modal(modal).show();
     }
@@ -12431,10 +11133,5 @@ fetch('/api/config/api-templates')
     }
 
 </script>
-
-<!-- Plugin Config Renderer -->
-<script src="static/js/plugin_config_renderer.js"></script>
-<!-- Plugin UI Extensions Loader -->
-<script src="static/js/plugin_ui_loader.js"></script>
 </body>
 </html>

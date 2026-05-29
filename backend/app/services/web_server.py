@@ -32,7 +32,7 @@ mimetypes.add_type('application/javascript', '.js')
 mimetypes.add_type('text/css', '.css')
 mimetypes.add_type('text/html', '.html')
 
-from flask import Flask, request, jsonify, Response, send_from_directory, render_template
+from flask import Flask, request, jsonify, Response, send_from_directory, render_template, make_response
 from flask.cli import pass_script_info
 from colorama import Fore, Back, Style, init
 from werkzeug.serving import make_server
@@ -48,6 +48,20 @@ try:
 except ImportError:
     from app.agent.reply_policy import default_reply_policy
 from app.core.config import CONFIG, generate_system_prompt, PROJECT_ROOT, DATA_DIR
+from app.services.gpt_sovits_tts import (
+    TTS_CACHE_DIR,
+    check_tts_service,
+    ensure_tts_service_running,
+    get_global_tts_config,
+    get_supported_languages,
+    get_current_language_label,
+    is_chat_voice_reply_enabled,
+    parse_api_endpoint,
+    resolve_tts_profile,
+    save_voice_reply_enabled,
+    save_target_language,
+    synthesize_reply_to_cache,
+)
 
 init(autoreset=True)
 
@@ -606,6 +620,7 @@ base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 static_dir = os.path.join(base_dir, 'static')
 app = Flask(__name__, static_folder=static_dir, static_url_path='')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
+
 
 # Helper method to send static files with correct path and cache control
 def send_static_file(filename):
@@ -2947,7 +2962,7 @@ def run_web_server():
     def index():
         # 根据环境变量决定默认页面，默认为 /control_panel
         default_page = os.environ.get('DEFAULT_PAGE', '/control_panel')
-        
+
         # 如果是文件（包含.），则尝试作为静态文件发送
         if '.' in default_page:
             return app.send_static_file(default_page.lstrip('/'))
@@ -2973,6 +2988,136 @@ def run_web_server():
     @app.route('/sandbox')
     def sandbox_route():
         return app.send_static_file('chat-sandbox.html')
+
+    @app.route('/api/tts/status', methods=['GET'])
+    def api_tts_status():
+        try:
+            cfg = get_global_tts_config()
+            persona_filename = (request.args.get('persona_filename') or '').strip()
+            profile = resolve_tts_profile(persona_filename)
+            _, _, api_base = parse_api_endpoint(profile=profile)
+            ok, detail = check_tts_service(api_base)
+            boot = {}
+            if not ok and request.args.get('autostart', '1') not in ('0', 'false', 'no'):
+                boot = ensure_tts_service_running(persona_filename)
+                if boot.get('success'):
+                    ok, detail = check_tts_service(api_base)
+            ref_audio = profile.get('ref_audio_path', '')
+            target_lang = str(cfg.get('target_language', 'ja') or 'ja').strip().lower()
+            return jsonify({
+                'success': True,
+                'service_online': ok,
+                'detail': detail,
+                'enabled': bool(cfg.get('enabled', True)),
+                'api_base': api_base,
+                'auto_start': bool(cfg.get('auto_start', True)),
+                'gpt_sovits_dir': profile.get('gpt_sovits_dir', ''),
+                'boot': boot,
+                'ref_audio_exists': bool(ref_audio and os.path.isfile(ref_audio)),
+                'ref_audio_path': ref_audio,
+                'target_language': target_lang,
+                'lang_label': get_current_language_label(),
+                'languages': get_supported_languages(),
+            })
+        except Exception as exc:
+            return jsonify({'success': False, 'error': str(exc)}), 500
+
+    @app.route('/api/tts/settings', methods=['GET'])
+    def api_tts_settings_get():
+        try:
+            cfg = get_global_tts_config()
+            _, _, api_base = parse_api_endpoint(profile=cfg)
+            online, detail = check_tts_service(api_base)
+            persona_filename = (request.args.get('persona_filename') or '').strip()
+            profile = resolve_tts_profile(persona_filename)
+            ref_audio = profile.get('ref_audio_path', '')
+            target_lang = str(cfg.get('target_language', 'ja') or 'ja').strip().lower()
+            return jsonify({
+                'success': True,
+                'voice_reply_enabled': is_chat_voice_reply_enabled(),
+                'tts_enabled': bool(cfg.get('enabled', True)),
+                'auto_start': bool(cfg.get('auto_start', True)),
+                'api_base': api_base,
+                'service_online': online,
+                'detail': detail,
+                'ref_audio_exists': bool(ref_audio and os.path.isfile(ref_audio)),
+                'ref_audio_path': ref_audio,
+                'target_language': target_lang,
+                'lang_label': get_current_language_label(),
+                'languages': get_supported_languages(),
+            })
+        except Exception as exc:
+            return jsonify({'success': False, 'error': str(exc)}), 500
+
+    @app.route('/api/tts/settings', methods=['POST'])
+    def api_tts_settings_post():
+        try:
+            data = request.get_json() or {}
+            enabled = bool(data.get('voice_reply_enabled', False))
+            cfg = save_voice_reply_enabled(enabled)
+            return jsonify({
+                'success': True,
+                'voice_reply_enabled': is_chat_voice_reply_enabled(),
+                'tts': cfg,
+            })
+        except Exception as exc:
+            return jsonify({'success': False, 'error': str(exc)}), 500
+
+    @app.route('/api/tts/languages', methods=['GET'])
+    def api_tts_languages():
+        try:
+            langs = get_supported_languages()
+            current = get_current_language_label()
+            cfg = get_global_tts_config()
+            target = str(cfg.get('target_language', 'ja') or 'ja').strip().lower()
+            return jsonify({
+                'success': True,
+                'languages': langs,
+                'current': target,
+                'current_label': current,
+            })
+        except Exception as exc:
+            return jsonify({'success': False, 'error': str(exc)}), 500
+
+    @app.route('/api/tts/language', methods=['POST'])
+    def api_tts_language_set():
+        try:
+            data = request.get_json() or {}
+            lang_code = str(data.get('language', 'ja') or 'ja').strip().lower()
+            cfg = save_target_language(lang_code)
+            return jsonify({
+                'success': True,
+                'target_language': lang_code,
+                'label': get_current_language_label(),
+            })
+        except Exception as exc:
+            return jsonify({'success': False, 'error': str(exc)}), 500
+
+    @app.route('/api/tts/start', methods=['POST'])
+    def api_tts_start():
+        try:
+            data = request.get_json() or {}
+            persona_filename = (data.get('persona_filename') or '').strip()
+            boot = ensure_tts_service_running(
+                persona_filename,
+                force_restart=bool(data.get('force_restart')),
+            )
+            status = 200 if boot.get('success') else 500
+            return jsonify(boot), status
+        except Exception as exc:
+            return jsonify({'success': False, 'error': str(exc)}), 500
+
+    @app.route('/api/tts/audio/<filename>', methods=['GET'])
+    def api_tts_audio(filename):
+        safe_name = os.path.basename(str(filename or '').split('?')[0].split('#')[0])
+        if not safe_name.lower().endswith('.wav'):
+            return jsonify({'error': 'invalid file'}), 400
+        if not os.path.isfile(os.path.join(TTS_CACHE_DIR, safe_name)):
+            return jsonify({'error': 'not found'}), 404
+        resp = make_response(send_from_directory(TTS_CACHE_DIR, safe_name, mimetype='audio/wav'))
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        resp.headers['Pragma'] = 'no-cache'
+        return resp
 
     @app.route('/chat', methods=['POST'])
     def chat_endpoint():
@@ -3059,6 +3204,14 @@ def run_web_server():
                         has_chunk = False
                         full_text = ''
                         for piece in stream_iter:
+                            if isinstance(piece, dict):
+                                event_type = str(piece.get('type') or '').strip()
+                                if event_type == 'thinking_delta':
+                                    text = str(piece.get('text') or '')
+                                    if text:
+                                        yield _sse('thinking_delta', {'text': text})
+                                    continue
+
                             text = str(piece or '')
                             if not text:
                                 continue
@@ -3120,6 +3273,40 @@ def run_web_server():
                         done_payload = {'reply': full_text}
                         if debug_payload:
                             done_payload['debug'] = debug_payload
+                        # 汇总思考内容
+                        thinking_parts = []
+                        for e in trace_events:
+                            if e.get('type') == 'assistant_message' and e.get('label') == '思考内容':
+                                c = str(e.get('content', '')).strip()
+                                if c:
+                                    thinking_parts.append(c)
+                        if thinking_parts:
+                            done_payload['thinking'] = '\n\n'.join(thinking_parts)
+                        if frontend_source in ('sandbox', 'control_panel') and is_chat_voice_reply_enabled():
+                            try:
+                                persona_fn = data.get('persona_filename') or ''
+                                tts_result = synthesize_reply_to_cache(
+                                    str(full_text or ''), persona_fn,
+                                    target_language=data.get('target_language', ''),
+                                )
+                                done_payload['tts'] = tts_result
+                                spoken = (
+                                    tts_result.get('spoken_text')
+                                    or tts_result.get('japanese_text')
+                                    or ''
+                                )
+                                if spoken:
+                                    done_payload['spoken_text'] = spoken
+                                if tts_result.get('synthesis_id'):
+                                    done_payload['tts_synthesis_id'] = tts_result.get('synthesis_id')
+                                if tts_result.get('audio_seq') is not None:
+                                    done_payload['audio_seq'] = tts_result.get('audio_seq')
+                                if tts_result.get('audio_local_relpath'):
+                                    done_payload['audio_local_relpath'] = tts_result.get('audio_local_relpath')
+                                if tts_result.get('success'):
+                                    done_payload['audio_url'] = tts_result.get('audio_url', '')
+                            except Exception:
+                                pass
                         yield _sse('done', done_payload)
                     except Exception:
                         # 流式异常时回退原同步链路，避免接口中断。
@@ -3141,6 +3328,33 @@ def run_web_server():
 
             response = quick_reply if quick_reply is not None else _build_chat_response()
             payload = {'success': True, 'reply': response}
+
+            if frontend_source in ('sandbox', 'control_panel'):
+                chat_settings = _default_chat_settings(
+                    (CONFIG.get('work_mode', {}) or {}).get('chat_settings', {})
+                )
+                if is_chat_voice_reply_enabled():
+                    persona_fn = data.get('persona_filename') or ''
+                    tts_result = synthesize_reply_to_cache(
+                        str(response or ''), persona_fn,
+                        target_language=data.get('target_language', ''),
+                    )
+                    payload['tts'] = tts_result
+                    spoken = (
+                        tts_result.get('spoken_text')
+                        or tts_result.get('japanese_text')
+                        or ''
+                    )
+                    if spoken:
+                        payload['spoken_text'] = spoken
+                    if tts_result.get('synthesis_id'):
+                        payload['tts_synthesis_id'] = tts_result.get('synthesis_id')
+                    if tts_result.get('audio_seq') is not None:
+                        payload['audio_seq'] = tts_result.get('audio_seq')
+                    if tts_result.get('audio_local_relpath'):
+                        payload['audio_local_relpath'] = tts_result.get('audio_local_relpath')
+                    if tts_result.get('success'):
+                        payload['audio_url'] = tts_result.get('audio_url', '')
 
             if frontend_source in ('sandbox', 'control_panel'):
                 try:
@@ -3171,15 +3385,22 @@ def run_web_server():
                             thinking_patterns = [
                                 '思考:', 'Thought:', '[THINK]', '<think>', 'Thinking:',
                                 '让我想想', '分析一下', '首先', '其次', '最后',
-                                '从', '根据', '考虑到', '综上所述'
+                                '从', '根据', '考虑到', '综上所述',
+                                '好的', '明白了', '收到', '我来', '让我',
+                                '先', '需要', '应该', '可能', '可以尝试',
+                                '看起来', '看起来这', '注意到', '观察',
+                                'Let me', 'First', 'I need', 'I should',
                             ]
                             is_thinking = any(stripped.startswith(p) for p in thinking_patterns)
-                            
-                            # 如果内容较长且不是简单的回复，也认为是思考内容
-                            if not is_thinking and len(stripped) > 50:
-                                # 检查是否包含分析性词汇
-                                analysis_words = ['因为', '所以', '但是', '然而', '因此', '可能', '应该', '需要']
-                                if any(word in stripped for word in analysis_words):
+
+                            # 如果内容较长且不是明显的对话回复，也认为是思考
+                            if not is_thinking:
+                                # 明显是回复的标记
+                                reply_markers = ['喵', '哒', '呢', '哦', '呀', '啦', 'Hello', 'Hi', 'こんにちは']
+                                looks_like_reply = any(stripped.startswith(m) for m in reply_markers) or len(stripped) < 20
+                                if not looks_like_reply and len(stripped) > 30:
+                                    is_thinking = True
+                                elif not looks_like_reply and len(stripped) > 50:
                                     is_thinking = True
                             
                             if is_thinking:
@@ -3215,6 +3436,16 @@ def run_web_server():
                             'timestamp': datetime.datetime.now().timestamp(),
                             'content': '已接收到工具调用请求，正在基于工具结果组织最终回复。'
                         })
+
+                    # 汇总思考内容
+                    thinking_parts = []
+                    for e in events:
+                        if e.get('type') == 'assistant_message' and e.get('label') == '思考内容':
+                            c = str(e.get('content', '')).strip()
+                            if c:
+                                thinking_parts.append(c)
+                    if thinking_parts:
+                        payload['thinking'] = '\n\n'.join(thinking_parts)
 
                     payload['debug'] = {
                         'enabled': bool(chat_settings.get('sandbox_show_agent_trace', True)),

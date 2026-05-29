@@ -532,8 +532,29 @@ class DatabaseManager:
             if not exists:
                 self._execute(cursor, "ALTER TABLE chat_history ADD COLUMN persona_filename VARCHAR(120) NULL DEFAULT NULL")
                 self.connection.commit()
+            thinking_exists = self._column_exists(cursor, 'chat_history', 'thinking')
+            if not thinking_exists:
+                self._execute(cursor, "ALTER TABLE chat_history ADD COLUMN thinking LONGTEXT NULL DEFAULT NULL")
+                self.connection.commit()
         except Exception as e:
             print(f"确保 persona_filename 列时出错: {e}")
+        finally:
+            if cursor:
+                cursor.close()
+
+    def _ensure_chat_history_thinking_column(self, table_name):
+        """确保指定聊天表存在 thinking 列。"""
+        cursor = None
+        try:
+            cursor = self._new_cursor()
+            if not self._table_exists(cursor, table_name):
+                return
+            exists = self._column_exists(cursor, table_name, 'thinking')
+            if not exists:
+                self._execute(cursor, f"ALTER TABLE {table_name} ADD COLUMN thinking LONGTEXT NULL DEFAULT NULL")
+                self.connection.commit()
+        except Exception as e:
+            print(f"确保 thinking 列时出错({table_name}): {e}")
         finally:
             if cursor:
                 cursor.close()
@@ -567,6 +588,7 @@ class DatabaseManager:
                 ai_response TEXT,
                 image_description TEXT,
                 persona_filename VARCHAR(120) NULL,
+                thinking TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
@@ -578,6 +600,7 @@ class DatabaseManager:
                 ai_response TEXT,
                 image_description TEXT,
                 persona_filename TEXT NULL,
+                thinking TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
@@ -589,6 +612,7 @@ class DatabaseManager:
                 ai_response LONGTEXT,
                 image_description TEXT,
                 persona_filename VARCHAR(120) NULL,
+                thinking LONGTEXT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
@@ -600,6 +624,7 @@ class DatabaseManager:
             return
 
         self._ensure_chat_history_table(cursor, table_name)
+        self._ensure_chat_history_thinking_column(table_name)
 
         if not persona_filename or not self._table_exists(cursor, 'chat_history'):
             self._chat_history_bootstrapped_tables.add(table_name)
@@ -608,7 +633,7 @@ class DatabaseManager:
         try:
             self._execute(
                 cursor,
-                "SELECT user_input, ai_response, image_description, persona_filename FROM chat_history WHERE persona_filename = %s ORDER BY id ASC",
+                "SELECT user_input, ai_response, image_description, persona_filename, thinking FROM chat_history WHERE persona_filename = %s ORDER BY id ASC",
                 (persona_filename,)
             )
             legacy_rows = cursor.fetchall() or []
@@ -620,8 +645,8 @@ class DatabaseManager:
                     for row in legacy_rows:
                         self._execute(
                             cursor,
-                            f"INSERT INTO {table_name} (user_input, ai_response, image_description, persona_filename) VALUES (%s, %s, %s, %s)",
-                            (row[0], row[1], row[2], row[3])
+                            f"INSERT INTO {table_name} (user_input, ai_response, image_description, persona_filename, thinking) VALUES (%s, %s, %s, %s, %s)",
+                            (row[0], row[1], row[2], row[3], row[4] if len(row) > 4 else None)
                         )
                     self.connection.commit()
         except Exception:
@@ -1035,19 +1060,38 @@ class DatabaseManager:
             
             if not self._table_exists(cursor, table_name):
                 return []
+
+            try:
+                self._ensure_chat_history_thinking_column(table_name)
+            except Exception:
+                pass
                 
-            if persona_filename:
-                self._execute(
-                    cursor, 
-                    f"SELECT * FROM {table_name} WHERE persona_filename = %s ORDER BY id DESC LIMIT %s",
-                    (persona_filename, limit)
-                )
-            else:
-                self._execute(
-                    cursor, 
-                    f"SELECT * FROM {table_name} ORDER BY id DESC LIMIT %s",
-                    (limit,)
-                )
+            try:
+                if persona_filename:
+                    self._execute(
+                        cursor,
+                        f"SELECT * FROM {table_name} WHERE persona_filename = %s ORDER BY id DESC LIMIT %s",
+                        (persona_filename, limit)
+                    )
+                else:
+                    self._execute(
+                        cursor,
+                        f"SELECT * FROM {table_name} ORDER BY id DESC LIMIT %s",
+                        (limit,)
+                    )
+            except Exception:
+                if persona_filename:
+                    self._execute(
+                        cursor,
+                        f"SELECT user_input, ai_response, image_description, persona_filename, created_at FROM {table_name} WHERE persona_filename = %s ORDER BY id DESC LIMIT %s",
+                        (persona_filename, limit)
+                    )
+                else:
+                    self._execute(
+                        cursor,
+                        f"SELECT user_input, ai_response, image_description, persona_filename, created_at FROM {table_name} ORDER BY id DESC LIMIT %s",
+                        (limit,)
+                    )
                 
             result = cursor.fetchall()
             return result
@@ -1076,20 +1120,40 @@ class DatabaseManager:
             
             if not self._table_exists(cursor, table_name):
                 return []
+
+            try:
+                self._ensure_chat_history_thinking_column(table_name)
+            except Exception:
+                pass
                 
             # 获取最近的记录（按ID降序），然后反转以得到时间顺序
-            if persona_filename:
-                self._execute(
-                    cursor, 
-                    f"SELECT user_input, ai_response, image_description FROM {table_name} WHERE persona_filename = %s ORDER BY id DESC LIMIT %s",
-                    (persona_filename, limit)
-                )
-            else:
-                self._execute(
-                    cursor, 
-                    f"SELECT user_input, ai_response, image_description FROM {table_name} ORDER BY id DESC LIMIT %s",
-                    (limit,)
-                )
+            try:
+                if persona_filename:
+                    self._execute(
+                        cursor,
+                        f"SELECT user_input, ai_response, image_description, thinking FROM {table_name} WHERE persona_filename = %s ORDER BY id DESC LIMIT %s",
+                        (persona_filename, limit)
+                    )
+                else:
+                    self._execute(
+                        cursor,
+                        f"SELECT user_input, ai_response, image_description, thinking FROM {table_name} ORDER BY id DESC LIMIT %s",
+                        (limit,)
+                    )
+            except Exception:
+                # 兼容旧表：没有 thinking 列时回退到老查询
+                if persona_filename:
+                    self._execute(
+                        cursor,
+                        f"SELECT user_input, ai_response, image_description FROM {table_name} WHERE persona_filename = %s ORDER BY id DESC LIMIT %s",
+                        (persona_filename, limit)
+                    )
+                else:
+                    self._execute(
+                        cursor,
+                        f"SELECT user_input, ai_response, image_description FROM {table_name} ORDER BY id DESC LIMIT %s",
+                        (limit,)
+                    )
                 
             rows = cursor.fetchall()
             if not rows:
@@ -1106,11 +1170,13 @@ class DatabaseManager:
                     user_input = row.get('user_input', '')
                     ai_response = row.get('ai_response', '')
                     image_desc = row.get('image_description', '')
+                    thinking = row.get('thinking', '')
                 else:
-                    # 元组情况：(user_input, ai_response, image_description)
+                    # 元组情况：(user_input, ai_response, image_description, [thinking])
                     user_input = row[0] if len(row) > 0 else ''
                     ai_response = row[1] if len(row) > 1 else ''
                     image_desc = row[2] if len(row) > 2 else ''
+                    thinking = row[3] if len(row) > 3 else ''
                 
                 # 添加用户消息
                 if user_input:
@@ -1122,6 +1188,9 @@ class DatabaseManager:
                 # 添加AI回复
                 if ai_response:
                     messages.append({"role": "assistant", "content": str(ai_response)})
+
+                if thinking:
+                    messages.append({"role": "assistant", "content": str(thinking), "metadata": {"type": "thinking"}})
             
             return messages
         except Exception as e:
@@ -1133,7 +1202,7 @@ class DatabaseManager:
             if cursor:
                 cursor.close()
 
-    def save_chat(self, user_input, ai_response, image_description=None, persona_filename=None):
+    def save_chat(self, user_input, ai_response, image_description=None, persona_filename=None, thinking=None):
         """保存聊天记录到数据库
         
         Args:
@@ -1154,14 +1223,14 @@ class DatabaseManager:
             if persona_filename:
                 self._execute(
                     cursor,
-                    f"INSERT INTO {table_name} (user_input, ai_response, image_description, persona_filename) VALUES (%s, %s, %s, %s)",
-                    (user_input, ai_response, image_description, persona_filename)
+                    f"INSERT INTO {table_name} (user_input, ai_response, image_description, persona_filename, thinking) VALUES (%s, %s, %s, %s, %s)",
+                    (user_input, ai_response, image_description, persona_filename, thinking)
                 )
             else:
                 self._execute(
                     cursor,
-                    f"INSERT INTO {table_name} (user_input, ai_response, image_description) VALUES (%s, %s, %s)",
-                    (user_input, ai_response, image_description)
+                    f"INSERT INTO {table_name} (user_input, ai_response, image_description, thinking) VALUES (%s, %s, %s, %s)",
+                    (user_input, ai_response, image_description, thinking)
                 )
             
             self.connection.commit()
