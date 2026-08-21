@@ -2,17 +2,17 @@
   "active_persona": "shizuku.json",
   "api_keys": {
     "deepseek_chat": {
-      "key": "sk-76c143f207bf4e688b15999a7fcf4336",
+      "key": "",
       "base_url": "https://api.deepseek.com/v1",
       "model": "deepseek-v4-pro"
     },
     "search": {
-      "key": "sk-VfP8AhbSELO9p4v31IpKHu5Sn6CWhquS23n2ONjqsDtWM2Ez",
+      "key": "",
       "base_url": "https://api.moonshot.cn/v1",
       "model": ""
     },
     "image_recognition": {
-      "key": "sk-a548806c16e5440e97243d782ba3dcae",
+      "key": "",
       "base_url": "https://dashscope.aliyuncs.com/api/v1",
       "model": ""
     },
@@ -37,7 +37,7 @@
       "model": "moonshot-v1-8k"
     },
     "minimax_coder": {
-      "key": "sk-cp-8Wgwhqzr1dNKGMuoSEJ7NcCN3NEK3L6Zer3fuQ8WVWoECc6Z4XSzVYWkaW23hY-l6YraKNLMaez6nsLT79Bh-yl9KP2xcXEskBtp96yvw8hdCEj-qF22rRo",
+      "key": "",
       "base_url": "https://api.minimaxi.com/v1",
       "model": "MiniMax-M2.7"
     },
@@ -66,7 +66,7 @@
         "model": "moonshot-v1-8k"
       },
       "minimax": {
-        "key": "sk-cp-8Wgwhqzr1dNKGMuoSEJ7NcCN3NEK3L6Zer3fuQ8WVWoECc6Z4XSzVYWkaW23hY-l6YraKNLMaez6nsLT79Bh-yl9KP2xcXEskBtp96yvw8hdCEj-qF22rRo",
+        "key": "",
         "base_url": "https://api.minimaxi.com/v1",
         "model": "MiniMax-M2.7"
       },
@@ -93,10 +93,10 @@
   "unified_api": {
     "host": "0.0.0.0",
     "port": 3001,
-    "access_token": "114514"
+    "access_token": ""
   },
   "onebot": {
-    "access_token": "114514",
+    "access_token": "",
     "host": "127.0.0.1",
     "http": {
       "enable": false,
