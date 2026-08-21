@@ -1,0 +1,9 @@
+# config/settings.yaml
+llm:
+  provider: "openai"       # 对应 llm_provider
+  model_name: "gpt-4o"     # 对应 model_name
+  temperature: 0.7         # 扩展字段
+
+agent:
+  max_rounds: 10           # 对应 max_rounds
+  system_prompt: "你是一个智能助手，请根据用户意图选择工具或直接回答。"
